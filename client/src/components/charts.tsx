@@ -7,22 +7,24 @@ import type { EChartsCoreOption } from 'echarts/core';
 import type { OverviewStats, TrendPoint } from '../types';
 import { STATUS_COLORS, STATUS_LABELS, ALL_STATUSES } from '../utils/constants';
 import type { AppStatus } from '../types';
+import { useAppTheme } from '../theme';
 
 echarts.use([BarChart, LineChart, PieChart, EChartsFunnel, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
 function useChart(option: EChartsCoreOption) {
+  const { dark } = useAppTheme();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current) return;
-    const chart = echarts.init(ref.current);
-    chart.setOption(option);
+    const chart = echarts.init(ref.current, dark ? 'dark' : undefined);
+    chart.setOption({ ...option, backgroundColor: 'transparent' });
     const onResize = () => chart.resize();
     window.addEventListener('resize', onResize);
     return () => {
       window.removeEventListener('resize', onResize);
       chart.dispose();
     };
-  }, [option]);
+  }, [option, dark]);
   return ref;
 }
 

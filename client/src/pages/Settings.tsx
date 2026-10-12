@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Col, Form, Input, InputNumber, Radio, Row, Space, Switch, Typography, Upload, message } from 'antd';
+import { Alert, AutoComplete, Button, Card, Col, Form, Input, InputNumber, Radio, Row, Space, Switch, Typography, Upload, message } from 'antd';
 import { CloudDownloadOutlined, CloudUploadOutlined, InboxOutlined, RobotOutlined, WindowsOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,8 @@ export default function Settings() {
   const [deviceModalOpen, setDeviceModalOpen] = useState(false);
   const [publishPath, setPublishPath] = useState('');
   const [publishing, setPublishing] = useState(false);
+  // 从上游 /models 拉取到的候选模型（可空：部分兼容端点不支持该接口，仍可手填）
+  const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([]);
 
   const { data: settings } = useQuery({
     queryKey: ['settings'],
@@ -93,6 +95,19 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
     onError: (err) => message.error(err instanceof Error ? err.message : '保存失败'),
+  });
+
+  const fetchModels = useMutation({
+    mutationFn: () =>
+      settingsApi.listModels({
+        baseUrl: llmForm.getFieldValue('baseUrl') as string | undefined,
+        apiKey: (llmForm.getFieldValue('apiKey') as string | undefined) || undefined,
+      }),
+    onSuccess: (data) => {
+      setModelOptions(data.models.map((m) => ({ value: m.id, label: m.ownedBy ? `${m.id}（${m.ownedBy}）` : m.id })));
+      message.success(`已获取 ${data.models.length} 个可用模型${data.usedStoredKey ? '（使用已保存的 Key）' : ''}`);
+    },
+    onError: (err) => message.error(err instanceof Error ? err.message : '获取模型列表失败'),
   });
 
   const disconnectOauth2 = useMutation({
@@ -289,7 +304,7 @@ export default function Settings() {
               type="info"
               showIcon
               style={{ marginBottom: 12 }}
-              message="默认使用 DeepSeek（deepseek-chat）。邮件内容仅在主动点击「分析邮件」时发送给所配置的服务；不配置 Key 时自动降级本地规则提取。"
+                message="手动或定时分析会将脱敏后的邮件正文和支持的附件文本发送给已配置的模型。自动计划与最近结果可在邮件分析页查看；无 Key 时使用本地规则。"
             />
             <Form
               form={llmForm}
@@ -306,12 +321,24 @@ export default function Settings() {
               <Form.Item name="apiKey" label={settings?.llm?.apiKeySet ? 'API Key（已保存，留空保持不变）' : 'API Key'}>
                 <Input.Password placeholder="sk-..." />
               </Form.Item>
-              <Form.Item name="model" label="模型" rules={[{ required: true }]}>
-                <Input placeholder="deepseek-chat" />
+              <Form.Item
+                name="model"
+                label="模型"
+                rules={[{ required: true }]}
+                extra="可点「获取可用模型」从服务端 /models 拉取候选；部分兼容端点不支持该接口，也可直接手填"
+              >
+                <AutoComplete
+                  options={modelOptions}
+                  placeholder="deepseek-chat"
+                  filterOption={(input, option) => String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
+                />
               </Form.Item>
               <Space>
                 <Button type="primary" onClick={() => llmForm.submit()} loading={saveLlm.isPending}>
                   保存 AI 配置
+                </Button>
+                <Button onClick={() => fetchModels.mutate()} loading={fetchModels.isPending}>
+                  获取可用模型
                 </Button>
                 <Button onClick={handleTestLlm} loading={testingLlm}>
                   测试连通

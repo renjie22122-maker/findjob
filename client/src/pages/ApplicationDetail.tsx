@@ -206,7 +206,7 @@ export default function ApplicationDetail() {
         <Descriptions column={{ xs: 1, md: 2, lg: 3 }} size="small">
           <Descriptions.Item label="类型">{JOB_TYPE_LABELS[app.jobType]}</Descriptions.Item>
           <Descriptions.Item label="渠道">{app.channel || '-'}</Descriptions.Item>
-          <Descriptions.Item label="投递日期">{app.appliedAt || '-'}</Descriptions.Item>
+          <Descriptions.Item label="投递日期">{app.appliedAt || (app.status === 'WISHLIST' ? '尚未投递' : '未知（未收到回执，可手动补录）')}</Descriptions.Item>
           <Descriptions.Item label="截止日期">{app.deadline ? formatDateTime(app.deadline) : '-'}</Descriptions.Item>
           <Descriptions.Item label="更新时间">{formatDateTime(app.updatedAt)}</Descriptions.Item>
           <Descriptions.Item label="JD 链接">
@@ -319,7 +319,7 @@ export default function ApplicationDetail() {
                 <Typography.Text strong>
                   匹配度 {matchResult.score}/100{matchResult.ruleBased ? '（规则降级）' : ''}
                 </Typography.Text>
-                <div style={{ fontSize: 12, color: '#666' }}>{matchResult.summary}</div>
+                <div style={{ fontSize: 12, color: 'var(--app-muted)' }}>{matchResult.summary}</div>
               </div>
             </Space>
             {matchResult.strengths.length > 0 && (

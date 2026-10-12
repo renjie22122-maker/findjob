@@ -28,7 +28,7 @@ describe('邮件批量自动应用（高置信度）', () => {
     const company = createCompany({ name: '字节跳动' });
     const app = createApplication({ companyId: company.id, positionTitle: '后端开发工程师' });
 
-    seedPending('高置信度面试邀请', { company: '字节跳动', eventType: 'interview', eventTime: null, positionTitle: '后端开发工程师', summary: '一面', confidence: 0.92 });
+    seedPending('高置信度面试邀请', { company: '字节跳动', eventType: 'interview', eventTime: '2026-10-15T14:00:00', timeSource: 'body', positionTitle: '后端开发工程师', summary: '一面', confidence: 0.92 });
     seedPending('低置信度规则提取', { company: '美团', eventType: 'interview', eventTime: null, positionTitle: null, summary: '规则识别', confidence: 0.4 });
     seedPending('无法提取', null);
 
@@ -49,11 +49,11 @@ describe('邮件批量自动应用（高置信度）', () => {
     expect(status).toBe('WISHLIST');
   });
 
-  it('阈值设为 0 时应用全部有提取结果的邮件', () => {
+  it('阈值设为 0 也不会应用缺少公司和事件的邮件', () => {
     seedPending('A', { company: null, eventType: null, eventTime: null, positionTitle: null, summary: 's', confidence: 0.3 });
     seedPending('B', null);
     const result = applyEmailBatch(0);
-    expect(result.applied).toBe(1);
-    expect(result.skipped).toBe(1);
+    expect(result.applied).toBe(0);
+    expect(result.skipped).toBe(2);
   });
 });

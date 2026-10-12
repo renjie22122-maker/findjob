@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler } from '../middleware/error.js';
+import { asyncHandler, AppError } from '../middleware/error.js';
 import { parse } from '../middleware/validate.js';
 import {
   DEFAULT_LLM_BASE_URL,
@@ -12,7 +12,7 @@ import {
   settingsPayload,
 } from '../services/settings.service.js';
 import { testEmail } from '../services/email/email.service.js';
-import { testLlm } from '../services/llm/llm.client.js';
+import { listLlmModels, testLlm } from '../services/llm/llm.client.js';
 
 const router = Router();
 
@@ -87,6 +87,25 @@ router.post(
   '/test-llm',
   asyncHandler(async (_req, res) => {
     res.json(await testLlm());
+  }),
+);
+
+const modelListSchema = z.object({
+  baseUrl: z.string().trim().min(1).optional(),
+  apiKey: z.string().optional(), // 仅用于本次请求，不写入数据库
+});
+
+/** 获取上游可用模型列表（用 POST 是为了允许携带未保存的草稿地址/Key，避免密钥出现在会被日志记录的 URL 里） */
+router.post(
+  '/llm/models',
+  asyncHandler(async (req, res) => {
+    const input = parse(modelListSchema, req.body ?? {});
+    try {
+      res.json(await listLlmModels(input));
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      throw AppError.badGateway(err instanceof Error ? err.message : '获取模型列表失败');
+    }
   }),
 );
 

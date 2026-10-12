@@ -80,7 +80,7 @@ export function nextStatuses(from: AppStatus): AppStatus[] {
 }
 
 /** 邮件分析事件类型 */
-export const EMAIL_EVENT_TYPES = ['written_test', 'interview', 'assessment', 'offer', 'reject', 'other'] as const;
+export const EMAIL_EVENT_TYPES = ['written_test', 'interview', 'assessment', 'offer', 'reject', 'applied', 'other'] as const;
 export type EmailEventType = (typeof EMAIL_EVENT_TYPES)[number];
 
 export const EMAIL_EVENT_LABELS: Record<EmailEventType, string> = {
@@ -89,6 +89,7 @@ export const EMAIL_EVENT_LABELS: Record<EmailEventType, string> = {
   assessment: '测评',
   offer: 'Offer',
   reject: '拒信',
+  applied: '投递确认',
   other: '其他',
 };
 
@@ -96,8 +97,47 @@ export const EMAIL_EVENT_LABELS: Record<EmailEventType, string> = {
 export const EMAIL_EVENT_TO_REMINDER_TYPE: Record<EmailEventType, string> = {
   written_test: 'written_test',
   interview: 'interview',
-  assessment: 'other',
+  assessment: 'written_test',
   offer: 'other',
   reject: 'other',
+  applied: 'other',
   other: 'other',
 };
+
+/**
+ * 邮件事件类型 → 应当推进到的状态（ADR-7 的受控扩展）。
+ * 只给出“目标状态”，具体走哪些中间状态由 planStatusPath 沿合法流转表推导，
+ * 因此不会绕过状态机（例如 WISHLIST → 笔试 会自动经过 已投递/筛选）。
+ */
+export const EMAIL_EVENT_TO_TARGET_STATUS: Record<EmailEventType, AppStatus | null> = {
+  written_test: STATUS.WRITTEN_TEST,
+  assessment: STATUS.WRITTEN_TEST,
+  interview: STATUS.INTERVIEW_1,
+  offer: STATUS.OFFER,
+  reject: STATUS.REJECTED,
+  applied: STATUS.APPLIED,
+  other: null,
+};
+
+/**
+ * 计算从 from 到 to 的最短合法流转路径（不包含起点；无法到达返回空数组）。
+ * 纯 BFS over TRANSITIONS，便于单测（例如：待投递 → 笔试 = [已投递, 笔试]）。
+ */
+export function planStatusPath(from: AppStatus, to: AppStatus): AppStatus[] {
+  if (from === to) return [];
+  if (TERMINAL_STATUSES.includes(from)) return [];
+
+  const queue: AppStatus[][] = [[from]];
+  const seen = new Set<AppStatus>([from]);
+  while (queue.length > 0) {
+    const path = queue.shift() as AppStatus[];
+    const last = path[path.length - 1];
+    for (const next of TRANSITIONS[last] ?? []) {
+      if (seen.has(next)) continue;
+      if (next === to) return path.slice(1).concat(next);
+      seen.add(next);
+      queue.push(path.concat(next));
+    }
+  }
+  return [];
+}

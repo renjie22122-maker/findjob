@@ -1,32 +1,45 @@
-import { Alert, Button, Card, Descriptions, Modal, Progress, Segmented, Space, Tag, Typography, message, Form, Input, DatePicker, Select } from 'antd';
+import { Alert, Button, Card, Descriptions, Modal, Spin, Pagination, Segmented, Space, Switch, Tag, Typography, message, Form, Input, DatePicker, Select } from 'antd';
 import { CheckOutlined, CloseOutlined, MailOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { emailApi, settingsApi } from '../api';
 import type { EmailExtraction, EmailItem } from '../types';
-import { EMAIL_EVENT_COLORS, EMAIL_EVENT_LABELS, formatDateTime } from '../utils/constants';
+import { EMAIL_EVENT_COLORS, EMAIL_EVENT_LABELS, STATUS_LABELS, formatDateTime } from '../utils/constants';
 import dayjs from 'dayjs';
 
 export default function EmailAnalysis() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState('pending');
+  const [page, setPage] = useState(1);
+  const [rescan, setRescan] = useState(false);
   const [days, setDays] = useState(14);
   const [editItem, setEditItem] = useState<EmailItem | null>(null);
   const [editForm] = Form.useForm();
+  // 应用邮件时的行为（默认开启）：“投递确认”类邮件可一并把匹配到的申请标为已投递；库里没有记录则自动创建
+  const [markApplied, setMarkApplied] = useState(true);
+  const [createIfMissing, setCreateIfMissing] = useState(true);
 
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: settingsApi.get });
+  const { data: auto } = useQuery({ queryKey: ['email', 'auto'], queryFn: emailApi.autoStatus, refetchInterval: 5000 });
+  const autoMutation = useMutation({ mutationFn: emailApi.runAuto, onSuccess: (r) => {
+    (r.ran ? message.success : message.warning)(r.message);
+    queryClient.invalidateQueries();
+  }, onError: (err) => message.error(err instanceof Error ? err.message : '运行失败') });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['email', 'items', tab],
-    queryFn: () => emailApi.items({ status: tab, page: 1, pageSize: 50 }),
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['email', 'items', tab, page],
+    queryFn: () => emailApi.items({ status: tab, page, pageSize: 20 }),
+    refetchInterval: auto?.running ? 5000 : 30000,
   });
 
   const analyzeMutation = useMutation({
-    mutationFn: () => emailApi.analyze(days),
+    mutationFn: () => emailApi.analyze(days, { fullRescan: rescan, reanalyzePending: rescan }),
     onSuccess: (r) => {
-      message.success(`分析完成：拉取 ${r.fetched} 封，候选 ${r.candidates} 封，新分析 ${r.analyzed} 封（去重跳过 ${r.skipped}）`);
+      message.success(
+        `分析完成（${r.mode === 'llm-first' ? 'AI 读正文判定' : '关键词降级'}）：拉取 ${r.fetched} 封，候选 ${r.candidates} 封，新分析 ${r.analyzed} 封，判定无关 ${r.irrelevant} 封（去重跳过 ${r.skipped}）`,
+      );
       queryClient.invalidateQueries({ queryKey: ['email'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
     },
@@ -34,10 +47,13 @@ export default function EmailAnalysis() {
   });
 
   const applyMutation = useMutation({
-    mutationFn: (item: EmailItem) => emailApi.apply(item.id, item.extracted ?? undefined),
+    mutationFn: (item: EmailItem) =>
+      emailApi.apply(item.id, item.extracted ?? undefined, { markApplied, createIfMissing }),
     onSuccess: (r) => {
+      if (r.statusChange) {
+        message.success(`已应用，申请 #${r.statusChange.applicationId} 状态已更新为「${STATUS_LABELS[r.statusChange.to as keyof typeof STATUS_LABELS]}」`);
+      } else message.success(r.timelineEvent ? `已生成时间线${r.reminder ? '与提醒' : ''}` : '已应用');
       if (r.warning) message.warning(r.warning);
-      else message.success(r.timelineEvent ? '已生成时间线笔记与提醒' : '已应用');
       setEditItem(null);
       queryClient.invalidateQueries({ queryKey: ['email'] });
       queryClient.invalidateQueries({ queryKey: ['applications'] });
@@ -53,15 +69,18 @@ export default function EmailAnalysis() {
       message.success('已忽略');
       queryClient.invalidateQueries({ queryKey: ['email'] });
     },
+    onError: (err) => message.error(err instanceof Error ? err.message : '忽略失败'),
   });
 
   const batchApplyMutation = useMutation({
-    mutationFn: () => emailApi.applyBatch(0.8),
+    mutationFn: () => emailApi.applyBatch(0.8, { markApplied, createIfMissing }),
     onSuccess: (r) => {
-      message.success(
+      const failures = r.results.filter((item) => !item.ok);
+      if (failures.length) message.warning(`${failures.length} 条未应用：${failures[0].message}`);
+      message.info(
         r.applied > 0
-          ? `批量应用完成：应用 ${r.applied} 条（时间线笔记+提醒已生成），跳过低置信度 ${r.skipped} 条`
-          : `没有置信度 ≥ 0.8 的待处理邮件（跳过 ${r.skipped} 条低置信度）`,
+          ? `批量应用完成：应用 ${r.applied} 条，${r.skipped} 条需复核`
+          : `没有可安全自动应用的邮件（${r.skipped} 条需复核）`,
       );
       queryClient.invalidateQueries({ queryKey: ['email'] });
       queryClient.invalidateQueries({ queryKey: ['applications'] });
@@ -90,6 +109,7 @@ export default function EmailAnalysis() {
       )}
 
       <Card
+        className="email-workspace"
         size="small"
         title={
           <Space>
@@ -97,8 +117,17 @@ export default function EmailAnalysis() {
           </Space>
         }
         extra={
-          <Space>
+          <Space wrap>
             <Segmented options={[7, 14, 30]} value={days} onChange={(v) => setDays(v as number)} />
+            <Space size={4}><Switch size="small" checked={rescan} onChange={setRescan} /><Typography.Text type="secondary" style={{ fontSize: 12 }}>补扫并重分析待处理</Typography.Text></Space>
+            <Space size={4}>
+              <Switch size="small" checked={markApplied} onChange={setMarkApplied} />
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>按事件推进状态</Typography.Text>
+            </Space>
+            <Space size={4}>
+              <Switch size="small" checked={createIfMissing} onChange={setCreateIfMissing} />
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>缺记录则创建</Typography.Text>
+            </Space>
             <Button
               icon={<ThunderboltOutlined />}
               loading={batchApplyMutation.isPending}
@@ -106,8 +135,8 @@ export default function EmailAnalysis() {
             >
               批量应用高置信度（≥0.8）
             </Button>
-            <Button type="primary" loading={analyzeMutation.isPending} disabled={!configured} onClick={() => analyzeMutation.mutate()}>
-              分析最近 {days} 天邮件
+            <Button type="primary" loading={analyzeMutation.isPending} disabled={!configured || auto?.running || autoMutation.isPending} onClick={() => analyzeMutation.mutate()}>
+              {rescan ? `补扫最近 ${days} 天` : '增量分析新邮件'}
             </Button>
           </Space>
         }
@@ -115,8 +144,13 @@ export default function EmailAnalysis() {
         <Alert
           type="info"
           showIcon
-          message="分析流程：IMAP 拉取 → 关键词初筛招聘邮件 → DeepSeek 提取（公司/事件/时间/岗位）→ 人工确认后应用到时间线与提醒。AI 不直接修改状态机。"
+          message="投递按收件时间；笔试、面试和测评按正文或附件；Offer 优先正文中的录用日期，否则按收件时间。"
+          description="默认按文件夹 UID 游标增量读取，首次从所选天数开始；历史补扫会重分析待处理邮件，保留已应用结果。只读邮箱，不打开链接、不执行身份验证。缺少时间、附件未读或匹配有歧义时请人工复核。"
         />
+        {auto && <Card size="small" style={{ marginTop: 12 }} title="自动分析与时间线" extra={<Button loading={autoMutation.isPending} disabled={!configured || auto.running || analyzeMutation.isPending} onClick={() => autoMutation.mutate()}>立即运行自动流程</Button>}>
+          <Space wrap><Tag color={auto.enabled ? 'green' : 'default'}>{auto.enabled ? '自动分析已开启' : '自动分析已关闭'}</Tag><Tag>{auto.autoApply ? '符合条件自动生成时间线' : '分析后人工应用'}</Tag><Typography.Text type="secondary">{auto.nextRunAt ? `下次 ${formatDateTime(auto.nextRunAt)}（服务需运行）` : '无自动计划'}</Typography.Text></Space>
+          {auto.lastResult && <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>{auto.lastResult}</Typography.Paragraph>}
+        </Card>}
         <div style={{ marginTop: 12 }}>
           <Segmented
             options={[
@@ -125,11 +159,13 @@ export default function EmailAnalysis() {
               { value: 'dismissed', label: '已忽略' },
             ]}
             value={tab}
-            onChange={(v) => setTab(v as string)}
+            onChange={(v) => { setTab(v as string); setPage(1); }}
           />
         </div>
 
-        {analyzeMutation.isPending && <Progress percent={60} status="active" style={{ marginTop: 12 }} />}
+        {(analyzeMutation.isPending || autoMutation.isPending || auto?.running) && <Space role="status" style={{ marginTop: 12 }}><Spin size="small" /><Typography.Text>正在读取并分析邮件，可以稍后刷新查看结果…</Typography.Text></Space>}
+        {error && <Alert type="error" showIcon message={error.message} />}
+        {isLoading && <Spin style={{ margin: 16 }} />}
 
         <Space direction="vertical" style={{ width: '100%', marginTop: 12 }}>
           {(data?.items ?? []).length === 0 && !isLoading && (
@@ -151,13 +187,27 @@ export default function EmailAnalysis() {
                       事件：{EMAIL_EVENT_LABELS[item.extracted.eventType]}
                     </Tag>
                   )}
-                  {item.extracted?.eventTime && <Tag color="orange">时间：{formatDateTime(item.extracted.eventTime)}</Tag>}
+                  {(item.extracted?.eventTime || item.extracted?.eventTimeEnd) && (
+                    <Tag color="orange">
+                      时间：
+                      {item.extracted?.eventTime
+                        ? formatDateTime(item.extracted.eventTime)
+                        : formatDateTime(item.extracted?.eventTimeEnd ?? '')}
+                      {item.extracted?.eventTime && item.extracted?.eventTimeEnd
+                        ? `–${item.extracted.eventTimeEnd.slice(11, 16)}`
+                        : ''}
+                    </Tag>
+                  )}
                   {item.extracted?.positionTitle && <Tag>岗位：{item.extracted.positionTitle}</Tag>}
                   <Tag color={item.extracted && item.extracted.confidence >= 0.7 ? 'green' : item.extracted && item.extracted.confidence >= 0.4 ? 'gold' : 'red'}>
                     置信度 {Math.round((item.extracted?.confidence ?? 0) * 100)}%
                   </Tag>
-                  {item.applicationId && <Tag color="cyan">已关联申请 #{item.applicationId}</Tag>}
+                  <Tag>时间来源：{{ received: '收件时间', body: '正文', attachment: '附件', manual: '人工确认', unknown: '待确认' }[item.extracted?.timeSource ?? 'unknown']}</Tag>
+                  {item.applicationId && <Button size="small" type="link" onClick={() => navigate(`/applications/${item.applicationId}`)}>查看申请 #{item.applicationId} →</Button>}
                 </Space>
+                {!!item.extracted?.reviewReasons?.length && <Alert type="warning" showIcon message="需要复核" description={item.extracted.reviewReasons.join('；')} />}
+                {item.extracted?.timeEvidence && <Typography.Paragraph style={{ margin: 0 }}>时间原文：{item.extracted.timeEvidence}</Typography.Paragraph>}
+                {!!item.extracted?.attachments?.length && <Space wrap>{item.extracted.attachments.map((a, i) => <Tag key={i} color={a.status === 'parsed' ? 'cyan' : 'orange'}>{a.name} · {a.detail}</Tag>)}</Space>}
                 {item.extracted?.summary && (
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     {item.extracted.summary}
@@ -180,6 +230,7 @@ export default function EmailAnalysis() {
                           company: item.extracted?.company ?? undefined,
                           eventType: item.extracted?.eventType ?? undefined,
                           eventTime: item.extracted?.eventTime ? dayjs(item.extracted.eventTime) : undefined,
+                          eventTimeEnd: item.extracted?.eventTimeEnd ? dayjs(item.extracted.eventTimeEnd) : undefined,
                           positionTitle: item.extracted?.positionTitle ?? undefined,
                           summary: item.extracted?.summary ?? undefined,
                           confidence: item.extracted?.confidence ?? 0,
@@ -197,6 +248,7 @@ export default function EmailAnalysis() {
             </Card>
           ))}
         </Space>
+        <Pagination current={page} pageSize={20} total={data?.total ?? 0} onChange={setPage} showSizeChanger={false} showTotal={(total) => `共 ${total} 封`} style={{ marginTop: 16 }} />
       </Card>
 
       <Modal
@@ -206,9 +258,13 @@ export default function EmailAnalysis() {
         onOk={() => {
           const v = editForm.getFieldsValue();
           const extracted: EmailExtraction = {
+            attachments: editItem?.extracted?.attachments,
+            timeSource: 'manual',
+            timeEvidence: editItem?.extracted?.timeEvidence,
             company: v.company || null,
             eventType: v.eventType || null,
             eventTime: v.eventTime ? (v.eventTime as dayjs.Dayjs).format('YYYY-MM-DDTHH:mm:ss') : null,
+            eventTimeEnd: v.eventTimeEnd ? (v.eventTimeEnd as dayjs.Dayjs).format('YYYY-MM-DDTHH:mm:ss') : null,
             positionTitle: v.positionTitle || null,
             summary: v.summary || null,
             confidence: Number(v.confidence ?? 0),
@@ -233,6 +289,7 @@ export default function EmailAnalysis() {
           <Form.Item name="positionTitle" label="岗位">
             <Input />
           </Form.Item>
+          <Form.Item name="eventTimeEnd" label="结束时间（可选，需晚于开始时间）"><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="summary" label="摘要">
             <Input />
           </Form.Item>

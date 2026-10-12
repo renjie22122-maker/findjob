@@ -2,9 +2,8 @@ import { Router } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { asyncHandler, AppError } from '../middleware/error.js';
-import { parse } from '../middleware/validate.js';
+import { optionalIntQuery, parse, statusQuery, stringQuery } from '../middleware/validate.js';
 import { STATUS_LABELS } from '../domain/status.js';
-import type { AppStatus } from '../domain/status.js';
 import { importRecords } from '../services/import.service.js';
 import { listApplications } from '../services/applications.service.js';
 import { parseExcelBuffer, exportToBuffer, buildTemplateWorkbook } from '../adapters/excel.adapter.js';
@@ -67,13 +66,12 @@ router.get(
   '/excel',
   asyncHandler(async (req, res) => {
     const q = req.query;
-    const statuses = Array.isArray(q.status) ? (q.status as string[]) : typeof q.status === 'string' ? [q.status] : [];
     const filters = {
-      statuses: statuses.length > 0 ? (statuses as AppStatus[]) : undefined,
-      companyId: q.companyId ? Number(q.companyId) : undefined,
+      statuses: statusQuery(q.status),
+      companyId: optionalIntQuery(q.companyId, { min: 1 }),
       jobType: typeof q.jobType === 'string' ? q.jobType : undefined,
       priority: typeof q.priority === 'string' ? q.priority : undefined,
-      keyword: typeof q.keyword === 'string' ? q.keyword : undefined,
+      keyword: stringQuery(q.keyword),
     };
 
     // listApplications 单页最多返回 100 条；导出必须遍历所有分页，避免静默截断。

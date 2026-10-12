@@ -67,6 +67,7 @@ export const EMAIL_EVENT_LABELS: Record<EmailEventType, string> = {
   assessment: '测评',
   offer: 'Offer',
   reject: '拒信',
+  applied: '投递确认',
   other: '其他',
 };
 
@@ -76,11 +77,19 @@ export const EMAIL_EVENT_COLORS: Record<EmailEventType, string> = {
   assessment: 'cyan',
   offer: 'gold',
   reject: 'red',
+  applied: 'green',
   other: 'default',
 };
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '-';
+  if (/(?:Z|[+-]\d{2}:\d{2})$/.test(iso)) {
+    const date = new Date(iso);
+    if (!Number.isNaN(date.getTime())) {
+      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString();
+      return local.slice(0, 16).replace('T', ' ');
+    }
+  }
   return iso.slice(0, 16).replace('T', ' ');
 }
 

@@ -1,4 +1,5 @@
-import { Layout, Menu, Badge, Typography, Space } from 'antd';
+import { Layout, Menu, Badge, Typography, Space, Select, theme } from 'antd';
+import { useAppTheme } from '../theme';
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -38,6 +39,8 @@ const QUICK_NAV: Array<{ path: string; label: string }> = [
 ];
 
 export default function AppLayout() {
+  const { mode, setMode } = useAppTheme();
+  const { token } = theme.useToken();
   const location = useLocation();
   const navigate = useNavigate();
   const { data: today } = useToday();
@@ -75,7 +78,7 @@ export default function AppLayout() {
         />
       </Sider>
       <Layout>
-        <Header style={{ background: '#fff', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', height: 'auto', minHeight: 64 }}>
+        <Header style={{ background: token.colorBgContainer, padding: '12px 24px', gap: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', height: 'auto', minHeight: 64, lineHeight: 'normal' }}>
           <Space align="center" wrap>
             <Typography.Title level={4} style={{ margin: 0 }}>
               秋招进度实时追踪
@@ -86,11 +89,9 @@ export default function AppLayout() {
               </Link>
             ))}
           </Space>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            单用户本地应用 · 数据存储于本地 SQLite
-          </Typography.Text>
+          <Select aria-label="界面主题" value={mode} onChange={setMode} style={{ width: 132 }} options={[{ value: 'system', label: '跟随系统' }, { value: 'light', label: '☀ 浅色' }, { value: 'dark', label: '☾ 暗色' }]} />
         </Header>
-        <Content style={{ margin: 16 }}>
+        <Content style={{ margin: 16, minWidth: 0 }}>
           <Outlet />
         </Content>
       </Layout>

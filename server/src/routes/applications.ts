@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/error.js';
-import { parse, parseId } from '../middleware/validate.js';
+import { intQuery, optionalIntQuery, parse, parseId, statusQuery, stringQuery } from '../middleware/validate.js';
 import { ALL_STATUSES } from '../domain/status.js';
 import type { AppStatus } from '../domain/status.js';
 import {
@@ -38,17 +38,16 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     const q = req.query;
-    const statuses = Array.isArray(q.status) ? (q.status as string[]) : typeof q.status === 'string' ? [q.status] : [];
     const parsed = listApplications({
-      statuses: statuses.length > 0 ? (statuses as never[]) : undefined,
-      companyId: q.companyId ? Number(q.companyId) : undefined,
+      statuses: statusQuery(q.status),
+      companyId: optionalIntQuery(q.companyId, { min: 1 }),
       jobType: typeof q.jobType === 'string' ? q.jobType : undefined,
       priority: typeof q.priority === 'string' ? q.priority : undefined,
-      keyword: typeof q.keyword === 'string' ? q.keyword : undefined,
+      keyword: stringQuery(q.keyword),
       sortBy: ['updatedAt', 'appliedAt', 'deadline'].includes(String(q.sortBy)) ? (q.sortBy as 'updatedAt') : undefined,
       sortOrder: q.sortOrder === 'asc' ? 'asc' : 'desc',
-      page: q.page ? Number(q.page) : 1,
-      pageSize: q.pageSize ? Number(q.pageSize) : 20,
+      page: intQuery(q.page, 1, { min: 1 }),
+      pageSize: intQuery(q.pageSize, 20, { min: 1, max: 100 }),
     });
     res.json(parsed);
   }),

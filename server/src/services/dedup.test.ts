@@ -99,7 +99,7 @@ describe('三路数据源一致性（跨路径去重）', () => {
     const company = createCompany({ name: '美团' });
     const app = createApplication({ companyId: company.id, positionTitle: '后端' });
 
-    const eventTime = nowIso();
+    const eventTime = '2099-10-15T14:00:00';
     // 手动已有相同提醒
     getDb()
       .prepare(
@@ -114,7 +114,7 @@ describe('三路数据源一致性（跨路径去重）', () => {
         `INSERT INTO email_items (message_id, subject, sender, received_at, snippet, extracted, status, application_id, created_at, applied_at)
          VALUES ('dedup-test', '面试邀请', 'hr@meituan.com', ?, '', ?, 'pending', NULL, ?, NULL)`,
       )
-      .run(nowIso(), JSON.stringify({ company: '美团', eventType: 'interview', eventTime, positionTitle: '后端', summary: '一面', confidence: 0.9 }), nowIso());
+      .run(nowIso(), JSON.stringify({ company: '美团', eventType: 'interview', timeSource: 'body', eventTime, positionTitle: '后端', summary: '一面', confidence: 0.9 }), nowIso());
 
     const result = applyEmailBatch(0.8);
     expect(result.applied).toBe(1);

@@ -256,6 +256,15 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 7,
+    up(db) {
+      db.exec(`CREATE TABLE IF NOT EXISTS email_ignored_receipts (
+        message_id TEXT PRIMARY KEY,
+        analyzed_at TEXT NOT NULL
+      );`);
+    },
+  },
 ];
 
 /** 按 PRAGMA user_version 顺序执行迁移 */

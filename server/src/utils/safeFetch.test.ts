@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../middleware/error.js';
-import {
-  assertPublicHttpUrl,
-  fetchPublicHtml,
-  isPublicIpAddress,
-  parsePublicHttpUrl,
-} from './safeFetch.js';
+import { isPublicIpAddress } from './ip.js';
+import { assertPublicHttpUrl, fetchPublicHtml, parsePublicHttpUrl } from './safeFetch.js';
 
 describe('公网 URL 安全校验', () => {
   it('识别公网与非公网 IP', () => {

@@ -646,7 +646,7 @@ function ResumePreviewModal({ resume, onClose }: { resume: Resume | null; onClos
             <Progress type="circle" size={56} percent={review.score} format={(p) => p} />
             <div>
               <Typography.Text strong>AI 简历审查{review.ruleBased ? '（规则降级）' : ''}</Typography.Text>
-              <div style={{ fontSize: 12, color: '#666' }}>{review.summary}</div>
+              <div style={{ fontSize: 12, color: 'var(--app-muted)' }}>{review.summary}</div>
             </div>
           </Space>
           {review.issues.length > 0 && (

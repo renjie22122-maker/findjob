@@ -56,9 +56,18 @@ export interface Reminder {
 }
 
 export interface EmailExtraction {
+  timeSource?: 'received' | 'body' | 'attachment' | 'unknown' | 'manual';
+  timeEvidence?: string | null;
+  reviewReasons?: string[];
+  attachments?: Array<{ name: string; status: 'parsed' | 'skipped'; detail: string }>;
+  /** 是否与求职/招聘相关（LLM 判别；false 的邮件不入库） */
+  relevant?: boolean;
   company: string | null;
   eventType: EmailEventType | null;
+  /** 事件时间：时间点，或时间段的开始时间 */
   eventTime: string | null;
+  /** 邮件给的是“时间段”时的结束时间（如 19:00-21:00 的 21:00）；时间点则为 null */
+  eventTimeEnd?: string | null;
   positionTitle: string | null;
   summary: string | null;
   confidence: number;

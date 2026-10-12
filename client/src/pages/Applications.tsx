@@ -350,7 +350,7 @@ export default function Applications() {
               },
               { title: '类型', dataIndex: 'jobType', width: 70, render: (v: JobType) => JOB_TYPE_LABELS[v] },
               { title: '渠道', dataIndex: 'channel', width: 90, render: (v: Application['channel']) => v || '-' },
-              { title: '投递日期', dataIndex: 'appliedAt', width: 100, render: (v: Application['appliedAt']) => formatDate(v) },
+              { title: '投递日期', dataIndex: 'appliedAt', width: 130, render: (v: Application['appliedAt'], row: Application) => v ? formatDate(v) : row.status === 'WISHLIST' ? '尚未投递' : '未知 / 待补录' },
               {
                 title: '截止日期',
                 dataIndex: 'deadline',

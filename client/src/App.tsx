@@ -1,11 +1,12 @@
 import { lazy, Suspense, type ReactNode } from 'react';
-import { ConfigProvider, App as AntApp, Spin } from 'antd';
-import zhCN from 'antd/locale/zh_CN';
+import { App as AntApp, Spin } from 'antd';
+import { ThemeProvider } from './theme';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import AppLayout from './layouts/AppLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Applications = lazy(() => import('./pages/Applications'));
@@ -26,6 +27,8 @@ const queryClient = new QueryClient({
       retry: 1,
       staleTime: 15_000,
       refetchOnWindowFocus: false,
+      // 断网恢复后自动补一次请求，避免离线期间的失败状态一直残留
+      refetchOnReconnect: true,
     },
   },
 });
@@ -51,28 +54,31 @@ function LazyPage({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
-    <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: '#1677ff' } }}>
+    <ThemeProvider>
       <AntApp>
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <Routes>
-              <Route element={<AppLayout />}>
-                <Route path="/" element={<LazyPage><Dashboard /></LazyPage>} />
-                <Route path="/applications" element={<LazyPage><Applications /></LazyPage>} />
-                <Route path="/applications/:id" element={<LazyPage><ApplicationDetail /></LazyPage>} />
-                <Route path="/companies" element={<LazyPage><Companies /></LazyPage>} />
-                <Route path="/today" element={<LazyPage><Today /></LazyPage>} />
-                <Route path="/sources" element={<LazyPage><Sources /></LazyPage>} />
-                <Route path="/email" element={<LazyPage><EmailAnalysis /></LazyPage>} />
-                <Route path="/settings" element={<LazyPage><Settings /></LazyPage>} />
-                <Route path="/resumes" element={<LazyPage><Resumes /></LazyPage>} />
-                <Route path="/recommendations" element={<LazyPage><Recommendations /></LazyPage>} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </QueryClientProvider>
+        {/* 渲染异常兜底：避免整页白屏，并给出重试/刷新入口 */}
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <Routes>
+                <Route element={<AppLayout />}>
+                  <Route path="/" element={<LazyPage><Dashboard /></LazyPage>} />
+                  <Route path="/applications" element={<LazyPage><Applications /></LazyPage>} />
+                  <Route path="/applications/:id" element={<LazyPage><ApplicationDetail /></LazyPage>} />
+                  <Route path="/companies" element={<LazyPage><Companies /></LazyPage>} />
+                  <Route path="/today" element={<LazyPage><Today /></LazyPage>} />
+                  <Route path="/sources" element={<LazyPage><Sources /></LazyPage>} />
+                  <Route path="/email" element={<LazyPage><EmailAnalysis /></LazyPage>} />
+                  <Route path="/settings" element={<LazyPage><Settings /></LazyPage>} />
+                  <Route path="/resumes" element={<LazyPage><Resumes /></LazyPage>} />
+                  <Route path="/recommendations" element={<LazyPage><Recommendations /></LazyPage>} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </QueryClientProvider>
+        </ErrorBoundary>
       </AntApp>
-    </ConfigProvider>
+    </ThemeProvider>
   );
 }

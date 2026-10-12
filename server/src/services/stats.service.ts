@@ -108,18 +108,34 @@ export function getTrends(days: number): TrendPoint[] {
     )
     .all(start) as { d: string; to_status: string; c: number }[];
 
+  // 先按日期聚合一次：原来对每一天都重新扫描全部事件行（O(天数 × 事件数)，365 天会放大 365 倍）。
+  interface TrendBucket {
+    applied: number;
+    interviewed: number;
+    offer: number;
+    rejected: number;
+  }
+  const totals = new Map<string, TrendBucket>();
+  for (const r of rows) {
+    const bucket = totals.get(r.d) ?? { applied: 0, interviewed: 0, offer: 0, rejected: 0 };
+    if (r.to_status === STATUS.APPLIED) bucket.applied += r.c;
+    else if ((INTERVIEW_STATES as string[]).includes(r.to_status)) bucket.interviewed += r.c;
+    else if ((OFFER_STATES as string[]).includes(r.to_status)) bucket.offer += r.c;
+    else if ((REJECTED_STATES as string[]).includes(r.to_status)) bucket.rejected += r.c;
+    totals.set(r.d, bucket);
+  }
+
   const points: TrendPoint[] = [];
   for (let i = clamped - 1; i >= 0; i--) {
     const date = daysAgoStartIso(i).slice(0, 10);
-    const bucket: TrendPoint = { date, applied: 0, interviewed: 0, offer: 0, rejected: 0 };
-    for (const r of rows) {
-      if (r.d !== date) continue;
-      if (r.to_status === STATUS.APPLIED) bucket.applied += r.c;
-      else if ((INTERVIEW_STATES as string[]).includes(r.to_status)) bucket.interviewed += r.c;
-      else if ((OFFER_STATES as string[]).includes(r.to_status)) bucket.offer += r.c;
-      else if ((REJECTED_STATES as string[]).includes(r.to_status)) bucket.rejected += r.c;
-    }
-    points.push(bucket);
+    const bucket = totals.get(date);
+    points.push({
+      date,
+      applied: bucket?.applied ?? 0,
+      interviewed: bucket?.interviewed ?? 0,
+      offer: bucket?.offer ?? 0,
+      rejected: bucket?.rejected ?? 0,
+    });
   }
   return points;
 }

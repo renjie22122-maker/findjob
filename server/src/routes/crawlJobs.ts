@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/error.js';
-import { parse, parseId } from '../middleware/validate.js';
+import { parse, parseId, intQuery, optionalIntQuery } from '../middleware/validate.js';
 import {
   createCrawlJob,
   deleteCrawlJob,
@@ -73,9 +73,9 @@ crawlRunsRouter.get(
     const q = req.query;
     res.json(
       listCrawlRuns({
-        jobId: q.jobId ? Number(q.jobId) : undefined,
-        page: q.page ? Number(q.page) : 1,
-        pageSize: q.pageSize ? Number(q.pageSize) : 20,
+        jobId: optionalIntQuery(q.jobId, { min: 1 }),
+        page: intQuery(q.page, 1, { min: 1 }),
+        pageSize: intQuery(q.pageSize, 20, { min: 1, max: 100 }),
       }),
     );
   }),

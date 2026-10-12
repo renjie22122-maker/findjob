@@ -19,6 +19,7 @@ import type {
   MatchResult,
   LinkedinSearchPlan,
   JobRecommendation,
+  LlmModelListResult,
   ManualRecommendationInput,
   Oauth2PollResult,
   OfferCompareResult,
@@ -134,6 +135,8 @@ export const settingsApi = {
   }) => http.put<SettingsPayload>('/settings', body),
   testEmail: () => http.post<{ ok: boolean; message: string }>('/settings/test-email'),
   testLlm: () => http.post<{ ok: boolean; message: string }>('/settings/test-llm'),
+  listModels: (body: { baseUrl?: string; apiKey?: string }) =>
+    http.post<LlmModelListResult>('/settings/llm/models', body),
 };
 
 // ---------- outlook oauth2 ----------
@@ -154,18 +157,31 @@ export const auditApi = {
 
 // ---------- email analysis ----------
 export const emailApi = {
-  analyze: (days = 14) => http.post<{ fetched: number; candidates: number; analyzed: number; skipped: number }>('/email/analyze', { days }),
+  autoStatus: () => http.get<{ enabled: boolean; running: boolean; hours: number[]; autoApply: boolean; nextRunAt: string | null; lastResult: string | null }>('/email/auto-analyze'),
+  runAuto: () => http.post<{ ran: boolean; message: string }>('/email/auto-analyze/run', {}, 600000),
+    analyze: (days = 14, options: { fullRescan?: boolean; reanalyzePending?: boolean } = {}) =>
+    http.post<{ fetched: number; candidates: number; analyzed: number; skipped: number; irrelevant: number; mode: 'llm-first' | 'keyword' }>(
+      '/email/analyze',
+        { days, ...options },
+        600000,
+    ),
   items: (filters: { status?: string; page?: number; pageSize?: number }) =>
     http.get<Paginated<EmailItem>>(`/email/items${qs(filters)}`),
-  apply: (id: number, extracted?: EmailItem['extracted']) =>
+  apply: (
+    id: number,
+    extracted?: EmailItem['extracted'],
+    options?: { markApplied?: boolean; createIfMissing?: boolean },
+  ) =>
     http.post<{
       item: EmailItem;
       timelineEvent: TimelineEvent | null;
       reminder: Reminder | null;
       warning: string | null;
-    }>(`/email/items/${id}/apply`, extracted ? { extracted } : {}),
+      statusChange: { applicationId: number; from: string; to: string } | null;
+    }>(`/email/items/${id}/apply`, { ...(extracted ? { extracted } : {}), ...(options ?? {}) }),
   dismiss: (id: number) => http.post<EmailItem>(`/email/items/${id}/dismiss`),
-  applyBatch: (minConfidence = 0.8) => http.post<ApplyBatchResult>('/email/apply-batch', { minConfidence }),
+  applyBatch: (minConfidence = 0.8, options?: { markApplied?: boolean; createIfMissing?: boolean }) =>
+    http.post<ApplyBatchResult>('/email/apply-batch', { minConfidence, ...(options ?? {}) }),
 };
 
 // ---------- utils ----------

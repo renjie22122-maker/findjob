@@ -15,7 +15,7 @@ export type AppStatus =
 export type JobType = 'school' | 'intern';
 export type Priority = 'HIGH' | 'MEDIUM' | 'LOW';
 export type ReminderType = 'written_test' | 'interview' | 'deadline' | 'other';
-export type EmailEventType = 'written_test' | 'interview' | 'assessment' | 'offer' | 'reject' | 'other';
+export type EmailEventType = 'written_test' | 'interview' | 'assessment' | 'offer' | 'reject' | 'applied' | 'other';
 
 export interface Company {
   id: number;
@@ -74,9 +74,15 @@ export interface Reminder {
 }
 
 export interface EmailExtraction {
+  timeSource?: 'received' | 'body' | 'attachment' | 'unknown' | 'manual';
+  timeEvidence?: string | null;
+  reviewReasons?: string[];
+  attachments?: Array<{ name: string; status: 'parsed' | 'skipped'; detail: string }>;
   company: string | null;
   eventType: EmailEventType | null;
   eventTime: string | null;
+  /** 邮件给的是时间段时的结束时间 */
+  eventTimeEnd?: string | null;
   positionTitle: string | null;
   summary: string | null;
   confidence: number;
@@ -236,6 +242,18 @@ export interface LlmSettings {
   baseUrl: string;
   model: string;
   apiKeySet: boolean;
+}
+
+/** 上游 /models 返回的可用模型（仅用于下拉选项） */
+export interface LlmModelInfo {
+  id: string;
+  ownedBy: string | null;
+}
+
+export interface LlmModelListResult {
+  models: LlmModelInfo[];
+  /** true = 使用了已保存的 Key（客户端未临时输入） */
+  usedStoredKey: boolean;
 }
 
 export interface SettingsPayload {

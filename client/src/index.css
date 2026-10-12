@@ -1,10 +1,12 @@
+:root { --app-bg: #f5f5f5; --app-muted: #666; --app-border: #e8e8e8; --app-surface: #fff; --app-code: #f5f5f5; }
+:root[data-theme='dark'] { --app-bg: #141414; --app-muted: #a6a6a6; --app-border: #424242; --app-surface: #1f1f1f; --app-code: #303030; }
 html,
 body,
 #root {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #f5f5f5;
+  background: var(--app-bg);
 }
 
 * {
@@ -19,7 +21,7 @@ body,
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3 {
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--app-border);
   padding-bottom: 4px;
   margin-top: 14px;
 }
@@ -27,7 +29,13 @@ body,
   padding-left: 20px;
 }
 .markdown-body code {
-  background: #f5f5f5;
+  background: var(--app-code);
   padding: 1px 5px;
   border-radius: 3px;
+}
+.ant-layout-sider-zero-width .ant-layout-sider-children { overflow: hidden; }
+@media (max-width: 800px) {
+  .email-workspace > .ant-card-head .ant-card-head-wrapper { flex-direction: column; align-items: flex-start; gap: 10px; padding-block: 12px; }
+  .email-workspace > .ant-card-head .ant-card-head-title { flex: auto; }
+  .email-workspace > .ant-card-head .ant-card-extra { margin-inline-start: 0; max-width: 100%; }
 }

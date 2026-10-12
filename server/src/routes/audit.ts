@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/error.js';
+import { intQuery, stringQuery } from '../middleware/validate.js';
 import { clearAudits, listAudits } from '../services/audit.service.js';
 
 /** GET /api/audit —— 出站调用审计列表（分页 + 类型过滤） */
@@ -11,9 +12,9 @@ router.get(
     const q = req.query;
     res.json(
       listAudits({
-        kind: typeof q.kind === 'string' ? q.kind : undefined,
-        page: q.page ? Number(q.page) : 1,
-        pageSize: q.pageSize ? Number(q.pageSize) : 20,
+        kind: stringQuery(q.kind, 50),
+        page: intQuery(q.page, 1, { min: 1 }),
+        pageSize: intQuery(q.pageSize, 20, { min: 1, max: 100 }),
       }),
     );
   }),
