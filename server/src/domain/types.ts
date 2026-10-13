@@ -55,7 +55,22 @@ export interface Reminder {
   createdAt: string;
 }
 
+export interface RecruitmentScheduleChange {
+  action: 'create' | 'update' | 'reschedule' | 'cancel' | 'restore';
+  eventRef?: string | null;
+  round?: string | null;
+  previousTime?: string | null;
+  mode?: 'online' | 'offline' | 'unknown';
+  venue?: string | null;
+  address?: string | null;
+  room?: string | null;
+  timezone?: string | null;
+  timeKind?: 'start' | 'deadline';
+  evidence?: string | null;
+}
+
 export interface EmailExtraction {
+  schedule?: RecruitmentScheduleChange;
   recruitmentId?: string | null;
   preparationTasks?: Array<{ title: string; scheduledAt: string; timeEvidence: string }>;
   timeSource?: 'received' | 'body' | 'attachment' | 'unknown' | 'manual';

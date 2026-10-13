@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {mkdirSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {chromium} from 'playwright';
+process.env.FINDJOB_DB_PATH=':memory:';process.env.EMAIL_AUTO_ANALYZE='0';
+const {createApp}=await import('../dist/index.js');
+const {getDb,closeDb}=await import('../dist/db/connection.js');
+const server=createApp().listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+const base=`http://127.0.0.1:${server.address().port}`;
+const browser=await chromium.launch({channel:'msedge',headless:true});
+const out=fileURLToPath(new URL('../data/ui-review/',import.meta.url));mkdirSync(out,{recursive:true});
+const seed=(n,e)=>getDb().prepare("INSERT INTO email_items(message_id,subject,received_at,extracted,status,created_at) VALUES (?, ?, ?, ?, 'pending', ?)").run(`schedule-ui-${n}`,`日程测试-${n}`,`2020-10-0${n}T08:00:00Z`,JSON.stringify(e),'2099-10-01T16:00:00');
+const extraction={company:'日程测试企业',positionTitle:'工程师',eventType:'interview',eventTime:'2099-10-18T15:00:00',timeSource:'body',confidence:0.95,summary:'面试安排',schedule:{action:'create',eventRef:'EVENT-501',round:'第一轮',mode:'offline',venue:'东区中心'}};
+try{
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const apply=async()=>{await page.goto(base+'/email');await page.getByRole('button',{name:'应用到追踪'}).first().click();await page.getByText('确认提取结果（可修改后应用）',{exact:true}).waitFor();const result=page.waitForResponse(r=>r.url().endsWith('/apply') && r.request().method()==='POST');await page.getByRole('button',{name:'确 定',exact:true}).click();const response=await result;assert.equal(response.status(),201,await response.text());};
+ seed(1,extraction);await apply();
+ seed(2,{...extraction,eventTime:null,schedule:{action:'update',eventRef:'EVENT-501',address:'星海路88号',room:'B302'}});await apply();
+ let {items}=await (await fetch(base+'/api/email/schedules')).json();assert.equal(items.length,1);assert.equal(items[0].data.room,'B302');assert.equal(items[0].data.mode,'offline');
+ seed(3,{...extraction,eventTime:'2099-10-21T09:00:00',schedule:{action:'reschedule',eventRef:'EVENT-501',previousTime:extraction.eventTime}});await apply();
+ await page.goto(base+'/schedules');await page.getByText('地址：星海路88号 · 考场 / 房间：B302',{exact:true}).waitFor();
+ await page.locator('.ant-select').filter({has:page.getByRole('combobox',{name:'界面主题'})}).click();await page.getByText('☾ 暗色',{exact:true}).click();await page.keyboard.press('Escape');await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+ await page.screenshot({path:out+'schedules-dark.png',fullPage:true,animations:'disabled'});
+ await page.setViewportSize({width:390,height:844});await page.goto(base+'/schedules');await page.getByText('地址：星海路88号 · 考场 / 房间：B302',{exact:true}).waitFor();await page.screenshot({path:out+'schedules-mobile.png',fullPage:true,animations:'disabled'});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2),false);
+ seed(4,{...extraction,eventTime:null,schedule:{action:'cancel',eventRef:'EVENT-501'}});await apply();
+ ({items}=await (await fetch(base+'/api/email/schedules')).json());assert.equal(items[0].status,'cancelled');assert.equal(items[0].sources.length,4);assert.equal(getDb().prepare('SELECT COUNT(*) n FROM reminders WHERE schedule_id=? AND done=0').get(items[0].id).n,0);
+ await page.goto(base+'/schedules');await page.getByText('已取消',{exact:true}).click();await page.getByText('日程测试企业 · 工程师',{exact:true}).waitFor();
+ await page.getByRole('button',{name:/调\s*整/}).click();await page.locator('.ant-select').filter({has:page.getByLabel('操作',{exact:true})}).click();await page.getByText('恢复已取消活动',{exact:true}).click();await page.getByLabel('考点 / 场所',{exact:true}).fill('南区中心');
+ const changed=page.waitForResponse(r=>r.request().method()==='PATCH' && r.url().includes('/email/schedules/'));await page.getByRole('button',{name:'确 定',exact:true}).click();const changeResponse=await changed;assert.equal(changeResponse.status(),200,await changeResponse.text());
+ ({items}=await (await fetch(base+'/api/email/schedules')).json());assert.equal(items[0].status,'scheduled');assert.equal(items[0].data.venue,'南区中心');assert.equal(items[0].sources[0].action,'manual:restore');
+ assert.deepEqual(errors,[]);console.log('Schedule UI passed: create, attachment fields, reschedule, cancel, owned reminders, dark mode, mobile.');
+}finally{await browser.close();await new Promise(r=>server.close(r));closeDb();}

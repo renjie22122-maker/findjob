@@ -6,6 +6,21 @@ import { mailTimeToLocal, validEventTime } from './eventTime.js';
 export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): EmailExtraction {
   const result = { ...extraction, attachments: raw.content?.attachments ?? [], reviewReasons: [...(raw.content?.warnings ?? [])] };
   const sourceText = `${raw.subject}\n${raw.content?.body ?? raw.snippet}\n${raw.content?.attachmentText ?? ''}`;
+  const change = result.schedule;
+  const changeOnly = change && change.action !== 'create';
+  if (change) {
+    const normalize = (value: string) => value.replace(/\s+/gu, '');
+    const quote = change.evidence?.trim();
+    const hasQuote = Boolean(quote && normalize(sourceText).includes(normalize(quote)));
+    if ((changeOnly || change.venue || change.address || change.room || change.eventRef || change.round) && !hasQuote) result.reviewReasons.push('日程关联或变更缺少原文依据，请人工确认');
+    for (const value of [change.eventRef, change.round, change.venue, change.address, change.room]) {
+      if (value && (!hasQuote || !normalize(quote!).includes(normalize(value)) || /https?:|www\.|链接已隐藏|验证码|密码|token=/i.test(value))) result.reviewReasons.push('活动标识或地点无法从引文核对，或含敏感链接，请人工确认');
+    }
+    if (change.action === 'cancel' && (!quote || !/取消|作废|cancel/i.test(quote) || /未取消|不取消|not cancelled|not canceled/i.test(quote))) result.reviewReasons.push('未确认明确取消通知，不能自动撤销提醒');
+    if (change.action === 'reschedule' && (!quote || !/改期|调整|变更|延期|推迟|提前|reschedul|postpon|moved|changed/i.test(quote))) result.reviewReasons.push('未确认明确改期通知，请复核');
+    if (change.action === 'restore' && (!quote || !/恢复|重新安排|reinstate|resume/i.test(quote))) result.reviewReasons.push('未确认明确恢复通知，请复核');
+    if (change.previousTime && !validEventTime(change.previousTime)) result.reviewReasons.push('原活动时间格式无效');
+  }
   if ((sourceText.match(/地区[^\n。]{0,40}开始时间/g) ?? []).length > 1) {
     result.eventTime = null; result.eventTimeEnd = null;
     result.reviewReasons.push('包含多个地区的考试时间，请选择本人考区后确认');
@@ -44,9 +59,9 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     }
     result.timeSource = source ?? 'unknown';
     if (source && evidence && result.eventTime) {
-      const explicitDate = /(20\d{2})[-年/.](\d{1,2})[-月/.](\d{1,2})/.exec(evidence);
-      const date = explicitDate ? `${explicitDate[1]}-${explicitDate[2].padStart(2, '0')}-${explicitDate[3].padStart(2, '0')}` : null;
-      if (date && date !== result.eventTime.slice(0, 10)) result.reviewReasons.push('提取日期与原文日期不一致，需复核时区或日期');
+      const dates = [...evidence.matchAll(/(20\d{2})[-年/.](\d{1,2})[-月/.](\d{1,2})/g)].map(m=>`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`);
+      if (dates.length && !dates.includes(result.eventTime.slice(0,10))) result.reviewReasons.push('提取日期与原文日期不一致，需复核时区或日期');
+      if (change?.action === 'reschedule' && change.previousTime && validEventTime(change.previousTime) === result.eventTime) result.reviewReasons.push('改期后的时间仍等于原时间，请复核');
       if (['written_test', 'interview', 'assessment'].includes(result.eventType ?? '') && !/\d[:：点时]\d|T\d{6}|\d点/.test(evidence)) result.reviewReasons.push('原文未明确具体时刻，需人工确认活动时间');
       if (result.eventType === 'offer' && /入职|报到|截止|回复|deadline|start date/i.test(evidence)) {
         result.eventTime = null; result.eventTimeEnd = null;
@@ -56,9 +71,12 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     if (!result.eventTime && result.eventType === 'offer') {
       result.eventTime = mailTimeToLocal(raw.receivedAt); result.timeSource = 'received';
     }
-    if (!result.eventTime && ['written_test', 'interview', 'assessment'].includes(result.eventType ?? '')) {
+    if (!result.eventTime && !changeOnly && ['written_test', 'interview', 'assessment'].includes(result.eventType ?? '')) {
       result.reviewReasons.push('未确定活动时间，请核对原邮件或附件后填写');
     }
+  }
+  if (changeOnly && !result.eventTime && change?.evidence && !result.reviewReasons.length) {
+    result.timeSource = (raw.content?.body ?? raw.snippet).replace(/\s+/gu, '').includes(change.evidence.replace(/\s+/gu, '')) ? 'body' : 'attachment';
   }
   if (result.eventTimeEnd && (!result.eventTime || result.eventTimeEnd <= result.eventTime)) {
     result.eventTimeEnd = null; result.reviewReasons.push('结束时间不晚于开始时间，需复核');

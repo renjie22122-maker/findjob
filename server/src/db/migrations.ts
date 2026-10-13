@@ -265,6 +265,60 @@ const migrations: Migration[] = [
       );`);
     },
   },
+  {
+    version: 8,
+    up(db) {
+      db.exec(`
+        CREATE TABLE recruitment_schedules (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          application_id INTEGER NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+          kind TEXT NOT NULL CHECK (kind IN ('interview','written_test','assessment')),
+          status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled','cancelled','awaiting_time')),
+          data TEXT NOT NULL,
+          last_received_at TEXT NOT NULL,
+          revision INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_schedule_app ON recruitment_schedules(application_id);
+        CREATE TABLE schedule_sources (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          schedule_id INTEGER NOT NULL REFERENCES recruitment_schedules(id) ON DELETE CASCADE,
+          email_id INTEGER REFERENCES email_items(id) ON DELETE SET NULL,
+          action TEXT NOT NULL,
+          snapshot TEXT NOT NULL,
+          received_at TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          UNIQUE(email_id)
+        );
+        ALTER TABLE reminders ADD COLUMN schedule_id INTEGER REFERENCES recruitment_schedules(id) ON DELETE SET NULL;
+        CREATE INDEX idx_rem_schedule ON reminders(schedule_id);
+      `);
+      // Only dated confirmed events can be adopted. Unknown associations stay untouched.
+      const rows = db.prepare("SELECT id,application_id,extracted,received_at,created_at FROM email_items WHERE status='confirmed' AND application_id IS NOT NULL ORDER BY received_at,id").all() as {id:number;application_id:number;extracted:string|null;received_at:string;created_at:string}[];
+      const known = new Map<string, number>();
+      for (const row of rows) {
+        let e;
+        try { e = JSON.parse(row.extracted ?? '{}'); } catch { continue; }
+        if (!e || typeof e !== 'object') continue;
+        {
+          if (!['interview','written_test','assessment'].includes(e.eventType) || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(e.eventTime ?? '')) continue;
+          const key = JSON.stringify([row.application_id,e.eventType,e.eventTime]);
+          const data = JSON.stringify({eventTime:e.eventTime,eventTimeEnd:e.eventTimeEnd ?? null,preparationTasks:e.preparationTasks ?? [],timeEvidence:e.timeEvidence ?? null,mode:'unknown'});
+          let id = known.get(key);
+          if (!id) {
+            id = Number(db.prepare('INSERT INTO recruitment_schedules(application_id,kind,data,last_received_at,created_at,updated_at) VALUES (?,?,?,?,?,?)').run(row.application_id,e.eventType,data,row.received_at,row.created_at,row.created_at).lastInsertRowid);
+            known.set(key,id);
+          } else {
+            db.prepare('UPDATE recruitment_schedules SET data=?,last_received_at=?,updated_at=? WHERE id=?').run(data,row.received_at,row.created_at,id);
+          }
+          db.prepare("INSERT INTO schedule_sources(schedule_id,email_id,action,snapshot,received_at,created_at) VALUES (?,?,'legacy',?,?,?)").run(id,row.id,data,row.received_at,row.created_at);
+          // Adopt only the exact generated email reminder, never manually authored reminders.
+          db.prepare("UPDATE reminders SET schedule_id=? WHERE application_id=? AND scheduled_at=? AND title LIKE '邮件：%' AND schedule_id IS NULL").run(id,row.application_id,e.eventTime);
+        }
+      }
+    },
+  },
 ];
 
 /** 按 PRAGMA user_version 顺序执行迁移 */

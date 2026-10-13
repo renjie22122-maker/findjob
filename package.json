@@ -10,8 +10,9 @@
     "start": "pnpm --filter server start",
     "test": "pnpm --filter server test",
     "test:integration": "pnpm build && node server/scripts/integration-test.mjs && node server/scripts/attachment-smoke.mjs",
-    "test:ui": "pnpm build && node server/scripts/ui-smoke.mjs",
+    "test:ui": "pnpm build && node server/scripts/ui-smoke.mjs && node server/scripts/schedule-ui-smoke.mjs",
     "test:email:live": "pnpm --filter server build && node server/scripts/email-live-smoke.mjs --live",
+    "test:schedule:live": "pnpm --filter server build && node server/scripts/schedule-live-smoke.mjs --live",
     "typecheck": "pnpm --filter server typecheck && pnpm --filter client typecheck",
     "check": "pnpm test && pnpm typecheck && pnpm test:integration"
   },

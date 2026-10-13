@@ -73,7 +73,22 @@ export interface Reminder {
   createdAt: string;
 }
 
+export interface RecruitmentScheduleChange {
+  action: 'create' | 'update' | 'reschedule' | 'cancel' | 'restore';
+  eventRef?: string | null;
+  round?: string | null;
+  previousTime?: string | null;
+  mode?: 'online' | 'offline' | 'unknown';
+  venue?: string | null;
+  address?: string | null;
+  room?: string | null;
+  timezone?: string | null;
+  timeKind?: 'start' | 'deadline';
+  evidence?: string | null;
+}
+
 export interface EmailExtraction {
+  schedule?: RecruitmentScheduleChange;
   recruitmentId?: string | null;
   preparationTasks?: Array<{ title: string; scheduledAt: string; timeEvidence: string }>;
   timeSource?: 'received' | 'body' | 'attachment' | 'unknown' | 'manual';
@@ -580,4 +595,16 @@ export interface RecommendationBatchImportResult {
   skipped: number;
   errors: Array<{ id: number; message: string }>;
   items: JobRecommendation[];
+}
+
+export interface RecruitmentSchedule {
+  id: number;
+  applicationId: number;
+  companyName: string;
+  positionTitle: string;
+  kind: string;
+  status: 'scheduled' | 'cancelled' | 'awaiting_time';
+  revision: number;
+  data: Partial<RecruitmentScheduleChange> & {eventTime?: string | null; eventTimeEnd?: string | null; preparationTasks?: EmailExtraction['preparationTasks']};
+  sources: Array<{emailId: number | null; action: string; snapshot: string; receivedAt: string; subject: string | null}>;
 }

@@ -9,6 +9,19 @@ const raw = { messageId: 'test', subject: '面试', sender: 'HR', receivedAt, sn
 const base: EmailExtraction = { company: '测试公司', eventType: 'interview', eventTime: '2026-10-15T14:00:00', positionTitle: '工程师', summary: null, confidence: 0.95, timeEvidence: '2026-10-15 14:00' };
 
 describe('事件时间依据与危险信息', () => {
+  it('取消必须有明确的正文或附件依据，不能听从无来源的模型指令', () => {
+    const e = {...base,eventTime:null,schedule:{action:'cancel' as const,eventRef:'EV-1',evidence:'活动 EV-1 已取消'}};
+    const invalid = attachEvidence(e,raw);
+    expect(invalid.reviewReasons?.join()).toContain('原文');
+    const valid = attachEvidence(e,{...raw,snippet:'活动 EV-1 已取消'});
+    expect(valid.reviewReasons).toEqual([]); expect(valid.timeSource).toBe('body');
+    expect(attachEvidence({...e,schedule:{...e.schedule,evidence:'活动 EV-1 未取消'}},{...raw,snippet:'活动 EV-1 未取消'}).reviewReasons?.join()).toContain('取消');
+  });
+  it('日程字段不接受凭空地点或一次性链接', () => {
+    const quote='活动 EV-2 考点：东楼；考试链接已隐藏';
+    const e={...base,schedule:{action:'update' as const,eventRef:'EV-2',venue:'西楼',room:'https://example.test/once?token=secret',evidence:quote}};
+    expect(attachEvidence(e,{...raw,snippet:quote}).reviewReasons?.join()).toContain('敏感链接');
+  });
   it('允许 HTML 布局引入的空白变化，仍要求原文内容一致', () => {
     const result = attachEvidence(base, { ...raw, snippet: '面试时间：2026-10-15\n  14:00' });
     expect(result.eventTime).toBe(base.eventTime);

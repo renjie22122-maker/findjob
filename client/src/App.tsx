@@ -15,6 +15,7 @@ const Companies = lazy(() => import('./pages/Companies'));
 const Today = lazy(() => import('./pages/Today'));
 const Sources = lazy(() => import('./pages/Sources'));
 const EmailAnalysis = lazy(() => import('./pages/EmailAnalysis'));
+const Schedules = lazy(() => import('./pages/Schedules'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Resumes = lazy(() => import('./pages/Resumes'));
 const Recommendations = lazy(() => import('./pages/Recommendations'));
@@ -69,6 +70,7 @@ export default function App() {
                   <Route path="/today" element={<LazyPage><Today /></LazyPage>} />
                   <Route path="/sources" element={<LazyPage><Sources /></LazyPage>} />
                   <Route path="/email" element={<LazyPage><EmailAnalysis /></LazyPage>} />
+                  <Route path="/schedules" element={<LazyPage><Schedules /></LazyPage>} />
                   <Route path="/settings" element={<LazyPage><Settings /></LazyPage>} />
                   <Route path="/resumes" element={<LazyPage><Resumes /></LazyPage>} />
                   <Route path="/recommendations" element={<LazyPage><Recommendations /></LazyPage>} />

@@ -1,3 +1,4 @@
+import type { RecruitmentSchedule } from '../types';
 import { downloadFile, http, uploadFile } from './http';
 import type {
   ActionListItem,
@@ -157,6 +158,8 @@ export const auditApi = {
 
 // ---------- email analysis ----------
 export const emailApi = {
+  updateSchedule: (id: number, body: {revision:number;schedule:NonNullable<EmailItem['extracted']>['schedule'];eventTime:string|null;eventTimeEnd:string|null}) => http.patch<RecruitmentSchedule>(`/email/schedules/${id}`,body),
+  schedules: (applicationId?: number) => http.get<{items:RecruitmentSchedule[]}>(`/email/schedules${qs({applicationId})}`),
   autoStatus: () => http.get<{ enabled: boolean; running: boolean; hours: number[]; autoApply: boolean; nextRunAt: string | null; lastResult: string | null }>('/email/auto-analyze'),
   runAuto: () => http.post<{ ran: boolean; message: string }>('/email/auto-analyze/run', {}, 600000),
     analyze: (days = 14, options: { fullRescan?: boolean; reanalyzePending?: boolean } = {}) =>
@@ -170,7 +173,7 @@ export const emailApi = {
   apply: (
     id: number,
     extracted?: EmailItem['extracted'],
-    options?: { markApplied?: boolean; createIfMissing?: boolean; targetApplicationId?: number | null },
+    options?: { markApplied?: boolean; createIfMissing?: boolean; targetApplicationId?: number | null; targetScheduleId?: number | null; expectedScheduleRevision?: number },
   ) =>
     http.post<{
       item: EmailItem;

@@ -22,6 +22,7 @@ const MENU_ITEMS = [
   { key: '/', icon: <DashboardOutlined />, label: '看板' },
   { key: '/applications', icon: <FileTextOutlined />, label: '投递管理' },
   { key: '/today', icon: <CalendarOutlined />, label: '今日待办' },
+  { key: '/schedules', icon: <CalendarOutlined />, label: '招聘日程' },
   { key: '/sources', icon: <GlobalOutlined />, label: '网上找岗位' },
   { key: '/recommendations', icon: <RobotOutlined />, label: '智能推荐' },
   { key: '/email', icon: <MailOutlined />, label: '邮件分析' },
@@ -37,6 +38,7 @@ const QUICK_NAV: Array<{ path: string; label: string }> = [
   { path: '/recommendations', label: '✨ 智能推荐' },
   { path: '/resumes', label: '📄 简历' },
   { path: '/today', label: '🔔 待办' },
+  { path: '/schedules', label: '📅 日程' },
 ];
 
 export default function AppLayout() {

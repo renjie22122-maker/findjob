@@ -31,7 +31,7 @@ describe('没有投递回执的申请与历史邮件', () => {
   it('预约准备提醒独立于笔试时间，人工选择申请不能跨公司', () => {
     const extraction = { ...base, eventTime: '2099-10-18T15:00:00', preparationTasks: [{title:'考位预约开始',scheduledAt:'2099-10-14T09:00:00',timeEvidence:'2099年10月14日9:00开始预约'}] };
     const first = applyEmailItem(seed(extraction), undefined, { createIfMissing: true });
-    expect(getDb().prepare('SELECT COUNT(*) AS n FROM reminders WHERE application_id=?').get(first.item.applicationId)).toEqual({n:2});
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM reminders WHERE application_id=?').get(first.item.applicationId)).toEqual({n:3}); // 活动、提前一天、预约分别提醒
     expect(() => applyEmailItem(seed({...base,company:'另一公司'}), undefined, { createIfMissing: true, targetApplicationId:first.item.applicationId! })).toThrow('不属于此公司');
   });
   it('首封面试补建申请：投递日期未知，面试时间来自正文', () => {

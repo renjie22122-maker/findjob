@@ -1,3 +1,6 @@
+import { scheduleChangeSchema } from '../services/email/schedule.schema.js';
+import { listSchedules, updateScheduleManually } from '../services/email/schedules.service.js';
+import { validEventTime } from '../services/email/eventTime.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/error.js';
@@ -11,6 +14,12 @@ import {
 } from '../services/email/autoAnalyze.service.js';
 
 const router = Router();
+router.patch('/schedules/:id', asyncHandler(async(req,res)=>{
+  const time = z.string().refine(v=>Boolean(validEventTime(v)), '无效活动时间').nullish();
+  const input = parse(z.object({revision:z.number().int().positive(),schedule:scheduleChangeSchema,eventTime:time,eventTimeEnd:time}),req.body);
+  res.json(updateScheduleManually(parseId(req.params.id),input.revision,input.schedule,input.eventTime,input.eventTimeEnd));
+}));
+router.get('/schedules', asyncHandler(async (req, res) => { res.json({items:listSchedules(req.query.applicationId ? parseId(String(req.query.applicationId)) : undefined)}); }));
 
 const analyzeSchema = z.object({
   days: z.number().int().min(1).max(30).optional(),
@@ -64,6 +73,7 @@ router.get(
 );
 
 const extractedSchema = z.object({
+  schedule: scheduleChangeSchema.optional(),
   recruitmentId: z.string().max(100).nullish(),
   preparationTasks: z.array(z.object({ title: z.string().max(100), scheduledAt: z.string(), timeEvidence: z.string().max(500) })).max(6).optional(),
   timeSource: z.literal('manual').optional(),
@@ -80,6 +90,8 @@ const extractedSchema = z.object({
 });
 
 const applyOptionsSchema = z.object({
+  targetScheduleId: z.number().int().positive().nullable().optional(),
+  expectedScheduleRevision: z.number().int().positive().optional(),
   targetApplicationId: z.number().int().positive().nullable().optional(),
   markApplied: z.boolean().optional(),
   createIfMissing: z.boolean().optional(),

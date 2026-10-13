@@ -121,6 +121,6 @@ describe('三路数据源一致性（跨路径去重）', () => {
     expect(result.results[0].ok).toBe(true);
 
     const reminders = getDb().prepare('SELECT COUNT(*) AS c FROM reminders').get() as { c: number };
-    expect(reminders.c).toBe(1); // 未重复创建
+    expect(reminders.c).toBe(2); // 保留已有提醒，仅补提前一天准备提醒
   });
 });

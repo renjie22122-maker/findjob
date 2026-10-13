@@ -63,10 +63,20 @@ function detectSchedule(text: string, receivedAt?: string): { time: string | nul
 export function extractWithRules(subject: string, sender: string, snippet: string, receivedAt?: string): EmailExtraction {
   const text = `${subject} ${snippet}`;
   const eventType = detectEventType(text);
+  const action = /取消|cancel(?:led|ed|lation)/i.test(subject) ? 'cancel' : /恢复|重新安排|reinstate/i.test(subject) ? 'restore' : /改期|延期|调整|reschedul|postpon/i.test(subject) ? 'reschedule' : /考场|考点|地点|地址|准考证|预约成功|location|venue|room|admission ticket/i.test(subject) ? 'update' : 'create';
+  const field = (pattern: RegExp) => snippet.match(pattern)?.[1]?.trim();
+  const schedule = ['written_test','interview','assessment'].includes(eventType ?? '') ? {
+    action: action as 'create' | 'update' | 'reschedule' | 'cancel' | 'restore',
+    eventRef: field(/(?:活动编号|场次编号|event id|session id)\s*[:：]\s*([^\s，。;；]+)/i),
+    venue: field(/(?:考点|场所|venue)\s*[:：]\s*([^\n。；]+)/i),
+    address: field(/(?:地址|address)\s*[:：]\s*([^\n。；]+)/i),
+    room: field(/(?:考场|房间|room)\s*[:：]\s*([^\n。；]+)/i),
+    evidence: snippet.slice(0, 2000),
+  } : undefined;
   const company = detectCompany(subject, sender, snippet);
-  const schedule = detectSchedule(snippet, receivedAt);
-  const eventTime = eventType === 'offer' || eventType === 'applied' ? null : schedule.time;
-  const timeEvidence = eventTime ? schedule.evidence : null;
+  const detectedTime = detectSchedule(snippet, receivedAt);
+  const eventTime = eventType === 'offer' || eventType === 'applied' ? null : detectedTime.time;
+  const timeEvidence = eventTime ? detectedTime.evidence : null;
   const eventTimeEnd = detectTimeRangeEnd(timeEvidence ?? '', eventTime);
   const recruitmentId = text.match(/(?:Job (?:number|id)|requisition(?: id)?|职位编号)\s*[:：#]?\s*([A-Z0-9-]{4,40})/i)?.[1]
     ?? text.match(/Microsoft Software Engineer[^\n]*?\b(\d{7,12})\b/i)?.[1] ?? null;
@@ -76,5 +86,5 @@ export function extractWithRules(subject: string, sender: string, snippet: strin
   const summary = explicitAssessment ? `编程测评登录截止（已换算本地时间）；具体时长及不可暂停要求请查看原邮件。` : eventType ? `本地规则识别：${eventType}` : '本地规则识别：招聘相关邮件';
   const confidence = explicitAssessment ? 0.9 : eventType ? 0.4 : 0.2;
 
-  return { recruitmentId, company, eventType, eventTime, eventTimeEnd, timeEvidence, timeSource: eventTime ? 'body' : 'unknown', positionTitle, summary, confidence };
+  return { schedule, recruitmentId, company, eventType, eventTime, eventTimeEnd, timeEvidence, timeSource: eventTime ? 'body' : 'unknown', positionTitle, summary, confidence };
 }

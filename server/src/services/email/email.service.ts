@@ -14,6 +14,7 @@ import { fetchRecentEmails, testEmailConnection, acknowledgeEmail } from './imap
 import { isRecruitmentCandidate } from './filter.js';
 import { eventWindowText, mailTimeToLocal, timelineTime, validEventTime } from './eventTime.js';
 import { attachEvidence } from './evidence.js';
+import { applySchedule, scheduleApplication, applicationFromEventRef, SCHEDULE_KINDS } from './schedules.service.js';
 import { matchEmailApplication } from './applicationMatch.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
 
@@ -187,6 +188,8 @@ export function countPendingEmailItems(): number {
 
 /** 应用邮件时的可选项（ADR-7 的扩展：默认不碰状态机，悬选后才推进） */
 export interface ApplyOptions {
+  targetScheduleId?: number | null;
+  expectedScheduleRevision?: number;
   targetApplicationId?: number | null;
   /** 投递确认类邮件：匹配到的申请若处于「待投递」，一并推进为「已投递」 */
   markApplied?: boolean;
@@ -226,9 +229,10 @@ function applyEmailItemInternal(
   if (extracted?.eventType === 'applied' || extracted?.eventType === 'reject') {
     extracted = { ...extracted, eventTime: mailTimeToLocal(row.received_at), eventTimeEnd: null, timeSource: 'received', timeEvidence: null };
   }
+  if (extracted?.schedule && !SCHEDULE_KINDS.includes(extracted.eventType ?? '')) throw AppError.validation('日程变更必须指定考试、测评或面试类型，取消活动不等于拒信');
   if (extracted?.eventTime && !validEventTime(extracted.eventTime)) throw AppError.validation('事件时间格式或日期无效');
   if (extracted?.eventTimeEnd && (!validEventTime(extracted.eventTimeEnd) || !extracted.eventTime || extracted.eventTimeEnd <= extracted.eventTime)) throw AppError.validation('结束时间必须晚于开始时间');
-  if (extracted && ['written_test', 'interview', 'assessment'].includes(extracted.eventType ?? '') && !extracted.eventTime) throw AppError.validation('请先填写正文或附件中的活动时间，不能使用收件时间代替');
+  if (extracted && ['written_test', 'interview', 'assessment'].includes(extracted.eventType ?? '') && !extracted.eventTime && (!extracted.schedule || extracted.schedule.action === 'create')) throw AppError.validation('请先填写正文或附件中的活动时间，不能使用收件时间代替');
 
   let applicationId: number | null = null;
   let timelineEvent: TimelineEvent | null = null;
@@ -251,7 +255,15 @@ function applyEmailItemInternal(
     if (!company) {
       warning = `未在库中找到公司「${extracted.company}」，本次仅记录邮件；可在应用时勾选「不存在则创建记录」，或先在申请列表添加该公司。`;
     } else {
-      let appRow = matchEmailApplication(company.id, extracted, options.targetApplicationId);
+      const selectedApp = typeof options.targetScheduleId === 'number' ? scheduleApplication(options.targetScheduleId) : undefined;
+      if (selectedApp && options.targetApplicationId !== undefined && options.targetApplicationId !== selectedApp) throw AppError.conflict('所选申请与日程不一致');
+      const eventApp = selectedApp ?? applicationFromEventRef(company.id, extracted.schedule?.eventRef);
+      if (!selectedApp && options.targetApplicationId === undefined && eventApp && extracted.recruitmentId) {
+        const byJob = matchEmailApplication(company.id, extracted);
+        if (!byJob || byJob.id !== eventApp) throw AppError.conflict('职位编号与活动编号指向不同申请，请人工核对');
+      }
+      let appRow = matchEmailApplication(company.id, extracted, options.targetApplicationId !== undefined ? options.targetApplicationId : eventApp);
+      if (!appRow && extracted.schedule && extracted.schedule.action !== 'create') throw AppError.conflict('变更通知无法确认原申请，请先选择原日程');
       // 开启 createIfMissing 且无匹配时：自动建一条「待投递」记录（后续可推进为已投递）
       if (!appRow && options.createIfMissing) {
         const title =
@@ -279,6 +291,11 @@ function applyEmailItemInternal(
     warning = '未识别到公司信息，仅记录邮件内容。';
   }
 
+  const managedSchedule = Boolean(extracted && SCHEDULE_KINDS.includes(extracted.eventType ?? ''));
+  if (managedSchedule && !applicationId) throw AppError.validation('请先关联申请，再创建或更新日程');
+  const scheduleResult = managedSchedule && applicationId && extracted ? applySchedule(applicationId, id, row.received_at, extracted, options.targetScheduleId, options.expectedScheduleRevision) : null;
+  if (scheduleResult?.stale) warning = '旧邮件已留档，未覆盖更新的日程和提醒';
+  if (scheduleResult?.cancelled) warning = '日程已取消，已撤销该日程自动生成的未完成提醒';
   const now = nowIso();
   // 保留收件时间，并按事件类型选择真实的事件时间。
   const mailTime = mailTimeToLocal(row.received_at) ?? now;
@@ -290,7 +307,7 @@ function applyEmailItemInternal(
   const windowText = extracted ? eventWindowText(extracted.eventTime, extracted.eventTimeEnd ?? null) : null;
   db.transaction(() => {
     if (applicationId && extracted) {
-      for (const task of extracted.preparationTasks ?? []) {
+      for (const task of managedSchedule ? [] : extracted.preparationTasks ?? []) {
         const at = validEventTime(task.scheduledAt);
         if (!at) throw AppError.validation('准备事项时间无效');
         const taskTitle = `准备：${task.title}`;
@@ -300,9 +317,11 @@ function applyEmailItemInternal(
         db.prepare("INSERT INTO timeline_events(application_id,event_type,title,description,occurred_at,created_at) VALUES (?,'note',?,?,?,?)").run(applicationId, taskTitle, task.timeEvidence, at, now);
       }
       const eventLabel = extracted.eventType ? EMAIL_EVENT_LABELS[extracted.eventType] : '邮件';
-      const title = `邮件：${eventLabel}${extracted.positionTitle ? `（${extracted.positionTitle}）` : ''}${windowText ? ` · ${windowText}` : ''}`;
+      const title = `邮件：${extracted.schedule ? {create:'安排',update:'补充',reschedule:'改期',cancel:'取消',restore:'恢复'}[extracted.schedule.action] + ' · ' : ''}${eventLabel}${extracted.positionTitle ? `（${extracted.positionTitle}）` : ''}${windowText ? ` · ${windowText}` : ''}`;
       const description = [
         extracted.summary,
+        extracted.schedule ? [extracted.schedule.venue, extracted.schedule.address, extracted.schedule.room].filter(Boolean).join(' · ') : null,
+        extracted.schedule?.evidence,
         windowText ? `时间：${windowText}` : null,
         row.subject ? `主题：${row.subject}` : null,
         `收件时间：${mailTime}`,
@@ -336,7 +355,7 @@ function applyEmailItemInternal(
           : extracted.eventType && extracted.eventTimeEnd && extracted.eventTimeEnd > now
             ? extracted.eventTimeEnd
             : null;
-      if (extracted.eventType && remindAt) {
+      if (!managedSchedule && extracted.eventType && remindAt) {
         const remType = EMAIL_EVENT_TO_REMINDER_TYPE[extracted.eventType] ?? 'other';
         // 提醒去重：同申请 + 同类型 + 同时间且未完成的提醒不重复创建
         const existingRem = db
@@ -371,10 +390,13 @@ function applyEmailItemInternal(
     ).run(JSON.stringify(extracted), applicationId, now, id);
   })();
 
+  if (scheduleResult && !scheduleResult.stale && !scheduleResult.cancelled) {
+    reminder = db.prepare('SELECT id, application_id applicationId, type, title, scheduled_at scheduledAt, done, done_at doneAt, created_at createdAt FROM reminders WHERE schedule_id=? AND done=0 ORDER BY scheduled_at DESC LIMIT 1').get(scheduleResult.id) as Reminder | undefined ?? null;
+  }
   // 状态推进（默认关闭；按邮件事件类型沿「合法流转路径」推进，不绕过状态机）
   const newerMail = applicationId ? (db.prepare("SELECT received_at FROM email_items WHERE application_id = ? AND status = 'confirmed' AND id <> ?").all(applicationId, id) as { received_at: string }[]).some((mail) => new Date(mail.received_at).getTime() > new Date(row.received_at).getTime()) : false;
   if (newerMail) warning = '已补充历史时间线；已有更新的邮件，保留当前申请状态';
-  if (options.markApplied && applicationId && !newerMail) {
+  if (options.markApplied && applicationId && !newerMail && !scheduleResult?.stale && (!extracted?.schedule || extracted.schedule.action === 'create' || extracted.schedule.action === 'restore')) {
     const current = db.prepare('SELECT status FROM applications WHERE id = ?').get(applicationId) as
       | { status: AppStatus }
       | undefined;
@@ -481,7 +503,7 @@ export function applyEmailBatch(minConfidence = 0.8, options: ApplyOptions = {})
     } catch {
       extraction = null;
     }
-    if (!extraction || !extraction.timeSource || extraction.timeSource === 'unknown' || extraction.confidence < minConfidence || extraction.reviewReasons?.length || !extraction.company || !extraction.eventType || extraction.eventType === 'other' || (['interview', 'written_test', 'assessment'].includes(extraction.eventType) && !extraction.eventTime)) {
+    if (!extraction || !extraction.timeSource || extraction.timeSource === 'unknown' || extraction.confidence < minConfidence || extraction.reviewReasons?.length || !extraction.company || !extraction.eventType || extraction.eventType === 'other' || (['interview', 'written_test', 'assessment'].includes(extraction.eventType) && !extraction.eventTime && (!extraction.schedule || extraction.schedule.action === 'create'))) {
       skipped++;
       continue;
     }
