@@ -170,7 +170,7 @@ export const emailApi = {
   apply: (
     id: number,
     extracted?: EmailItem['extracted'],
-    options?: { markApplied?: boolean; createIfMissing?: boolean },
+    options?: { markApplied?: boolean; createIfMissing?: boolean; targetApplicationId?: number | null },
   ) =>
     http.post<{
       item: EmailItem;

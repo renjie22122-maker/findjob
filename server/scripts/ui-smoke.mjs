@@ -31,6 +31,10 @@ try {
   await page.screenshot({ path: out + 'email-dark.png', fullPage: true, animations: 'disabled' });
   await page.getByRole('button', { name: '应用到追踪' }).first().click();
   await page.getByText('确认提取结果（可修改后应用）', { exact: true }).waitFor();
+  await page.getByLabel('关联申请').click();
+  await page.getByText('新建独立申请（不与已有申请合并）', { exact: true }).waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByLabel('职位编号（不是简历编号或验证码）').fill('DEMO-101');
   await page.screenshot({ path: out + 'modal-dark.png', animations: 'disabled' });
   await page.getByRole('button', { name: '取 消' }).click();
   await page.reload();

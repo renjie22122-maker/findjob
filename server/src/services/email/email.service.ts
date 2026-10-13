@@ -14,6 +14,7 @@ import { fetchRecentEmails, testEmailConnection, acknowledgeEmail } from './imap
 import { isRecruitmentCandidate } from './filter.js';
 import { eventWindowText, mailTimeToLocal, timelineTime, validEventTime } from './eventTime.js';
 import { attachEvidence } from './evidence.js';
+import { matchEmailApplication } from './applicationMatch.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
 
 interface EmailItemRow {
@@ -119,7 +120,7 @@ async function analyzeEmailsOnce(days: number, options: AnalyzeOptions = {}): Pr
         extraction = await extractWithLlm(raw.subject, raw.sender, raw.snippet ?? '', raw.receivedAt, raw.content?.attachmentText ?? '');
       } catch (err) {
         console.warn('[email] LLM 提取失败，降级本地规则：', err instanceof Error ? err.message : err);
-        extraction = extractWithRules(raw.subject, raw.sender, raw.snippet ?? '');
+        extraction = extractWithRules(raw.subject, raw.sender, `${raw.snippet ?? ''}\n${raw.content?.attachmentText ?? ''}`, raw.receivedAt);
       }
       // 模型判定与求职无关（安全通知/账单/营销等）：不入库，仅计数
       if (extraction.relevant === false) {
@@ -131,7 +132,7 @@ async function analyzeEmailsOnce(days: number, options: AnalyzeOptions = {}): Pr
         continue;
       }
     } else {
-      extraction = extractWithRules(raw.subject, raw.sender, raw.snippet ?? '');
+      extraction = extractWithRules(raw.subject, raw.sender, `${raw.snippet ?? ''}\n${raw.content?.attachmentText ?? ''}`, raw.receivedAt);
     }
     extraction = attachEvidence(extraction, raw);
     if (options.reanalyzePending && pending.has(raw.messageId)) {
@@ -186,6 +187,7 @@ export function countPendingEmailItems(): number {
 
 /** 应用邮件时的可选项（ADR-7 的扩展：默认不碰状态机，悬选后才推进） */
 export interface ApplyOptions {
+  targetApplicationId?: number | null;
   /** 投递确认类邮件：匹配到的申请若处于「待投递」，一并推进为「已投递」 */
   markApplied?: boolean;
   /** 库中缺少公司/岗位时自动创建申请记录（默认关闭，避免脏数据） */
@@ -206,6 +208,7 @@ function applyEmailItemInternal(
 } {
   const db = getDb();
   const row = db.prepare('SELECT * FROM email_items WHERE id = ?').get(id) as EmailItemRow | undefined;
+  if (options.targetApplicationId === null && !options.createIfMissing) throw AppError.validation('选择新建独立申请时，请开启缺记录则创建');
   if (!row) throw AppError.notFound('邮件记录');
   if (row.status !== 'pending') throw AppError.conflict('该邮件已处理');
 
@@ -234,7 +237,7 @@ function applyEmailItemInternal(
   let statusChange: { applicationId: number; from: AppStatus; to: AppStatus } | null = null;
 
   if (extracted?.company) {
-    // 公司：先模糊匹配；开启 createIfMissing 时允许自动建公司
+    // 公司名称精确匹配；开启 createIfMissing 时允许自动建公司。
     // Exact names only: fuzzy company matching may merge unrelated employers.
     let company = db.prepare('SELECT id, name FROM companies WHERE name = ?').get(extracted.company.trim()) as { id: number; name: string } | undefined;
     if (!company && options.createIfMissing) {
@@ -248,20 +251,7 @@ function applyEmailItemInternal(
     if (!company) {
       warning = `未在库中找到公司「${extracted.company}」，本次仅记录邮件；可在应用时勾选「不存在则创建记录」，或先在申请列表添加该公司。`;
     } else {
-      // 按公司 + 岗位唯一匹配，岗位缺失时不能在多个申请中猜测。
-      let appRow: { id: number } | undefined;
-      const matches = (extracted.positionTitle
-        ? db.prepare('SELECT id FROM applications WHERE company_id = ? AND position_title = ?').all(company.id, extracted.positionTitle.trim())
-        : db.prepare('SELECT id FROM applications WHERE company_id = ?').all(company.id)) as { id: number }[];
-      if (matches.length > 1) throw AppError.conflict('同公司存在多个匹配岗位，请填写唯一的岗位名称后应用');
-      appRow = matches[0];
-      if (!appRow && extracted.positionTitle) {
-        const all = db.prepare('SELECT id, position_title, channel FROM applications WHERE company_id = ?').all(company.id) as { id: number; position_title: string; channel: string | null }[];
-        if (all.length === 1 && all[0].channel === '邮件导入' && all[0].position_title.includes('邮件导入（')) {
-          appRow = all[0];
-          db.prepare('UPDATE applications SET position_title = ? WHERE id = ?').run(extracted.positionTitle.trim(), appRow.id);
-        }
-      }
+      let appRow = matchEmailApplication(company.id, extracted, options.targetApplicationId);
       // 开启 createIfMissing 且无匹配时：自动建一条「待投递」记录（后续可推进为已投递）
       if (!appRow && options.createIfMissing) {
         const title =
@@ -270,7 +260,7 @@ function applyEmailItemInternal(
         try {
           const created = createApplication({
             companyId: company.id,
-            positionTitle: title,
+            positionTitle: extracted.recruitmentId ? `${title} [${extracted.recruitmentId}]` : title,
             status: STATUS.WISHLIST,
             // 投递确认类邮件：投递日期用邮件收到日期，而不是导入/分析日期
             appliedAt:
@@ -300,6 +290,15 @@ function applyEmailItemInternal(
   const windowText = extracted ? eventWindowText(extracted.eventTime, extracted.eventTimeEnd ?? null) : null;
   db.transaction(() => {
     if (applicationId && extracted) {
+      for (const task of extracted.preparationTasks ?? []) {
+        const at = validEventTime(task.scheduledAt);
+        if (!at) throw AppError.validation('准备事项时间无效');
+        const taskTitle = `准备：${task.title}`;
+        if (at > now && !db.prepare('SELECT id FROM reminders WHERE application_id=? AND title=? AND scheduled_at=? AND done=0').get(applicationId, taskTitle, at)) {
+          db.prepare("INSERT INTO reminders(application_id,type,title,scheduled_at,done,created_at) VALUES (?,'other',?,?,0,?)").run(applicationId, taskTitle, at, now);
+        }
+        db.prepare("INSERT INTO timeline_events(application_id,event_type,title,description,occurred_at,created_at) VALUES (?,'note',?,?,?,?)").run(applicationId, taskTitle, task.timeEvidence, at, now);
+      }
       const eventLabel = extracted.eventType ? EMAIL_EVENT_LABELS[extracted.eventType] : '邮件';
       const title = `邮件：${eventLabel}${extracted.positionTitle ? `（${extracted.positionTitle}）` : ''}${windowText ? ` · ${windowText}` : ''}`;
       const description = [

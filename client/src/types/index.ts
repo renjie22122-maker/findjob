@@ -74,6 +74,8 @@ export interface Reminder {
 }
 
 export interface EmailExtraction {
+  recruitmentId?: string | null;
+  preparationTasks?: Array<{ title: string; scheduledAt: string; timeEvidence: string }>;
   timeSource?: 'received' | 'body' | 'attachment' | 'unknown' | 'manual';
   timeEvidence?: string | null;
   reviewReasons?: string[];

@@ -13,6 +13,27 @@ function seed(extracted: EmailExtraction, received = '2026-10-10T08:00:00Z') {
 beforeEach(() => { closeDb(); getDb(); });
 
 describe('没有投递回执的申请与历史邮件', () => {
+  it('不同职位编号即使岗位名称相同也分开；拒信不覆盖另一岗位笔试和提醒', () => {
+    const first = applyEmailItem(seed({ ...base, recruitmentId: 'JOB-101', eventType: 'assessment', eventTime: '2099-10-17T14:24:00' }), undefined, { createIfMissing: true, markApplied: true });
+    const second = applyEmailItem(seed({ ...base, recruitmentId: 'JOB-102', eventType: 'reject' }), undefined, { createIfMissing: true, markApplied: true });
+    expect(first.item.applicationId).not.toBe(second.item.applicationId);
+    expect(getDb().prepare('SELECT status FROM applications WHERE id=?').get(first.item.applicationId)).toEqual({status:'WRITTEN_TEST'});
+    expect(getDb().prepare('SELECT status FROM applications WHERE id=?').get(second.item.applicationId)).toEqual({status:'REJECTED'});
+    expect(getDb().prepare('SELECT scheduled_at FROM reminders WHERE application_id=?').get(first.item.applicationId)).toEqual({scheduled_at:'2099-10-17T14:24:00'});
+    const followup = applyEmailItem(seed({ ...base, recruitmentId: 'JOB-101', positionTitle: '不同语言的职位名', eventType: 'applied' }), undefined, { createIfMissing: true });
+    expect(followup.item.applicationId).toBe(first.item.applicationId);
+  });
+  it('旧版未知岗位不会被带岗位拒信改名吞并', () => {
+    const first = applyEmailItem(seed({ ...base, positionTitle: null }), undefined, { createIfMissing: true });
+    const reject = applyEmailItem(seed({ ...base, positionTitle: '另一岗位', eventType: 'reject' }), undefined, { createIfMissing: true });
+    expect(reject.item.applicationId).not.toBe(first.item.applicationId);
+  });
+  it('预约准备提醒独立于笔试时间，人工选择申请不能跨公司', () => {
+    const extraction = { ...base, eventTime: '2099-10-18T15:00:00', preparationTasks: [{title:'考位预约开始',scheduledAt:'2099-10-14T09:00:00',timeEvidence:'2099年10月14日9:00开始预约'}] };
+    const first = applyEmailItem(seed(extraction), undefined, { createIfMissing: true });
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM reminders WHERE application_id=?').get(first.item.applicationId)).toEqual({n:2});
+    expect(() => applyEmailItem(seed({...base,company:'另一公司'}), undefined, { createIfMissing: true, targetApplicationId:first.item.applicationId! })).toThrow('不属于此公司');
+  });
   it('首封面试补建申请：投递日期未知，面试时间来自正文', () => {
     const id = seed(base);
     const result = applyEmailItem(id, undefined, { markApplied: true, createIfMissing: true });

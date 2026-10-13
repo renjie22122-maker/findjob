@@ -103,11 +103,15 @@ export async function runAutoEmailAnalyze(
   try {
     const result = await analyzeEmails(EMAIL_AUTO_ANALYZE_DAYS, { includeJunk: true });
     let applied = 0;
+    let review = 0;
+    let failure = '';
     if (EMAIL_AUTO_APPLY) {
       const batch = applyEmailBatch(EMAIL_AUTO_APPLY_MIN_CONFIDENCE, { markApplied: true, createIfMissing: true });
       applied = batch.applied;
+      review = batch.skipped + batch.results.filter(r => !r.ok).length;
+      failure = batch.results.find(r => !r.ok)?.message ?? '';
     }
-    const summary = `拉取 ${result.fetched} / 候选 ${result.candidates} / 新分析 ${result.analyzed}（去重跳过 ${result.skipped}）/ 自动应用 ${applied}`;
+    const summary = `拉取 ${result.fetched} / 候选 ${result.candidates} / 新分析 ${result.analyzed}（去重跳过 ${result.skipped}）/ 自动应用 ${applied} / 待复核 ${review}${failure ? `（${failure}）` : ''}`;
     markAutoAnalyzeRan(`${nowIso().slice(0, 16)} ${trigger} 成功：${summary}`);
     console.log(`[email-auto] ${trigger} 成功：${summary}`);
     return { ran: true, trigger, message: summary, ...result, applied };

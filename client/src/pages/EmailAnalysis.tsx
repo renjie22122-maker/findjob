@@ -3,7 +3,7 @@ import { CheckOutlined, CloseOutlined, MailOutlined, SettingOutlined, Thunderbol
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { emailApi, settingsApi } from '../api';
+import { emailApi, settingsApi, applicationsApi } from '../api';
 import type { EmailExtraction, EmailItem } from '../types';
 import { EMAIL_EVENT_COLORS, EMAIL_EVENT_LABELS, STATUS_LABELS, formatDateTime } from '../utils/constants';
 import dayjs from 'dayjs';
@@ -17,6 +17,8 @@ export default function EmailAnalysis() {
   const [days, setDays] = useState(14);
   const [editItem, setEditItem] = useState<EmailItem | null>(null);
   const [editForm] = Form.useForm();
+  const [applicationSearch, setApplicationSearch] = useState('');
+  const { data: applicationChoices } = useQuery({ queryKey: ['applications', 'mail-targets', applicationSearch], queryFn: () => applicationsApi.list({ page: 1, pageSize: 100, keyword: applicationSearch }), enabled: Boolean(editItem) });
   // 应用邮件时的行为（默认开启）：“投递确认”类邮件可一并把匹配到的申请标为已投递；库里没有记录则自动创建
   const [markApplied, setMarkApplied] = useState(true);
   const [createIfMissing, setCreateIfMissing] = useState(true);
@@ -48,7 +50,7 @@ export default function EmailAnalysis() {
 
   const applyMutation = useMutation({
     mutationFn: (item: EmailItem) =>
-      emailApi.apply(item.id, item.extracted ?? undefined, { markApplied, createIfMissing }),
+      emailApi.apply(item.id, item.extracted ?? undefined, { markApplied, createIfMissing, targetApplicationId: editForm.getFieldValue('targetApplicationId') === 'new' ? null : editForm.getFieldValue('targetApplicationId') }),
     onSuccess: (r) => {
       if (r.statusChange) {
         message.success(`已应用，申请 #${r.statusChange.applicationId} 状态已更新为「${STATUS_LABELS[r.statusChange.to as keyof typeof STATUS_LABELS]}」`);
@@ -198,6 +200,8 @@ export default function EmailAnalysis() {
                         : ''}
                     </Tag>
                   )}
+                  {item.extracted?.recruitmentId && <Tag>职位编号：{item.extracted.recruitmentId}</Tag>}
+                  {item.extracted?.preparationTasks?.map((task, i) => <Tag key={i} color="orange">{task.title} · {formatDateTime(task.scheduledAt)}</Tag>)}
                   {item.extracted?.positionTitle && <Tag>岗位：{item.extracted.positionTitle}</Tag>}
                   <Tag color={item.extracted && item.extracted.confidence >= 0.7 ? 'green' : item.extracted && item.extracted.confidence >= 0.4 ? 'gold' : 'red'}>
                     置信度 {Math.round((item.extracted?.confidence ?? 0) * 100)}%
@@ -226,7 +230,10 @@ export default function EmailAnalysis() {
                       icon={<CheckOutlined />}
                       onClick={() => {
                         setEditItem(item);
+                        setApplicationSearch(item.extracted?.company ?? '');
+                        editForm.resetFields();
                         editForm.setFieldsValue({
+                          recruitmentId: item.extracted?.recruitmentId,
                           company: item.extracted?.company ?? undefined,
                           eventType: item.extracted?.eventType ?? undefined,
                           eventTime: item.extracted?.eventTime ? dayjs(item.extracted.eventTime) : undefined,
@@ -253,11 +260,15 @@ export default function EmailAnalysis() {
 
       <Modal
         title="确认提取结果（可修改后应用）"
+        style={{ top: 24 }}
+        styles={{ body: { maxHeight: 'calc(100vh - 160px)', overflowY: 'auto', paddingRight: 4 } }}
         open={Boolean(editItem)}
         onCancel={() => setEditItem(null)}
         onOk={() => {
           const v = editForm.getFieldsValue();
           const extracted: EmailExtraction = {
+            recruitmentId: v.recruitmentId || null,
+            preparationTasks: editItem?.extracted?.preparationTasks,
             attachments: editItem?.extracted?.attachments,
             timeSource: 'manual',
             timeEvidence: editItem?.extracted?.timeEvidence,
@@ -276,10 +287,15 @@ export default function EmailAnalysis() {
         <Descriptions column={1} size="small" style={{ marginBottom: 8 }}>
           <Descriptions.Item label="邮件主题">{editItem?.subject}</Descriptions.Item>
         </Descriptions>
+        {editItem?.extracted?.preparationTasks?.map((task, i) => <Typography.Paragraph key={i}>准备提醒：{task.title} · {formatDateTime(task.scheduledAt)}</Typography.Paragraph>)}
         <Form form={editForm} layout="vertical">
           <Form.Item name="company" label="公司">
-            <Input placeholder="与库中公司模糊匹配，未匹配到仅记录邮件" />
+            <Input placeholder="与库中公司名称精确匹配" />
           </Form.Item>
+          <Form.Item name="targetApplicationId" label="关联申请" extra="缺岗位或编号时请明确选择；拒信只影响所选申请。搜索可查找更多记录。">
+            <Select allowClear showSearch filterOption={false} onSearch={setApplicationSearch} placeholder="按职位编号 / 唯一岗位匹配" options={[{ value: 'new', label: '新建独立申请（不与已有申请合并）' }, ...(applicationChoices?.items ?? []).map(a => ({ value: a.id, label: `#${a.id} ${a.companyName} · ${a.positionTitle}` }))]} />
+          </Form.Item>
+          <Form.Item name="recruitmentId" label="职位编号（不是简历编号或验证码）"><Input /></Form.Item>
           <Form.Item name="eventType" label="事件类型">
             <Select allowClear options={Object.entries(EMAIL_EVENT_LABELS).map(([value, label]) => ({ value, label }))} />
           </Form.Item>

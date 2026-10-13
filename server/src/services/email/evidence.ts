@@ -5,6 +5,28 @@ import { mailTimeToLocal, validEventTime } from './eventTime.js';
 /** Confidence alone cannot authorize a dated event: require source evidence. */
 export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): EmailExtraction {
   const result = { ...extraction, attachments: raw.content?.attachments ?? [], reviewReasons: [...(raw.content?.warnings ?? [])] };
+  const sourceText = `${raw.subject}\n${raw.content?.body ?? raw.snippet}\n${raw.content?.attachmentText ?? ''}`;
+  if ((sourceText.match(/地区[^\n。]{0,40}开始时间/g) ?? []).length > 1) {
+    result.eventTime = null; result.eventTimeEnd = null;
+    result.reviewReasons.push('包含多个地区的考试时间，请选择本人考区后确认');
+  }
+  if (result.recruitmentId && !sourceText.includes(result.recruitmentId)) {
+    result.recruitmentId = null;
+    result.reviewReasons.push('职位编号未在原文出现，需确认申请关联');
+  }
+  result.preparationTasks = (result.preparationTasks ?? []).filter(task => {
+    const valid = validEventTime(task.scheduledAt);
+    const quote = task.timeEvidence?.replace(/\s+/gu, '');
+    const dates = [...(quote ?? '').matchAll(/(?<![\d:：])(?:(20\d{2})[-年/.])?(\d{1,2})[-月/.](\d{1,2})(?!\d)/g)];
+    const dateMatches = valid && dates.some(m => (!m[1] || m[1] === valid.slice(0, 4)) && Number(m[2]) === Number(valid.slice(5, 7)) && Number(m[3]) === Number(valid.slice(8, 10)));
+    const clockMatches = valid && [...(quote ?? '').matchAll(/(\d{1,2})[:：](\d{2})/g)].some(m => Number(m[1]) === Number(valid.slice(11, 13)) && m[2] === valid.slice(14, 16));
+    if (!valid || !quote || !sourceText.replace(/\s+/gu, '').includes(quote) || !dateMatches || !clockMatches) {
+      result.reviewReasons.push('准备事项缺少有效时间或原文依据，未创建该提醒');
+      return false;
+    }
+    task.scheduledAt = valid;
+    return true;
+  });
   result.eventTime = validEventTime(result.eventTime);
   result.eventTimeEnd = validEventTime(result.eventTimeEnd);
   if (result.eventType === 'applied' || result.eventType === 'reject') {
@@ -14,7 +36,8 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     const evidence = result.timeEvidence?.trim();
     const body = raw.content?.body ?? raw.snippet;
     const attachments = raw.content?.attachmentText ?? '';
-    const source = evidence && /\d/.test(evidence) ? (body.includes(evidence) ? 'body' : attachments.includes(evidence) ? 'attachment' : null) : null;
+    const normalize = (text: string) => text.replace(/\s+/gu, '');
+    const source = evidence && /\d/.test(evidence) ? (normalize(body).includes(normalize(evidence)) ? 'body' : normalize(attachments).includes(normalize(evidence)) ? 'attachment' : null) : null;
     if (result.eventTime && !source) {
       result.eventTime = null; result.eventTimeEnd = null;
       result.reviewReasons.push('模型提供的时间缺少可核对原文，需人工确认');

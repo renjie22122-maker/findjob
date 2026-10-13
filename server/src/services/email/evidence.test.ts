@@ -9,6 +9,22 @@ const raw = { messageId: 'test', subject: '面试', sender: 'HR', receivedAt, sn
 const base: EmailExtraction = { company: '测试公司', eventType: 'interview', eventTime: '2026-10-15T14:00:00', positionTitle: '工程师', summary: null, confidence: 0.95, timeEvidence: '2026-10-15 14:00' };
 
 describe('事件时间依据与危险信息', () => {
+  it('允许 HTML 布局引入的空白变化，仍要求原文内容一致', () => {
+    const result = attachEvidence(base, { ...raw, snippet: '面试时间：2026-10-15\n  14:00' });
+    expect(result.eventTime).toBe(base.eventTime);
+    expect(result.reviewReasons).toEqual([]);
+  });
+  it('模型不能擅选多考区、编造职位编号或准备事项原文', () => {
+    const result = attachEvidence({ ...base, recruitmentId: 'fabricated', preparationTasks: [{title:'预约',scheduledAt:'2026-10-14T09:00:00',timeEvidence:'虚构 09:00'}] }, { ...raw, snippet: `${raw.snippet}\n港澳地区开始时间为15:00。悉尼地区开始时间为18:00。` });
+    expect(result.eventTime).toBeNull(); expect(result.recruitmentId).toBeNull(); expect(result.preparationTasks).toEqual([]);
+    expect(result.reviewReasons?.join()).toContain('考区');
+  });
+  it('准备事项日期和时刻必须对应引文，不能凭真实引文伪造另一天', () => {
+    const quote = '请于2026年10月14日9:00-10月16日11:00预约';
+    const task = {title:'预约截止',scheduledAt:'2026-10-16T11:00:00',timeEvidence:quote};
+    expect(attachEvidence({...base,preparationTasks:[task]}, {...raw,snippet:`${raw.snippet}\n${quote}`}).preparationTasks).toHaveLength(1);
+    expect(attachEvidence({...base,preparationTasks:[{...task,scheduledAt:'2026-10-18T11:00:00'}]}, {...raw,snippet:`${raw.snippet}\n${quote}`}).preparationTasks).toHaveLength(0);
+  });
   it('投递始终使用收件时间，面试保留正文历史或未来时间', () => {
     const applied = attachEvidence({ ...base, eventType: 'applied' }, raw);
     expect(applied.timeSource).toBe('received');

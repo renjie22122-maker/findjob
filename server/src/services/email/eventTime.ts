@@ -52,6 +52,8 @@ const RANGE_RE = /(\d{1,2})[:：](\d{2})\s*分?\s*(?:[-~–—]|至|到|to)\s*(\
 export function detectTimeRangeEnd(text: string, startIso?: string | null): string | null {
   const m = RANGE_RE.exec(text);
   if (!m || !startIso || !/^\d{4}-\d{2}-\d{2}T/.test(startIso)) return null;
+  // An unrelated range (booking / customer service) is not the exam's end.
+  if (`${m[1].padStart(2, '0')}:${m[2]}` !== startIso.slice(11, 16)) return null;
   const endH = m[3].padStart(2, '0');
   const endM = m[4].padStart(2, '0');
   let iso = `${startIso.slice(0, 10)}T${endH}:${endM}:00`;

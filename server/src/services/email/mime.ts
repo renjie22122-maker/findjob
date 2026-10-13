@@ -1,6 +1,7 @@
 import { simpleParser } from 'mailparser';
 import { load } from 'cheerio';
-import { Worker } from 'node:worker_threads';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { redactMailSecrets, sensitiveContentWarnings } from './contentSafety.js';
 
@@ -22,14 +23,21 @@ async function extractAttachment(content: Buffer, extension: string): Promise<st
   const local = new URL('./attachment.worker.js', import.meta.url);
   const workerUrl = existsSync(local) ? local : new URL('../../../dist/services/email/attachment.worker.js', import.meta.url);
   return new Promise((resolve, reject) => {
-    const worker = new Worker(workerUrl, { workerData: { content, extension }, resourceLimits: { maxOldGenerationSizeMb: 128 } });
-    const timer = setTimeout(() => { void worker.terminate(); reject(new Error('附件解析超时')); }, 8000);
-    worker.once('message', (result: { text?: string; error?: string }) => {
-      clearTimeout(timer); void worker.terminate();
-      if (result.error) reject(new Error(result.error)); else resolve(result.text ?? '');
+    // Separate process: a PDF native-addon crash must never terminate the mailbox server.
+    // Only OS runtime variables are inherited; no API keys / mailbox credentials.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(PATH|SystemRoot|WINDIR|TEMP|TMP)$/i.test(key)));
+    const child = spawn(process.execPath, ['--max-old-space-size=128', fileURLToPath(workerUrl)], { env, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'], serialization: 'advanced' });
+    let result: { text?: string; error?: string } | undefined;
+    const timer = setTimeout(() => { child.kill(); reject(new Error('附件解析超时')); }, 8000);
+    child.once('message', (message) => { result = message as typeof result; });
+    child.once('error', () => { clearTimeout(timer); child.kill(); reject(new Error('附件解析失败')); });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      if (code !== 0 || !result) reject(new Error('附件解析中断'));
+      else if (result.error) reject(new Error(result.error));
+      else resolve(result.text ?? '');
     });
-    worker.once('error', () => { clearTimeout(timer); reject(new Error('附件解析失败')); });
-    worker.once('exit', (code) => { clearTimeout(timer); if (code !== 0) reject(new Error('附件解析中断')); });
+    child.send({ content, extension }, error => { if (error) { clearTimeout(timer); child.kill(); reject(new Error('附件解析失败')); } });
   });
 }
 

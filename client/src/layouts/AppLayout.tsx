@@ -1,4 +1,5 @@
-import { Layout, Menu, Badge, Typography, Space, Select, theme } from 'antd';
+import { Layout, Menu, Badge, Typography, Space, Select, theme, Alert, Button } from 'antd';
+import { formatDateTime } from '../utils/constants';
 import { useAppTheme } from '../theme';
 import {
   DashboardOutlined,
@@ -92,6 +93,7 @@ export default function AppLayout() {
           <Select aria-label="界面主题" value={mode} onChange={setMode} style={{ width: 132 }} options={[{ value: 'system', label: '跟随系统' }, { value: 'light', label: '☀ 浅色' }, { value: 'dark', label: '☾ 暗色' }]} />
         </Header>
         <Content style={{ margin: 16, minWidth: 0 }}>
+          {location.pathname !== '/today' && ((today?.today.length ?? 0) + (today?.upcoming.length ?? 0) > 0) && <Alert style={{ marginBottom: 12 }} showIcon type="warning" message={`待办提醒：今天 ${today?.today.length ?? 0} 项，未来 7 天 ${today?.upcoming.length ?? 0} 项`} description={(() => { const next = today?.today[0] ?? today?.upcoming[0]; return next ? `${next.companyName ?? ''} · ${next.title} · ${formatDateTime(next.scheduledAt)}` : ''; })()} action={<Button size="small" onClick={() => navigate('/today')}>查看全部</Button>} />}
           <Outlet />
         </Content>
       </Layout>

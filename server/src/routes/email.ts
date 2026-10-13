@@ -64,6 +64,8 @@ router.get(
 );
 
 const extractedSchema = z.object({
+  recruitmentId: z.string().max(100).nullish(),
+  preparationTasks: z.array(z.object({ title: z.string().max(100), scheduledAt: z.string(), timeEvidence: z.string().max(500) })).max(6).optional(),
   timeSource: z.literal('manual').optional(),
   timeEvidence: z.string().max(500).nullish(),
   attachments: z.array(z.object({ name: z.string(), status: z.enum(['parsed', 'skipped']), detail: z.string() })).optional(),
@@ -78,6 +80,7 @@ const extractedSchema = z.object({
 });
 
 const applyOptionsSchema = z.object({
+  targetApplicationId: z.number().int().positive().nullable().optional(),
   markApplied: z.boolean().optional(),
   createIfMissing: z.boolean().optional(),
 });

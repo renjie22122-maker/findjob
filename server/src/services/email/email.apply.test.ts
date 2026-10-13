@@ -68,13 +68,14 @@ describe('邮件应用：投递确认可推进状态（可选）', () => {
     expect(titles.some((t) => t.includes('状态更新'))).toBe(true);
   });
 
-  it('同一公司第二封邮件复用已有申请（不重复建单），且不重复改状态', () => {
+  it('岗位未知时拒绝公司级合并，人工指定已有申请后可复用', () => {
     const first = seedPendingEmail('测试公司B', 'applied', '【测试公司B】简历投递成功');
     const r1 = applyEmailItem(first.itemId, undefined, { markApplied: true, createIfMissing: true });
     const appId = r1.statusChange!.applicationId;
 
     const second = seedPendingEmail('测试公司B', 'applied', '【测试公司B】再次投递确认');
-    const r2 = applyEmailItem(second.itemId, undefined, { markApplied: true, createIfMissing: true });
+    expect(() => applyEmailItem(second.itemId, undefined, { markApplied: true, createIfMissing: true })).toThrow('岗位或职位编号缺失');
+    const r2 = applyEmailItem(second.itemId, undefined, { markApplied: true, createIfMissing: true, targetApplicationId: appId });
 
     expect(r2.statusChange).toBeNull(); // 已是已投递，不再重复推进
     expect(r2.warning).toContain('未改动');
