@@ -4,7 +4,7 @@ import { detectTimeRangeEnd, validEventTime } from '../email/eventTime.js';
 
 const RULES: Array<{ pattern: RegExp; type: EmailEventType }> = [
   { pattern: /感谢信|遗憾|暂不合适|未能通过|没有通过|不匹配|haven.t met the requirements|unfortunately.{0,60}not selected/i, type: 'reject' },
-  { pattern: /offer|录用|录取|发放意向/i, type: 'offer' },
+  { pattern: /(?:录用|录取)(?:通知|意向|决定)|(?:获得|发放|收到|接受|您的|your|an)\s*(?:job\s+)?offer\b|offer\s*(?:letter|of employment|通知)|pleased to offer|发放意向/i, type: 'offer' },
   { pattern: /笔试|在线考试|线下考试|统一考试|机考/i, type: 'written_test' },
   { pattern: /测评|在线评估|性格测试|认知能力|coding assessment|coding test|online assessment/i, type: 'assessment' },
   { pattern: /面试|面谈/i, type: 'interview' },
@@ -62,7 +62,8 @@ function detectSchedule(text: string, receivedAt?: string): { time: string | nul
 /** Generic fallback stays low confidence; the explicit assessment template is deterministic. */
 export function extractWithRules(subject: string, sender: string, snippet: string, receivedAt?: string): EmailExtraction {
   const text = `${subject} ${snippet}`;
-  const eventType = detectEventType(text);
+  // A receipt's hiring-process overview is not an invitation to every later stage.
+  const eventType = detectEventType(subject) === 'applied' ? 'applied' : detectEventType(text);
   const action = /取消|cancel(?:led|ed|lation)/i.test(subject) ? 'cancel' : /恢复|重新安排|reinstate/i.test(subject) ? 'restore' : /改期|延期|调整|reschedul|postpon/i.test(subject) ? 'reschedule' : /考场|考点|地点|地址|准考证|预约成功|location|venue|room|admission ticket/i.test(subject) ? 'update' : 'create';
   const field = (pattern: RegExp) => snippet.match(pattern)?.[1]?.trim();
   const schedule = ['written_test','interview','assessment'].includes(eventType ?? '') ? {

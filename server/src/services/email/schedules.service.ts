@@ -108,7 +108,7 @@ function rebuildReminders(row: Row, data: ScheduleData) {
   const add = (at: string | null | undefined, label: string, kind: string) => {
     if (!at || at <= now) return;
     if (db.prepare('SELECT id FROM reminders WHERE application_id=? AND type=? AND scheduled_at=? AND schedule_id IS NULL AND done=0').get(row.application_id,kind,at)) return;
-    if (db.prepare('SELECT id FROM reminders WHERE schedule_id=? AND scheduled_at=? AND title=? AND done=1').get(row.id, at, label)) return;
+    if (db.prepare('SELECT id FROM reminders WHERE schedule_id=? AND scheduled_at=? AND type=? AND done=1').get(row.id, at, kind)) return;
     db.prepare('INSERT INTO reminders(application_id,type,title,scheduled_at,done,created_at,schedule_id) VALUES (?,?,?,?,0,?,?)').run(row.application_id, kind, label, at, now, row.id);
   };
   const window = data.timeKind === 'window' && data.eventTimeEnd;

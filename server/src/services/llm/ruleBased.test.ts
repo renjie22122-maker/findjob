@@ -3,6 +3,14 @@ import { extractWithRules } from './ruleBased.js';
 import { isRecruitmentCandidate } from '../email/filter.js';
 
 describe('本地规则提取（LLM 降级方案）', () => {
+  it('测评催办末尾的 offer 祝福不能当作录用通知', () => {
+    const r=extractWithRules('线上测评即将截止','招聘','剩余作答时间不足24小时，请完成线上测评。最后祝你offer欧了！');
+    expect(r.eventType).toBe('assessment');expect(r.eventTime).toBeNull();
+  });
+  it('投递回执中的流程示意不算笔试面试邀请', () => {
+    const r=extractWithRules('简历投递成功，请确认职位信息','招聘','流程：简历投递 → 简历筛选 → 笔试 → 面试 → offer');
+    expect(r.eventType).toBe('applied');expect(r.eventTime).toBeNull();
+  });
   it('中行多地区线下考试不采用客服时间、预约时间或虚构午夜', () => {
     const r = extractWithRules('中国银行统一考试安排通知', '中华英才网', '2026年10月18日举行\n中国内地、港澳地区开始时间为北京时间10月18日15:00。\n悉尼地区开始时间为当地时间10月18日18:00。\n客服工作时间9:00-19:00', '2026-10-13T03:00:00Z');
     expect(r.company).toBe('中国银行股份有限公司'); expect(r.eventType).toBe('written_test');

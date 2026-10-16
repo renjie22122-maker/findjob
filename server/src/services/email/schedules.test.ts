@@ -16,6 +16,18 @@ function reminders() {return getDb().prepare('SELECT * FROM reminders ORDER BY s
 beforeEach(()=>{closeDb(); getDb();});
 
 describe('通用招聘日程：跨邮件关联与提醒生命周期',()=>{
+  it('人工合并或改名后，后续相同历史岗位名称仍关联原申请',()=>{
+    const e={...base,recruitmentId:null};const first=apply(e);
+    getDb().prepare("UPDATE applications SET position_title='人工统一后的岗位名称' WHERE id=?").run(first.item.applicationId);
+    const repeated=apply(e,'2099-10-02T08:00:00Z');expect(repeated.item.applicationId).toBe(first.item.applicationId);expect(listSchedules()).toHaveLength(1);
+  });
+  it('补充地点改变提醒标题时，不重新创建已完成的同场同时间提醒',()=>{
+    apply(base);const id=listSchedules()[0].id;
+    getDb().prepare('UPDATE reminders SET done=1 WHERE schedule_id=? AND scheduled_at=?').run(id,base.eventTime);
+    apply(update('update',{schedule:{action:'update',eventRef:'EV-100',room:'D501'}}),'2099-10-02T08:00:00Z');
+    expect(reminders().filter(r=>r.scheduled_at===base.eventTime)).toHaveLength(1);
+    expect(reminders().find(r=>r.scheduled_at===base.eventTime)?.done).toBe(1);
+  });
   it('同源重复邀请的岗位简称按完整窗口关联，截止提醒不被开放时间取代',()=>{
     const e:EmailExtraction={...base,recruitmentId:null,positionTitle:'2099管理培训生项目',eventTimeEnd:'2099-10-21T15:00:00',schedule:{action:'create',timeKind:'window',mode:'online'}};
     const first=seed(e);getDb().prepare("UPDATE email_items SET sender='HR <hr@example.test>' WHERE id=?").run(first);applyEmailItem(first,undefined,{createIfMissing:true});
