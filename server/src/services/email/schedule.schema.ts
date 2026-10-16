@@ -10,6 +10,6 @@ export const scheduleChangeSchema = z.object({
   address: z.string().max(500).nullish(),
   room: z.string().max(100).nullish(),
   timezone: z.string().max(80).nullish(),
-  timeKind: z.enum(['start', 'deadline']).optional(),
+  timeKind: z.enum(['start', 'deadline', 'window']).optional(),
   evidence: z.string().max(2000).nullish(),
 });

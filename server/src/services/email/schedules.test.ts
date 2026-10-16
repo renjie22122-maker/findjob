@@ -16,6 +16,29 @@ function reminders() {return getDb().prepare('SELECT * FROM reminders ORDER BY s
 beforeEach(()=>{closeDb(); getDb();});
 
 describe('通用招聘日程：跨邮件关联与提醒生命周期',()=>{
+  it('同源重复邀请的岗位简称按完整窗口关联，截止提醒不被开放时间取代',()=>{
+    const e:EmailExtraction={...base,recruitmentId:null,positionTitle:'2099管理培训生项目',eventTimeEnd:'2099-10-21T15:00:00',schedule:{action:'create',timeKind:'window',mode:'online'}};
+    const first=seed(e);getDb().prepare("UPDATE email_items SET sender='HR <hr@example.test>' WHERE id=?").run(first);applyEmailItem(first,undefined,{createIfMissing:true});
+    const repeat=seed({...e,positionTitle:'管理培训生'},'2099-10-02T08:00:00Z');getDb().prepare("UPDATE email_items SET sender='HR <hr@example.test>' WHERE id=?").run(repeat);applyEmailItem(repeat,undefined,{createIfMissing:true});
+    expect(listSchedules()).toHaveLength(1);expect(listSchedules()[0].sources).toHaveLength(2);
+    expect(reminders().map(r=>r.scheduled_at)).toEqual(['2099-10-18T15:00:00','2099-10-20T15:00:00','2099-10-21T15:00:00']);
+    expect(reminders().filter(r=>r.title.startsWith('完成截止'))).toHaveLength(1);
+    const deadline=seed({...e,positionTitle:'管理培训生',eventTime:e.eventTimeEnd!,eventTimeEnd:null,schedule:{action:'create',timeKind:'deadline'}},'2099-10-03T07:00:00Z');getDb().prepare("UPDATE email_items SET sender='HR <hr@example.test>' WHERE id=?").run(deadline);applyEmailItem(deadline,undefined,{createIfMissing:true});
+    expect(listSchedules()).toHaveLength(1);expect(listSchedules()[0].data.eventTime).toBe(e.eventTime);expect(reminders()).toHaveLength(3);
+    apply({...e,recruitmentId:'ANOTHER-JOB',positionTitle:'管理培训生'},'2099-10-03T08:00:00Z');expect(listSchedules()).toHaveLength(2);
+  });
+  it('相同开始时间但不同截止不能当重复催办覆盖',()=>{
+    apply({...base,eventTimeEnd:'2099-10-21T15:00:00'});
+    expect(()=>apply({...base,eventTimeEnd:'2099-10-22T15:00:00'},'2099-10-02T08:00:00Z')).toThrow('截止时间');
+    expect(listSchedules()[0].data.eventTimeEnd).toBe('2099-10-21T15:00:00');
+  });
+  it('升级后旧进程确认的邀请缺少日程时，后续催办安全接入原申请',()=>{
+    const e:EmailExtraction={...base,recruitmentId:null,positionTitle:'2099管理培训生项目',eventTimeEnd:'2099-10-21T15:00:00',schedule:undefined};
+    const first=seed(e);getDb().prepare("UPDATE email_items SET sender='hr@example.test' WHERE id=?").run(first);const original=applyEmailItem(first,undefined,{createIfMissing:true});
+    getDb().prepare('DELETE FROM schedule_sources').run();getDb().prepare('DELETE FROM recruitment_schedules').run();
+    const repeat=seed({...e,positionTitle:'管理培训生',schedule:{action:'create',timeKind:'window'}},'2099-10-02T08:00:00Z');getDb().prepare("UPDATE email_items SET sender='hr@example.test' WHERE id=?").run(repeat);
+    const result=applyEmailItem(repeat,undefined,{createIfMissing:true});expect(result.item.applicationId).toBe(original.item.applicationId);expect(listSchedules()).toHaveLength(1);expect(listSchedules()[0].sources).toHaveLength(2);
+  });
   it('人工调整可清除误提取地点，留下来源并受版本保护',()=>{
     apply(base,'2020-10-01T08:00:00Z');const s=listSchedules()[0];
     const changed=updateScheduleManually(s.id,s.revision,{action:'update',venue:null,address:'人工确认的新地址'},base.eventTime,null);

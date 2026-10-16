@@ -16,6 +16,7 @@ import { eventWindowText, mailTimeToLocal, timelineTime, validEventTime } from '
 import { attachEvidence } from './evidence.js';
 import { applySchedule, scheduleApplication, applicationFromEventRef, SCHEDULE_KINDS } from './schedules.service.js';
 import { matchEmailApplication } from './applicationMatch.js';
+import { adoptUntrackedInvitations, applicationFromRepeatedWindow } from './schedules.service.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
 
 interface EmailItemRow {
@@ -255,9 +256,10 @@ function applyEmailItemInternal(
     if (!company) {
       warning = `未在库中找到公司「${extracted.company}」，本次仅记录邮件；可在应用时勾选「不存在则创建记录」，或先在申请列表添加该公司。`;
     } else {
+      if (SCHEDULE_KINDS.includes(extracted.eventType ?? '')) adoptUntrackedInvitations(company.id);
       const selectedApp = typeof options.targetScheduleId === 'number' ? scheduleApplication(options.targetScheduleId) : undefined;
       if (selectedApp && options.targetApplicationId !== undefined && options.targetApplicationId !== selectedApp) throw AppError.conflict('所选申请与日程不一致');
-      const eventApp = selectedApp ?? applicationFromEventRef(company.id, extracted.schedule?.eventRef);
+      const eventApp = selectedApp ?? applicationFromEventRef(company.id, extracted.schedule?.eventRef) ?? applicationFromRepeatedWindow(company.id, extracted, row.subject, row.sender);
       if (!selectedApp && options.targetApplicationId === undefined && eventApp && extracted.recruitmentId) {
         const byJob = matchEmailApplication(company.id, extracted);
         if (!byJob || byJob.id !== eventApp) throw AppError.conflict('职位编号与活动编号指向不同申请，请人工核对');

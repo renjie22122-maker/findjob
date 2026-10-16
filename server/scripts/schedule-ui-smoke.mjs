@@ -28,5 +28,8 @@ try{
  await page.getByRole('button',{name:/调\s*整/}).click();await page.locator('.ant-select').filter({has:page.getByLabel('操作',{exact:true})}).click();await page.getByText('恢复已取消活动',{exact:true}).click();await page.getByLabel('考点 / 场所',{exact:true}).fill('南区中心');
  const changed=page.waitForResponse(r=>r.request().method()==='PATCH' && r.url().includes('/email/schedules/'));await page.getByRole('button',{name:'确 定',exact:true}).click();const changeResponse=await changed;assert.equal(changeResponse.status(),200,await changeResponse.text());
  ({items}=await (await fetch(base+'/api/email/schedules')).json());assert.equal(items[0].status,'scheduled');assert.equal(items[0].data.venue,'南区中心');assert.equal(items[0].sources[0].action,'manual:restore');
- assert.deepEqual(errors,[]);console.log('Schedule UI passed: create, attachment fields, reschedule, cancel, owned reminders, dark mode, mobile.');
+ seed(5,{...extraction,company:'窗口测试企业',positionTitle:'2099管理培训生项目',eventTimeEnd:'2099-10-21T15:00:00',schedule:{action:'create',mode:'online',timeKind:'window'}});
+ await page.goto(base+'/email');await page.getByText('时间：2099-10-18 15:00–2099-10-21 15:00',{exact:true}).waitFor();await apply();
+ await page.goto(base+'/schedules');await page.getByText('作答有效期：2099-10-18 15:00 — 2099-10-21 15:00',{exact:true}).waitFor();
+ assert.deepEqual(errors,[]);console.log('Schedule UI passed: create, attachment fields, reschedule, cancel, restore, window dates, owned reminders, dark mode, mobile.');
 }finally{await browser.close();await new Promise(r=>server.close(r));closeDb();}

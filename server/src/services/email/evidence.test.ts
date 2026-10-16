@@ -9,6 +9,25 @@ const raw = { messageId: 'test', subject: '面试', sender: 'HR', receivedAt, sn
 const base: EmailExtraction = { company: '测试公司', eventType: 'interview', eventTime: '2026-10-15T14:00:00', positionTitle: '工程师', summary: null, confidence: 0.95, timeEvidence: '2026-10-15 14:00' };
 
 describe('事件时间依据与危险信息', () => {
+  it('从正式作答窗口补全模型遗漏的时间引文，移除虚构形式轮次', () => {
+    const snippet='线上AI面试，链接有效期72小时\n正式作答时间：2026-10-15 18:16 至 2026-10-18 18:16 （请在本时间段内完成AI视频面试）';
+    const result=attachEvidence({...base,eventTime:null,timeEvidence:null,schedule:{action:'create',round:'线上AI面试（正式作答）',mode:'online'}},{...raw,snippet});
+    expect(result).toMatchObject({eventTime:'2026-10-15T18:16:00',eventTimeEnd:'2026-10-18T18:16:00',timeSource:'body',schedule:{timeKind:'window'}});
+    expect(result.schedule?.round).toBeUndefined();expect(result.reviewReasons).toEqual([]);
+  });
+  it('同一邀请的跨日窗口不随催办收件时间重新计算', () => {
+    const snippet='面试有效期内可以随时面试\n面试时间：（北京时间,UTC+08:00）2026-10-14 22:44 至 2026-10-17 22:44';
+    const result=attachEvidence({...base,eventTime:null,timeEvidence:null,schedule:{action:'create',round:'AI面试'}},{...raw,snippet,receivedAt:'2026-10-16T08:00:00Z'});
+    expect(result.eventTimeEnd).toBe(validEventTime('2026-10-17T22:44:00+08:00'));expect(result.reviewReasons).toEqual([]);
+  });
+  it('明确窗口与模型时间冲突、多个场次不自动修正', () => {
+    const snippet='面试时间：2026-10-15 18:16 至 2026-10-18 18:16';
+    expect(attachEvidence(base,{...raw,snippet}).reviewReasons?.join()).toContain('冲突');
+    expect(attachEvidence({...base,eventTime:null,timeEvidence:null},{...raw,snippet:snippet+'\n面试时间：2026-10-16 18:16 至 2026-10-19 18:16'}).eventTime).toBeNull();
+  });
+  it('访问通行证及口令脱敏，保留普通活动日期', () => {
+    expect(redactMailSecrets('通行证：123456789012 访问口令:abcd1234 2026-10-17')).toBe('通行证：[已隐藏] 访问口令:[已隐藏] 2026-10-17');
+  });
   it('取消必须有明确的正文或附件依据，不能听从无来源的模型指令', () => {
     const e = {...base,eventTime:null,schedule:{action:'cancel' as const,eventRef:'EV-1',evidence:'活动 EV-1 已取消'}};
     const invalid = attachEvidence(e,raw);

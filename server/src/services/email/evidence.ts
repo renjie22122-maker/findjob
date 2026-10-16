@@ -1,19 +1,30 @@
 import type { EmailExtraction } from '../../domain/types.js';
 import type { RawEmail } from './imap.client.js';
-import { mailTimeToLocal, validEventTime } from './eventTime.js';
+import { explicitActivityWindow, mailTimeToLocal, validEventTime } from './eventTime.js';
 
 /** Confidence alone cannot authorize a dated event: require source evidence. */
 export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): EmailExtraction {
-  const result = { ...extraction, attachments: raw.content?.attachments ?? [], reviewReasons: [...(raw.content?.warnings ?? [])] };
+  const result = { ...extraction, schedule: extraction.schedule ? {...extraction.schedule} : undefined, attachments: raw.content?.attachments ?? [], reviewReasons: [...(raw.content?.warnings ?? [])] };
   const sourceText = `${raw.subject}\n${raw.content?.body ?? raw.snippet}\n${raw.content?.attachmentText ?? ''}`;
+  const recovered = ['interview','assessment','written_test'].includes(result.eventType ?? '') && (!result.schedule || ['create','update'].includes(result.schedule.action)) ? explicitActivityWindow(sourceText) : null;
+  if (recovered) {
+    if ((result.eventTime && validEventTime(result.eventTime) !== recovered.start) || (result.eventTimeEnd && validEventTime(result.eventTimeEnd) !== recovered.end)) result.reviewReasons.push('模型时间与明确活动时间段冲突，请复核');
+    else {
+      result.eventTime=recovered.start; result.eventTimeEnd=recovered.end; result.timeEvidence=recovered.evidence;
+      if (recovered.window) result.schedule={...result.schedule,action:result.schedule?.action ?? 'create',timeKind:'window'};
+    }
+  }
   const change = result.schedule;
+  // Activity format is not a round identifier. Avoid invented rounds splitting reminders.
+  if (change?.round && /^(?:线上|在线)?AI(?:视频)?面试(?:[（(]正式作答[）)])?$/i.test(change.round)) delete change.round;
   const changeOnly = change && change.action !== 'create';
   if (change) {
     const normalize = (value: string) => value.replace(/\s+/gu, '');
     const quote = change.evidence?.trim();
     const hasQuote = Boolean(quote && normalize(sourceText).includes(normalize(quote)));
     if ((changeOnly || change.venue || change.address || change.room || change.eventRef || change.round) && !hasQuote) result.reviewReasons.push('日程关联或变更缺少原文依据，请人工确认');
-    for (const value of [change.eventRef, change.round, change.venue, change.address, change.room]) {
+    if (change.round && !normalize(sourceText).includes(normalize(change.round))) result.reviewReasons.push('轮次无法从邮件原文核对，请人工确认');
+    for (const value of [change.eventRef, change.venue, change.address, change.room]) {
       if (value && (!hasQuote || !normalize(quote!).includes(normalize(value)) || /https?:|www\.|链接已隐藏|验证码|密码|token=/i.test(value))) result.reviewReasons.push('活动标识或地点无法从引文核对，或含敏感链接，请人工确认');
     }
     if (change.action === 'cancel' && (!quote || !/取消|作废|cancel/i.test(quote) || /未取消|不取消|not cancelled|not canceled/i.test(quote))) result.reviewReasons.push('未确认明确取消通知，不能自动撤销提醒');

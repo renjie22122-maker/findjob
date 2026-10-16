@@ -164,7 +164,8 @@ JSON 格式：
   "summary": "一句话中文摘要",
   "confidence": 0 到 1 的置信度
 }
-日程字段 schedule 用于所有公司的考试和面试，不依赖厂商模板。结构为 {action:create|update|reschedule|cancel|restore,eventRef:活动或场次编号,round:轮次或场次名称,previousTime:改期前活动本地ISO时间,mode:online|offline|unknown,venue:考点或场所,address:详细地址,room:考场或房间,timezone:原文时区,timeKind:start|deadline,evidence:包含变更、活动标识及地点信息的连续原文}。缺失字段省略，绝不推测地点。不要复制链接、访问口令、身份证号、准考证号或候选人个人编号到这些字段；eventRef必须是活动编号，不能把职位编号当作活动编号。
+日程字段 schedule 用于所有公司的考试和面试，不依赖厂商模板。结构为 {action:create|update|reschedule|cancel|restore,eventRef:活动或场次编号,round:轮次或场次名称,previousTime:改期前活动本地ISO时间,mode:online|offline|unknown,venue:考点或场所,address:详细地址,room:考场或房间,timezone:原文时区,timeKind:start|deadline|window,evidence:包含变更、活动标识及地点信息的连续原文}。缺失字段省略，绝不推测地点。不要复制链接、访问口令、身份证号、准考证号或候选人个人编号到这些字段；eventRef必须是活动编号，不能把职位编号当作活动编号。
+有效期内自行完成的AI面试/测评用timeKind:window，eventTime与eventTimeEnd保留完整起止日期；提醒邮件重复相同窗口仍是create，不是改期，不能按新收件时间重新计算截止。round只填原文明确的一面、二面等轮次，AI面试、正式作答、线上面试只是形式，不要作为轮次。timeEvidence必须复制包含起止的原文，即使已经写了schedule.evidence也不能省略。岗位名称保留完整项目年份。
 补充地址、准考证信息是update；明确改时间是reschedule（eventTime只填新时间，previousTime填旧时间），只说延期另行通知则新时间null；取消考试是cancel而非拒信，eventType仍填原来的考试/面试类型且eventTime可null；明确恢复为restore。update/cancel等只有时间缺失也要保留，不要当无关邮件。多轮活动不可强行合成一场，无法确定时低置信度并摘要说明。恢复需明确时间。地点和考场可以来自附件，evidence复制附件原文，通知正文与附件冲突需低置信度人工确认。线上登录链接永不访问、永不纳入输出。
 规则：written_test 包括线下统一考试、考位预约成功后的笔试安排；assessment 包括 coding assessment。应聘雇主从正文/主题识别，不要把中华英才网、HackerRank 等代发平台当雇主。recruitmentId 提取明确的 Job number / requisition ID / 职位编号，无法判断为 null；不要用简历编号、验证码或候选人编号作为职位编号。positionTitle 只填岗位名称，编号单独填写。
 仅明确告知本次申请被拒才是 reject，投递回执中假设性的“if ... not selected”不算拒信。只取该场考试/面试本身时间为 eventTime/eventTimeEnd，客服工作时间、预约窗口、准考证打印时间均不算考试起止。预约成功不等于考试已完成，不代表录用。多个地区/场次且无法确定用户所属时 eventTime=null，summary 列明待选地区及时间，不能擅自选择。没有结束时间不要推算。

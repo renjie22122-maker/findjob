@@ -65,7 +65,7 @@ export interface RecruitmentScheduleChange {
   address?: string | null;
   room?: string | null;
   timezone?: string | null;
-  timeKind?: 'start' | 'deadline';
+  timeKind?: 'start' | 'deadline' | 'window';
   evidence?: string | null;
 }
 

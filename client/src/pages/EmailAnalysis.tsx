@@ -199,7 +199,7 @@ export default function EmailAnalysis() {
                         ? formatDateTime(item.extracted.eventTime)
                         : formatDateTime(item.extracted?.eventTimeEnd ?? '')}
                       {item.extracted?.eventTime && item.extracted?.eventTimeEnd
-                        ? `–${item.extracted.eventTimeEnd.slice(11, 16)}`
+                        ? `–${item.extracted.eventTimeEnd.slice(0,10) === item.extracted.eventTime.slice(0,10) ? item.extracted.eventTimeEnd.slice(11,16) : formatDateTime(item.extracted.eventTimeEnd)}`
                         : ''}
                     </Tag>
                   )}
@@ -336,7 +336,7 @@ export default function EmailAnalysis() {
           <Form.Item name="venue" label="考点 / 场所"><Input /></Form.Item>
           <Form.Item name="address" label="详细地址"><Input /></Form.Item>
           <Form.Item name="room" label="考场 / 房间"><Input /></Form.Item>
-          <Form.Item name="timeKind" label="时间含义"><Select options={[{value:'start',label:'活动开始'},{value:'deadline',label:'完成或登录截止'}]} /></Form.Item>
+          <Form.Item name="timeKind" label="时间含义"><Select options={[{value:'start',label:'活动开始'},{value:'deadline',label:'完成或登录截止'},{value:'window',label:'有效期内自行完成'}]} /></Form.Item>
             </> : null}
           </Form.Item>
           <Form.Item name="eventTime" label="事件时间（未来时间将自动创建提醒）">

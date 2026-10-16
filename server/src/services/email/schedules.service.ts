@@ -2,9 +2,34 @@ import { getDb } from '../../db/connection.js';
 import { AppError } from '../../middleware/error.js';
 import type { EmailExtraction, RecruitmentScheduleChange } from '../../domain/types.js';
 import { nowIso, localIso } from '../../utils/time.js';
-import { validEventTime } from './eventTime.js';
+import { explicitActivityWindow, validEventTime } from './eventTime.js';
 
 export const SCHEDULE_KINDS = ['interview', 'written_test', 'assessment'];
+
+/** Older running servers may confirm mail after migration without creating a schedule. */
+export function adoptUntrackedInvitations(companyId: number) {
+  const db=getDb();
+  const rows=db.prepare(`SELECT m.* FROM email_items m JOIN applications a ON a.id=m.application_id WHERE a.company_id=? AND m.status='confirmed' AND NOT EXISTS(SELECT 1 FROM schedule_sources ss WHERE ss.email_id=m.id) ORDER BY m.received_at,m.id`).all(companyId) as {id:number;application_id:number;extracted:string;snippet:string;received_at:string}[];
+  const groups=new Map<string,{row:typeof rows[number];e:EmailExtraction}[]>();
+  for(const row of rows){
+    let e:EmailExtraction;try{e=JSON.parse(row.extracted);}catch{continue;}
+    if(!e || !SCHEDULE_KINDS.includes(e.eventType ?? '') || !validEventTime(e.eventTime) || e.reviewReasons?.length || (e.schedule && e.schedule.action!=='create')) continue;
+    if(db.prepare('SELECT id FROM recruitment_schedules WHERE application_id=? AND kind=?').get(row.application_id,e.eventType)) continue;
+    const key=`${row.application_id}/${e.eventType}`;groups.set(key,[...(groups.get(key) ?? []),{row,e}]);
+  }
+  for(const group of groups.values()){
+    // Ambiguous legacy rounds must be reviewed, not collapsed by company or date alone.
+    if(new Set(group.map(({e})=>JSON.stringify([e.eventTime,e.eventTimeEnd,e.schedule?.round,e.schedule?.eventRef]))).size!==1) continue;
+    for(const {row,e} of group){
+      const window=explicitActivityWindow(row.snippet ?? '');
+      if(window?.window && window.start===e.eventTime && window.end===e.eventTimeEnd) e.schedule={...e.schedule,action:'create',timeKind:'window'};
+      const result=applySchedule(row.application_id,row.id,row.received_at,e);
+      db.prepare("UPDATE reminders SET schedule_id=? WHERE application_id=? AND scheduled_at IN (?,?) AND title LIKE '邮件：%' AND schedule_id IS NULL AND type=?").run(result.id,row.application_id,e.eventTime,e.eventTimeEnd ?? null,e.eventType==='interview'?'interview':'written_test');
+      const current=db.prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(result.id) as Row;
+      rebuildReminders(current,JSON.parse(current.data));
+    }
+  }
+}
 interface ScheduleData extends Partial<RecruitmentScheduleChange> {
   eventTime?: string | null;
   eventTimeEnd?: string | null;
@@ -33,7 +58,7 @@ function matchSchedule(appId: number, e: EmailExtraction, target?: number | null
     const d = JSON.parse(row.data) as ScheduleData;
     if (change?.eventRef) return d.eventRef === change.eventRef;
     if (!matchTime && change?.round && change.action !== 'create') return d.round === change.round;
-    return Boolean(matchTime && d.eventTime === matchTime && (!change?.round || !d.round || d.round === change.round));
+    return Boolean(matchTime && (d.eventTime === matchTime || (change?.timeKind === 'deadline' && d.timeKind === 'window' && d.eventTimeEnd === matchTime)) && (!change?.round || !d.round || d.round === change.round));
   });
   if (candidates.length > 1) throw AppError.conflict('多个日程符合邮件信息，请明确选择场次');
   return candidates[0];
@@ -54,6 +79,24 @@ export function applicationFromEventRef(companyId: number, eventRef?: string | n
   return ids[0];
 }
 
+/** Same sender + subject + complete window can resolve a shortened job title; never override job IDs. */
+export function applicationFromRepeatedWindow(companyId: number, e: EmailExtraction, subject: string | null, sender: string | null): number | undefined {
+  if (e.recruitmentId || !e.eventTime || (!e.eventTimeEnd && e.schedule?.timeKind !== 'deadline') || !subject || !sender || (e.schedule && e.schedule.action !== 'create')) return undefined;
+  const mailbox = (s: string) => (s.match(/<([^>]+)>/)?.[1] ?? s).trim().toLowerCase();
+  const rows = getDb().prepare(`SELECT s.*, a.position_title, m.subject, m.sender FROM recruitment_schedules s JOIN applications a ON a.id=s.application_id JOIN schedule_sources ss ON ss.schedule_id=s.id JOIN email_items m ON m.id=ss.email_id WHERE a.company_id=? AND s.kind=?`).all(companyId,e.eventType) as (Row & {position_title:string;subject:string;sender:string})[];
+  const matches=rows.filter(r=>{
+    const d=JSON.parse(r.data) as ScheduleData;
+    const title=e.positionTitle?.replace(/\s/g,'').toLowerCase(), oldTitle=r.position_title.replace(/\s/g,'').toLowerCase();
+    const compatibleTitle=title && title.length>=4 && !/\[[^\]]+\]$/.test(oldTitle) && (oldTitle.includes(title) || title.includes(oldTitle));
+    const sameWindow=d.eventTime===e.eventTime && d.eventTimeEnd===e.eventTimeEnd;
+    const sameDeadline=e.schedule?.timeKind==='deadline' && d.timeKind==='window' && d.eventTimeEnd===e.eventTime && !e.eventTimeEnd;
+    return compatibleTitle && r.subject===subject && r.sender && mailbox(r.sender)===mailbox(sender) && (sameWindow || sameDeadline) && (!e.schedule?.eventRef || !d.eventRef || e.schedule.eventRef===d.eventRef) && (!e.schedule?.round || !d.round || e.schedule.round===d.round);
+  });
+  const schedules=[...new Set(matches.map(r=>r.id))];
+  if(schedules.length>1) throw AppError.conflict('相同邮件来源和时间窗口对应多个场次，请人工选择');
+  return matches[0]?.application_id;
+}
+
 function rebuildReminders(row: Row, data: ScheduleData) {
   const db = getDb(); const now = nowIso();
   // Completed and user-authored reminders are preserved. Only pending owned reminders are replaced.
@@ -68,22 +111,28 @@ function rebuildReminders(row: Row, data: ScheduleData) {
     if (db.prepare('SELECT id FROM reminders WHERE schedule_id=? AND scheduled_at=? AND title=? AND done=1').get(row.id, at, label)) return;
     db.prepare('INSERT INTO reminders(application_id,type,title,scheduled_at,done,created_at,schedule_id) VALUES (?,?,?,?,0,?,?)').run(row.application_id, kind, label, at, now, row.id);
   };
-  const at = data.eventTime && data.eventTime > now ? data.eventTime : data.eventTimeEnd;
-  add(at, title, type);
-  if (data.eventTime) add(localIso(new Date(new Date(data.eventTime).getTime() - 86400000)), `提前一天准备：${title}`, type);
+  const window = data.timeKind === 'window' && data.eventTimeEnd;
+  const at = window ? data.eventTimeEnd : data.eventTime && data.eventTime > now ? data.eventTime : data.eventTimeEnd;
+  add(at, window ? `完成截止：${title}` : title, type);
+  if (at) add(localIso(new Date(new Date(at).getTime() - 86400000)), `提前一天准备：${title}`, type);
+  if (window) add(data.eventTime, `开放作答：${title}`, type);
   for (const task of data.preparationTasks ?? []) add(validEventTime(task.scheduledAt), `准备：${task.title}`, 'other');
 }
 
 /** Caller wraps this and email application in one transaction. */
 export function applySchedule(appId: number, emailId: number | null, receivedAt: string, e: EmailExtraction, target?: number | null, expectedRevision?: number) {
   const db = getDb(); const now = nowIso();
-  const change = e.schedule ?? { action: 'create' as const };
+  let change = e.schedule ?? { action: 'create' as const };
   let row = matchSchedule(appId, e, target);
   if (target === null && change.action !== 'create') throw AppError.validation('改期、取消和补充通知必须关联已有日程');
   if (!row && change.action !== 'create') throw AppError.conflict('未找到可确认的原日程，请选择场次；不会猜测或修改其他提醒');
   if (row && expectedRevision !== undefined && row.revision !== expectedRevision) throw AppError.conflict('日程已被其他邮件更新，请刷新后重新确认');
   if (row && target === undefined && change.action !== 'create' && new Date(receivedAt).getTime() === new Date(row.last_received_at).getTime()) throw AppError.conflict('通知收件时间相同，无法判断变更先后，请人工选择日程并确认');
   const old: ScheduleData = row ? JSON.parse(row.data) : {};
+  if (row && change.action === 'create' && change.timeKind === 'deadline' && old.timeKind === 'window' && old.eventTimeEnd === e.eventTime && !e.eventTimeEnd) {
+    change={...change,timeKind:'window'};
+    e={...e,eventTime:old.eventTime ?? null,eventTimeEnd:old.eventTimeEnd};
+  }
   if (row && change.eventRef && old.eventRef && change.eventRef !== old.eventRef) throw AppError.conflict('活动编号与所选日程不一致，请核对原文');
   if (row && change.round && old.round && change.round !== old.round) throw AppError.conflict('轮次与所选日程不一致，请为不同轮次创建新场次');
   if (row && new Date(receivedAt).getTime() < new Date(row.last_received_at).getTime()) {
@@ -93,6 +142,7 @@ export function applySchedule(appId: number, emailId: number | null, receivedAt:
   if (row?.status === 'cancelled' && !['restore','cancel'].includes(change.action)) throw AppError.conflict('日程已取消，仅明确恢复通知或人工选择恢复才会重新提醒');
   if (change.previousTime && old.eventTime !== validEventTime(change.previousTime)) throw AppError.conflict('邮件原时间与当前日程不一致，请复核改期链');
   if (row && change.action === 'create' && e.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('同一活动编号出现不同时间，请确认是改期还是另一场活动');
+  if (row && ['create','update'].includes(change.action) && e.eventTimeEnd && old.eventTimeEnd && old.eventTimeEnd !== e.eventTimeEnd) throw AppError.conflict('活动截止时间发生变化，请确认改期后更新');
   if (row && change.action === 'update' && e.eventTime && old.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('补充信息含不同活动时间，请明确选择改期');
   if (change.action === 'restore' && !e.eventTime) throw AppError.validation('恢复日程必须确认活动时间');
   const data: ScheduleData = { ...old };

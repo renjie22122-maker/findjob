@@ -15,6 +15,23 @@ export function validEventTime(value: string | null | undefined): string | null 
   return /Z|[+-]\d{2}:\d{2}$/.test(value) ? mailTimeToLocal(value) : value;
 }
 
+/** Recover only explicitly labelled, complete ranges. Never infer a deadline from a reminder's receipt. */
+export function explicitActivityWindow(text: string): { start: string; end: string; evidence: string; window: boolean } | null {
+  const stamp = '(20\\d{2})[-年/.](\\d{1,2})[-月/.](\\d{1,2})日?\\s+(\\d{1,2})[:：](\\d{2})';
+  const pattern = new RegExp(`(?:面试时间|正式作答时间|测评时间|考试时间|笔试时间|Interview window|Assessment window)[：:][^\\n]{0,65}?${stamp}\\s*(?:至|到|[-~–—]|to)\\s*${stamp}[^\\n]*`, 'gi');
+  const found = [...text.matchAll(pattern)].map(m => {
+    const offset = m[0].match(/UTC\s*([+-]\d{2}:\d{2})/i)?.[1] ?? (/北京时间/.test(m[0]) ? '+08:00' : '');
+    // Unsupported explicit zones must remain with the model / human timezone validation.
+    if (!offset && /UTC|GMT|时区|时间,|PST|EST|BST/i.test(m[0])) return null;
+    const stampAt = (i: number) => validEventTime(`${m[i]}-${m[i+1].padStart(2,'0')}-${m[i+2].padStart(2,'0')}T${m[i+3].padStart(2,'0')}:${m[i+4]}:00${offset}`);
+    const start=stampAt(1), end=stampAt(6);
+    return start && end && end > start ? {start,end,evidence:m[0].trim(),window:/有效期|时间段内完成|小时内.*完成|window|截止前.*完成|随时.*面试/i.test(text)} : null;
+  });
+  const valid = found.filter((v): v is NonNullable<typeof v> => Boolean(v));
+  if (!valid.length || valid.length !== found.length || new Set(valid.map(v=>`${v.start}/${v.end}`)).size !== 1) return null;
+  return valid[0];
+}
+
 export function timelineTime(extracted: EmailExtraction, receivedAt: string): string | null {
   if (extracted.eventType === 'applied') return mailTimeToLocal(receivedAt);
   if (['written_test', 'interview', 'assessment'].includes(extracted.eventType ?? '')) return validEventTime(extracted.eventTime);

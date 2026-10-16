@@ -3,7 +3,7 @@ export function redactMailSecrets(text: string): string {
   return text
     .replace(/(?:https?:\/\/|www\.)[^\s<>"'）)]+/gi, '[链接已隐藏，需本人在邮箱查看]')
     .replace(/\b(?:[A-Z0-9._%+-]+)@(?:[A-Z0-9.-]+\.[A-Z]{2,})\b/gi, '[邮箱]')
-    .replace(/((?:验证码|校验码|动态密码|一次性密码|verification code|one.time password|OTP|password|密码)\s*[:：是为]?\s*)[A-Za-z0-9_-]{4,}/gi, '$1[已隐藏]');
+    .replace(/((?:验证码|校验码|动态密码|一次性密码|通行证|访问口令|access code|passcode|verification code|one.time password|OTP|password|密码)\s*[:：是为]?\s*)[A-Za-z0-9_-]{4,}/gi, '$1[已隐藏]');
 }
 
 export function isAuthenticationMail(subject: string): boolean {
