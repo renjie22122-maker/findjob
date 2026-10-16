@@ -319,6 +319,27 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    version: 9,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS email_check_runs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, trigger TEXT NOT NULL, created_at TEXT NOT NULL,
+          result TEXT NOT NULL DEFAULT '{}'
+        );
+        CREATE TABLE IF NOT EXISTS email_check_findings (
+          key TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, detail TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('open','resolved','ignored')), plan TEXT NOT NULL,
+          fingerprint TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS email_check_changes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER REFERENCES email_check_runs(id),
+          finding_key TEXT, action TEXT NOT NULL, before_state TEXT NOT NULL, after_state TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 /** 按 PRAGMA user_version 顺序执行迁移 */

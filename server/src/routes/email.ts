@@ -1,4 +1,5 @@
 import { scheduleChangeSchema } from '../services/email/schedule.schema.js';
+import { checkExistingEmails, getEmailCheckState, resolveEmailCheck } from '../services/email/check.service.js';
 import { listSchedules, updateScheduleManually } from '../services/email/schedules.service.js';
 import { validEventTime } from '../services/email/eventTime.js';
 import { Router } from 'express';
@@ -14,6 +15,12 @@ import {
 } from '../services/email/autoAnalyze.service.js';
 
 const router = Router();
+router.get('/check',asyncHandler(async(_req,res)=>{res.json(getEmailCheckState());}));
+router.post('/check',asyncHandler(async(_req,res)=>{res.status(201).json(checkExistingEmails('manual'));}));
+router.post('/check/resolve',asyncHandler(async(req,res)=>{
+  const input=parse(z.object({key:z.string().max(150),fingerprint:z.string().length(64),decision:z.enum(['confirm','ignore']),targetId:z.number().int().positive().optional()}),req.body);
+  res.json(resolveEmailCheck(input.key,input.fingerprint,input.decision,input.targetId));
+}));
 router.patch('/schedules/:id', asyncHandler(async(req,res)=>{
   const time = z.string().refine(v=>Boolean(validEventTime(v)), '无效活动时间').nullish();
   const input = parse(z.object({revision:z.number().int().positive(),schedule:scheduleChangeSchema,eventTime:time,eventTimeEnd:time}),req.body);
@@ -102,7 +109,8 @@ router.post(
   asyncHandler(async (req, res) => {
     const override = req.body?.extracted ? parse(extractedSchema, req.body.extracted) : undefined;
     const options = parse(applyOptionsSchema, req.body ?? {});
-    res.status(201).json(applyEmailItem(parseId(req.params.id), override, options));
+    const result=applyEmailItem(parseId(req.params.id), override, options);
+    checkExistingEmails('apply');res.status(201).json(result);
   }),
 );
 
@@ -124,12 +132,11 @@ router.post(
       }),
       req.body ?? {},
     );
-    res.status(201).json(
-      applyEmailBatch(input.minConfidence ?? 0.8, {
+    const result=applyEmailBatch(input.minConfidence ?? 0.8, {
         markApplied: input.markApplied,
         createIfMissing: input.createIfMissing,
-      }),
-    );
+      });
+    checkExistingEmails('apply');res.status(201).json(result);
   }),
 );
 

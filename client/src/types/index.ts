@@ -608,3 +608,6 @@ export interface RecruitmentSchedule {
   data: Partial<RecruitmentScheduleChange> & {eventTime?: string | null; eventTimeEnd?: string | null; preparationTasks?: EmailExtraction['preparationTasks']};
   sources: Array<{emailId: number | null; action: string; snapshot: string; receivedAt: string; subject: string | null}>;
 }
+export interface EmailCheckRun { id:number;trigger:string;checked:number;repaired:number;review:number;createdAt:string }
+export interface EmailCheckFinding { key:string;kind:string;title:string;detail:string;status:'open'|'resolved'|'ignored';fingerprint:string;plan:{action:'merge-app'|'merge-schedule'|'split-mail'|'review';ids:number[];targetId?:number;mailId?:number};updated_at:string }
+export interface EmailCheckState { runs:EmailCheckRun[];findings:EmailCheckFinding[];changes:{id:number;action:string;before_state:string;after_state:string;created_at:string}[] }

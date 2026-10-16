@@ -1,4 +1,4 @@
-import type { RecruitmentSchedule } from '../types';
+import type { RecruitmentSchedule, EmailCheckRun, EmailCheckState } from '../types';
 import { downloadFile, http, uploadFile } from './http';
 import type {
   ActionListItem,
@@ -158,6 +158,9 @@ export const auditApi = {
 
 // ---------- email analysis ----------
 export const emailApi = {
+  checkState:()=>http.get<EmailCheckState>('/email/check'),
+  check:()=>http.post<EmailCheckRun>('/email/check',{}),
+  resolveCheck:(body:{key:string;fingerprint:string;decision:'confirm'|'ignore';targetId?:number})=>http.post<EmailCheckRun>('/email/check/resolve',body),
   updateSchedule: (id: number, body: {revision:number;schedule:NonNullable<EmailItem['extracted']>['schedule'];eventTime:string|null;eventTimeEnd:string|null}) => http.patch<RecruitmentSchedule>(`/email/schedules/${id}`,body),
   schedules: (applicationId?: number) => http.get<{items:RecruitmentSchedule[]}>(`/email/schedules${qs({applicationId})}`),
   autoStatus: () => http.get<{ enabled: boolean; running: boolean; hours: number[]; autoApply: boolean; nextRunAt: string | null; lastResult: string | null }>('/email/auto-analyze'),

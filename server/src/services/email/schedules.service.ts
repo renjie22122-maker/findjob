@@ -7,13 +7,16 @@ import { explicitActivityWindow, validEventTime } from './eventTime.js';
 export const SCHEDULE_KINDS = ['interview', 'written_test', 'assessment'];
 
 /** Older running servers may confirm mail after migration without creating a schedule. */
-export function adoptUntrackedInvitations(companyId: number) {
+export function adoptUntrackedInvitations(companyId: number, requireEvidence = false) {
   const db=getDb();
   const rows=db.prepare(`SELECT m.* FROM email_items m JOIN applications a ON a.id=m.application_id WHERE a.company_id=? AND m.status='confirmed' AND NOT EXISTS(SELECT 1 FROM schedule_sources ss WHERE ss.email_id=m.id) ORDER BY m.received_at,m.id`).all(companyId) as {id:number;application_id:number;extracted:string;snippet:string;received_at:string}[];
   const groups=new Map<string,{row:typeof rows[number];e:EmailExtraction}[]>();
   for(const row of rows){
     let e:EmailExtraction;try{e=JSON.parse(row.extracted);}catch{continue;}
     if(!e || !SCHEDULE_KINDS.includes(e.eventType ?? '') || !validEventTime(e.eventTime) || e.reviewReasons?.length || (e.schedule && e.schedule.action!=='create')) continue;
+    if(requireEvidence && e.timeSource!=='manual' && (!['body','attachment'].includes(e.timeSource ?? '') || !e.timeEvidence))continue;
+    const explicit=explicitActivityWindow(row.snippet ?? '');
+    if(requireEvidence && e.timeSource!=='manual' && explicit && (explicit.start!==e.eventTime || explicit.end!==e.eventTimeEnd))continue;
     if(db.prepare('SELECT id FROM recruitment_schedules WHERE application_id=? AND kind=?').get(row.application_id,e.eventType)) continue;
     const key=`${row.application_id}/${e.eventType}`;groups.set(key,[...(groups.get(key) ?? []),{row,e}]);
   }
@@ -97,19 +100,25 @@ export function applicationFromRepeatedWindow(companyId: number, e: EmailExtract
   return matches[0]?.application_id;
 }
 
-function rebuildReminders(row: Row, data: ScheduleData) {
+function rebuildReminders(row: Row, data: ScheduleData, keepOverdue = false) {
   const db = getDb(); const now = nowIso();
-  // Completed and user-authored reminders are preserved. Only pending owned reminders are replaced.
-  db.prepare('DELETE FROM reminders WHERE schedule_id=? AND done=0').run(row.id);
-  if (row.status !== 'scheduled') return;
+  const retained = new Set<number>();
+  // Reconcile in place: repeated checks must not churn reminder IDs or completion state.
+  if (row.status !== 'scheduled') { db.prepare('DELETE FROM reminders WHERE schedule_id=? AND done=0').run(row.id); return; }
   const location = [data.venue, data.address, data.room].filter(Boolean).join(' · ');
   const type = row.kind === 'interview' ? 'interview' : 'written_test';
   const title = `${row.kind === 'interview' ? '面试' : '考试'}${data.round ? ` · ${data.round}` : ''}${data.timeKind === 'deadline' ? ' · 截止' : ''}${location ? ` · ${location}` : ''}`;
   const add = (at: string | null | undefined, label: string, kind: string) => {
     if (!at || at <= now) return;
     if (db.prepare('SELECT id FROM reminders WHERE application_id=? AND type=? AND scheduled_at=? AND schedule_id IS NULL AND done=0').get(row.application_id,kind,at)) return;
-    if (db.prepare('SELECT id FROM reminders WHERE schedule_id=? AND scheduled_at=? AND type=? AND done=1').get(row.id, at, kind)) return;
-    db.prepare('INSERT INTO reminders(application_id,type,title,scheduled_at,done,created_at,schedule_id) VALUES (?,?,?,?,0,?,?)').run(row.application_id, kind, label, at, now, row.id);
+    if (db.prepare("SELECT id FROM reminders WHERE schedule_id=? AND scheduled_at=? AND type=? AND done=1 AND (type<>'other' OR title=?)").get(row.id, at, kind,label)) return;
+    const existing = db.prepare("SELECT id FROM reminders WHERE schedule_id=? AND scheduled_at=? AND type=? AND done=0 AND (type<>'other' OR title=?) ORDER BY id LIMIT 1").get(row.id,at,kind,label) as {id:number}|undefined;
+    if (existing) {
+      retained.add(existing.id);
+      if(!keepOverdue)db.prepare('UPDATE reminders SET title=?,application_id=? WHERE id=? AND (title<>? OR application_id<>?)').run(label,row.application_id,existing.id,label,row.application_id);
+      else db.prepare('UPDATE reminders SET application_id=? WHERE id=? AND application_id<>?').run(row.application_id,existing.id,row.application_id);
+    }
+    else retained.add(Number(db.prepare('INSERT INTO reminders(application_id,type,title,scheduled_at,done,created_at,schedule_id) VALUES (?,?,?,?,0,?,?)').run(row.application_id, kind, label, at, now, row.id).lastInsertRowid));
   };
   const window = data.timeKind === 'window' && data.eventTimeEnd;
   const at = window ? data.eventTimeEnd : data.eventTime && data.eventTime > now ? data.eventTime : data.eventTimeEnd;
@@ -117,6 +126,18 @@ function rebuildReminders(row: Row, data: ScheduleData) {
   if (at) add(localIso(new Date(new Date(at).getTime() - 86400000)), `提前一天准备：${title}`, type);
   if (window) add(data.eventTime, `开放作答：${title}`, type);
   for (const task of data.preparationTasks ?? []) add(validEventTime(task.scheduledAt), `准备：${task.title}`, 'other');
+  for (const pending of db.prepare('SELECT id,scheduled_at FROM reminders WHERE schedule_id=? AND done=0').all(row.id) as {id:number;scheduled_at:string}[]) {
+    // Keep overdue tasks visible; a check must not silently dismiss a missed reminder.
+    if (!retained.has(pending.id) && (!keepOverdue || pending.scheduled_at > now)) db.prepare('DELETE FROM reminders WHERE id=?').run(pending.id);
+  }
+}
+
+export function reconcileScheduleReminders(id: number) {
+  const row=getDb().prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(id) as Row|undefined;
+  if (!row) throw AppError.notFound('招聘日程');
+  const data=JSON.parse(row.data) as ScheduleData;
+  if (row.status==='scheduled' && (!validEventTime(data.eventTime) || (data.eventTimeEnd && (!validEventTime(data.eventTimeEnd) || data.eventTimeEnd<=data.eventTime!)))) throw AppError.validation('日程时间不完整或冲突，请先确认');
+  rebuildReminders(row,data,true);
 }
 
 /** Caller wraps this and email application in one transaction. */

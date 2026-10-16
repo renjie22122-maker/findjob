@@ -18,6 +18,7 @@ import { applySchedule, scheduleApplication, applicationFromEventRef, SCHEDULE_K
 import { matchEmailApplication } from './applicationMatch.js';
 import { adoptUntrackedInvitations, applicationFromRepeatedWindow } from './schedules.service.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
+import { checkExistingEmails } from './check.service.js';
 
 interface EmailItemRow {
   id: number;
@@ -82,7 +83,7 @@ export function isEmailAnalyzing(): boolean { return analyzing; }
 export async function analyzeEmails(days: number, options: AnalyzeOptions = {}): Promise<AnalyzeResult> {
   if (analyzing) throw AppError.conflict('邮件分析正在进行，请稍后刷新');
   analyzing = true;
-  try { return await analyzeEmailsOnce(days, options); }
+  try { const result=await analyzeEmailsOnce(days, options); checkExistingEmails('incremental'); return result; }
   finally { analyzing = false; }
 }
 

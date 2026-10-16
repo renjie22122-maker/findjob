@@ -3,6 +3,7 @@ import { AppError } from '../../middleware/error.js';
 import { getSetting, setSetting } from '../settings.service.js';
 import { localIso, nowIso } from '../../utils/time.js';
 import { analyzeEmails, applyEmailBatch, isEmailAnalyzing } from './email.service.js';
+import { checkExistingEmails } from './check.service.js';
 
 /**
  * 邮件定时分析（默认每天 08:00 / 20:00，本地时区）：
@@ -112,7 +113,8 @@ export async function runAutoEmailAnalyze(
       failure = batch.results.find(r => !r.ok)?.message ?? '';
     }
     const summary = `拉取 ${result.fetched} / 候选 ${result.candidates} / 新分析 ${result.analyzed}（去重跳过 ${result.skipped}）/ 自动应用 ${applied} / 待复核 ${review}${failure ? `（${failure}）` : ''}`;
-    markAutoAnalyzeRan(`${nowIso().slice(0, 16)} ${trigger} 成功：${summary}`);
+    const checked=checkExistingEmails('apply');
+    markAutoAnalyzeRan(`${nowIso().slice(0, 16)} ${trigger} 成功：${summary}；核查修复 ${checked.repaired} 项，待确认 ${checked.review} 项`);
     console.log(`[email-auto] ${trigger} 成功：${summary}`);
     return { ran: true, trigger, message: summary, ...result, applied };
   } catch (err) {
