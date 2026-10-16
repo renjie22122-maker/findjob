@@ -609,5 +609,7 @@ export interface RecruitmentSchedule {
   sources: Array<{emailId: number | null; action: string; snapshot: string; receivedAt: string; subject: string | null}>;
 }
 export interface EmailCheckRun { id:number;trigger:string;checked:number;repaired:number;review:number;createdAt:string }
-export interface EmailCheckFinding { key:string;kind:string;title:string;detail:string;status:'open'|'resolved'|'ignored';fingerprint:string;plan:{action:'merge-app'|'merge-schedule'|'split-mail'|'review';ids:number[];targetId?:number;mailId?:number};updated_at:string }
+export interface EmailCheckEvidenceMail { id:number;subject?:string;sender?:string;receivedAt?:string;position?:string;jobId?:string;event?:string;start?:string;end?:string;timeSource?:string;timeEvidence?:string;venue?:string;address?:string;room?:string;body?:string;attachments?:{name:string;status:string;detail:string}[] }
+export interface EmailCheckComparison { reasons:string[];columns:{id?:number;label:string;company?:string;position?:string;status?:string;start?:string;end?:string;venue?:string;address?:string;room?:string;round?:string;mails:EmailCheckEvidenceMail[]}[] }
+export interface EmailCheckFinding { comparison?:EmailCheckComparison;key:string;kind:string;title:string;detail:string;status:'open'|'resolved'|'ignored';fingerprint:string;plan:{action:'merge-app'|'merge-schedule'|'split-mail'|'review';ids:number[];targetId?:number;mailId?:number};updated_at:string }
 export interface EmailCheckState { runs:EmailCheckRun[];findings:EmailCheckFinding[];changes:{id:number;action:string;before_state:string;after_state:string;created_at:string}[] }

@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import EmailCheckComparison, {savedComparison} from './EmailCheckComparison';
 import {Alert,Button,Card,Collapse,Empty,Modal,Select,Space,Tag,Typography,message} from 'antd';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {Link} from 'react-router-dom';
@@ -20,8 +21,8 @@ export default function EmailCheckPanel(){
       {error && <Alert type="error" message={error.message}/>}
       {!isLoading && !open.length && <Typography.Text type="secondary">{latest?'暂无待确认问题。已完成状态与手工提醒受到保护。':'尚未检查，可点击上方按钮。'}</Typography.Text>}
       {open.map(f=><Card key={f.key} size="small" title={f.title}>
-        <Typography.Paragraph>{f.detail}</Typography.Paragraph>
-        <Space wrap>
+        <EmailCheckComparison data={f.comparison}/>
+        <Space wrap style={{marginTop:12}}>
           {f.plan.action!=='review' && <Button onClick={()=>{setSelected(f);setTarget(f.plan.targetId);}}>核对并处理</Button>}
           {f.plan.mailId && <Tag>邮件 #{f.plan.mailId}</Tag>}
           {f.kind.includes('schedule') || f.kind.includes('time') || f.kind==='untracked' ? <Link to="/schedules">前往招聘日程核对</Link> : null}
@@ -31,11 +32,11 @@ export default function EmailCheckPanel(){
       <Collapse items={[{key:'history',label:`检查与修复记录（最近 ${data?.changes.length??0} 项变更）`,children:<Space direction="vertical" style={{width:'100%'}}>
         {(data?.runs??[]).slice(0,5).map(r=><Typography.Text key={r.id}>#{r.id} · {formatDateTime(r.createdAt)} · {{manual:'手动检查',incremental:'增量分析后',apply:'应用邮件后',confirmation:'确认后复查'}[r.trigger]??r.trigger} · 检查 {r.checked} 封 / 修复 {r.repaired} 项 / 待确认 {r.review} 项</Typography.Text>)}
         {!data?.changes.length && <Empty description="暂无修复或确认记录"/>}
-        {(data?.changes??[]).map(c=><Collapse key={c.id} style={{width:'100%'}} items={[{key:String(c.id),label:`${formatDateTime(c.created_at)} · ${c.action}`,children:<><Typography.Text strong>变更前</Typography.Text><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:260,overflow:'auto'}}>{c.before_state}</pre><Typography.Text strong>变更后</Typography.Text><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:260,overflow:'auto'}}>{c.after_state}</pre></>}]} />)}
+        {(data?.changes??[]).map(c=><Collapse key={c.id} style={{width:'100%'}} items={[{key:String(c.id),label:`${formatDateTime(c.created_at)} · ${c.action}`,children:<><EmailCheckComparison data={savedComparison(c.before_state)}/><Typography.Text strong>变更前</Typography.Text><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:260,overflow:'auto'}}>{c.before_state}</pre><Typography.Text strong>变更后</Typography.Text><pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:260,overflow:'auto'}}>{c.after_state}</pre></>}]} />)}
       </Space>}]} />
     </Space>
-    <Modal title="核对本次修复" open={Boolean(selected)} onCancel={()=>setSelected(null)} confirmLoading={resolve.isPending} onOk={()=>selected&&resolve.mutate({finding:selected,decision:'confirm'})}>
-      <Typography.Paragraph>{selected?.detail}</Typography.Paragraph>
+    <Modal width={1100} title="核对本次修复" open={Boolean(selected)} onCancel={()=>setSelected(null)} confirmLoading={resolve.isPending} onOk={()=>selected&&resolve.mutate({finding:selected,decision:'confirm'})}>
+      <EmailCheckComparison data={selected?.comparison}/>
       {selected?.plan.action==='merge-app' && <><Typography.Paragraph>保留哪条申请？目标申请的当前状态将保留，源申请的完整记录会存入修复历史。</Typography.Paragraph><Select aria-label="保留申请" style={{width:'100%'}} value={target} onChange={setTarget} options={selected.plan.ids.map(id=>({value:id,label:`保留申请 #${id}`}))}/></>}
       <Alert style={{marginTop:16}} type="info" message="会保留已完成提醒和全部来源记录。记录已变化时会拒绝操作，请重新检查。"/>
     </Modal>

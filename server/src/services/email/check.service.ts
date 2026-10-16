@@ -19,8 +19,8 @@ const normalized=(value:unknown)=>String(value ?? '').replace(/\s/g,'').toLowerC
 function snapshot(plan:Plan) {
   const db=getDb();
   if(plan.action==='merge-app') return plan.ids.map(id=>({app:db.prepare('SELECT * FROM applications WHERE id=?').get(id),mail:rows('email_items','WHERE application_id=?',[id]),schedules:rows('recruitment_schedules','WHERE application_id=?',[id]),reminders:rows('reminders','WHERE application_id=?',[id]),timeline:rows('timeline_events','WHERE application_id=?',[id])}));
-  if(plan.action==='merge-schedule') return plan.ids.map(id=>({schedule:db.prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(id),sources:rows('schedule_sources','WHERE schedule_id=?',[id]),reminders:rows('reminders','WHERE schedule_id=?',[id])}));
-  if(plan.mailId) return {mail:db.prepare('SELECT * FROM email_items WHERE id=?').get(plan.mailId),apps:plan.ids.map(id=>db.prepare('SELECT * FROM applications WHERE id=?').get(id)),sources:rows('schedule_sources','WHERE email_id=?',[plan.mailId])};
+  if(plan.action==='merge-schedule') return plan.ids.map(id=>({schedule:db.prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(id),sources:rows('schedule_sources','WHERE schedule_id=?',[id]),mail:db.prepare('SELECT m.* FROM email_items m JOIN schedule_sources ss ON ss.email_id=m.id WHERE ss.schedule_id=? ORDER BY m.id').all(id),reminders:rows('reminders','WHERE schedule_id=?',[id])}));
+  if(plan.mailId) return {peers:plan.ids.flatMap(id=>rows('email_items','WHERE application_id=?',[id])),mail:db.prepare('SELECT * FROM email_items WHERE id=?').get(plan.mailId),apps:plan.ids.map(id=>db.prepare('SELECT * FROM applications WHERE id=?').get(id)),sources:rows('schedule_sources','WHERE email_id=?',[plan.mailId])};
   return plan.ids.map(id=>db.prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(id));
 }
 function record(runId:number|null,key:string|null,action:string,before:unknown,after:unknown) {
@@ -35,6 +35,44 @@ function addFinding(seen:Set<string>,key:string,kind:string,title:string,detail:
 function compatibleSchedules(a:RecordRow,b:RecordRow) {
   const x=parse<RecordRow>(a.data,{}),y=parse<RecordRow>(b.data,{});
   return a.application_id===b.application_id && a.kind===b.kind && a.status===b.status && x.eventTime===y.eventTime && x.eventTimeEnd===y.eventTimeEnd && ['eventRef','round','venue','address','room','mode','timeKind','timezone'].every(k=>!x[k] || !y[k] || x[k]===y[k]) && (!Array.isArray(x.preparationTasks) || !x.preparationTasks.length || !Array.isArray(y.preparationTasks) || !y.preparationTasks.length || hash(x.preparationTasks)===hash(y.preparationTasks));
+}
+
+/** Plain-text evidence only: no HTML, remote images, or actionable mail links. */
+function comparison(finding:Pick<Finding,'kind'|'detail'|'plan'>) {
+  const plan=parse<Plan>(finding.plan,{action:'review',ids:[]}),db=getDb();
+  const mailView=(m:RecordRow)=>{
+    const e=parse<RecordRow>(m.extracted,{}),s=(e.schedule ?? {}) as RecordRow;
+    return {id:m.id,subject:m.subject,sender:m.sender,receivedAt:m.received_at,position:e.positionTitle,jobId:e.recruitmentId,event:e.eventType,start:e.eventTime,end:e.eventTimeEnd,timeSource:e.timeSource,timeEvidence:e.timeEvidence,venue:s.venue,address:s.address,room:s.room,body:m.snippet,attachments:e.attachments};
+  };
+  const appView=(id:number)=>{
+    const app=db.prepare('SELECT a.*,c.name company FROM applications a LEFT JOIN companies c ON c.id=a.company_id WHERE a.id=?').get(id) as RecordRow|undefined;
+    return {id,label:`申请 #${id}`,company:app?.company,position:app?.position_title,status:app?.status,mails:rows('email_items','WHERE application_id=?',[id]).map(mailView)};
+  };
+  let columns:RecordRow[];
+  if(plan.mailId){
+    const mail=db.prepare('SELECT * FROM email_items WHERE id=?').get(plan.mailId) as RecordRow|undefined;
+    const e=parse<RecordRow>(mail?.extracted,{});
+    columns=[{label:`待核对邮件 #${plan.mailId}`,company:e.company,position:e.positionTitle,status:mail?.status,mails:mail?[mailView(mail)]:[]}];
+    if(mail?.application_id){const app=appView(Number(mail.application_id));columns.push({...app,label:`当前申请 #${app.id} 的其他邮件`,mails:app.mails.filter(m=>m.id!==plan.mailId)});}
+  }else if(plan.action==='merge-app')columns=plan.ids.map(appView);
+  else columns=plan.ids.map(id=>{
+    const row=db.prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(id) as RecordRow|undefined;
+    const data=parse<RecordRow>(row?.data,{}),app=row?appView(Number(row.application_id)):null;
+    const mails=db.prepare('SELECT DISTINCT m.* FROM email_items m JOIN schedule_sources ss ON ss.email_id=m.id WHERE ss.schedule_id=? ORDER BY m.id').all(id) as RecordRow[];
+    return {label:`日程 #${id}`,company:app?.company,position:app?.position,status:row?.status,start:data.eventTime,end:data.eventTimeEnd,venue:data.venue,address:data.address,room:data.room,round:data.round,mails:mails.map(mailView)};
+  });
+  const mails=columns.map(c=>(c.mails as ReturnType<typeof mailView>[]));
+  const reasons=[finding.detail];
+  if(plan.action==='merge-app'){
+    const refs=mails.map(ms=>new Set(ms.map(m=>m.jobId).filter(Boolean)));
+    const common=[...(refs[0]??[])].filter(id=>refs[1]?.has(id));
+    if(common.length)reasons.push(`匹配依据：邮件中的职位编号相同（${common.join('、')}）。`);
+    else reasons.push('匹配依据：同公司且岗位名称相同或同属管理培训生项目；缺少共同职位编号，名称相似不能证明是同一次申请。');
+    reasons.push('不同测评／面试阶段可以属于同一申请；合并申请不会自动合并不同阶段的日程。');
+  }
+  if(plan.action==='split-mail')reasons.push('拆分依据：同一申请内出现不同职位编号或不同岗位回执。请核对是否不同岗位，避免把简称或岗位改名误拆。');
+  if(finding.kind==='duplicate-schedule')reasons.push('匹配依据：同一申请、活动类型，且活动编号或开始时间相同；请结合轮次及原文确认是否同一场次。');
+  return parse<{reasons:string[];columns:RecordRow[]}>(redactMailSecrets(JSON.stringify({reasons,columns})),{reasons:[],columns:[]});
 }
 
 /** Local-only audit. Never reads credentials, fetches mail, calls a model, or follows a URL. */
@@ -131,7 +169,7 @@ export function checkExistingEmails(trigger:'manual'|'incremental'|'apply'|'conf
 }
 
 export function getEmailCheckState() {
-  const db=getDb();return {runs:rows('email_check_runs').slice(-30).reverse().map(r=>parse(r.result,{})),findings:(db.prepare("SELECT * FROM email_check_findings ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END,updated_at DESC LIMIT 300").all() as Finding[]).map(r=>({...r,plan:parse<Plan>(r.plan,{action:'review',ids:[]})})),changes:db.prepare('SELECT * FROM email_check_changes ORDER BY id DESC LIMIT 100').all()};
+  const db=getDb();return {runs:rows('email_check_runs').slice(-30).reverse().map(r=>parse(r.result,{})),findings:(db.prepare("SELECT * FROM email_check_findings ORDER BY CASE status WHEN 'open' THEN 0 ELSE 1 END,updated_at DESC LIMIT 300").all() as Finding[]).map(r=>({...r,comparison:r.status==='open'?comparison(r):undefined,plan:parse<Plan>(r.plan,{action:'review',ids:[]})})),changes:db.prepare('SELECT * FROM email_check_changes ORDER BY id DESC LIMIT 100').all()};
 }
 function moveReferences(from:number,to:number) {
   const db=getDb();for(const {name} of db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {name:string}[]){
@@ -145,7 +183,8 @@ export function resolveEmailCheck(key:string,fingerprint:string,decision:'confir
     if(!finding || finding.status!=='open')throw AppError.conflict('该问题已处理，请刷新');
     const plan=parse<Plan>(finding.plan,{action:'review',ids:[]}),before=snapshot(plan);let additional:unknown=null;
     if(finding.fingerprint!==fingerprint || hash(before)!==fingerprint)throw AppError.conflict('相关邮件或记录已变化，请重新检查后确认');
-    if(decision==='ignore'){db.prepare("UPDATE email_check_findings SET status='ignored',updated_at=? WHERE key=?").run(nowIso(),key);record(null,key,'用户确认保持现状',before,before);return;}
+    const evidence={comparison:comparison(finding),records:before};
+    if(decision==='ignore'){db.prepare("UPDATE email_check_findings SET status='ignored',updated_at=? WHERE key=?").run(nowIso(),key);record(null,key,'用户确认保持现状',evidence,before);return;}
     if(plan.action==='review')throw AppError.validation('此项需要先在邮件或日程页面核对信息，不能直接确认修复');
     if(plan.action==='merge-app'){
       const target=targetId ?? plan.targetId!;if(!plan.ids.includes(target))throw AppError.validation('请选择候选申请作为保留目标');
@@ -177,7 +216,7 @@ export function resolveEmailCheck(key:string,fingerprint:string,decision:'confir
       additional=db.prepare('SELECT * FROM applications WHERE id=?').get(id);
     }
     db.prepare("UPDATE email_check_findings SET status='resolved',updated_at=? WHERE key=?").run(nowIso(),key);
-    record(null,key,`用户确认：${finding.title}`,before,{state:snapshot(plan),additional});
+    record(null,key,`用户确认：${finding.title}`,evidence,{state:snapshot(plan),additional,targetId:targetId??plan.targetId,decision});
   })();
   return checkExistingEmails('confirmation');
 }

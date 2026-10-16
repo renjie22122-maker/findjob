@@ -10,6 +10,31 @@ function apply(e=base){const id=seed(e);return {id,...applyEmailItem(id,undefine
 function findings(){return getEmailCheckState().findings.filter(f=>f.status==='open');}
 beforeEach(()=>{closeDb();getDb();});
 describe('已有邮件检查及修复记录',()=>{
+ it('并排证据包含原文、地点和编号依据，确认快照脱敏且不随邮件改变',()=>{
+   apply();const id=seed({...base,positionTitle:'工程师（项目名）',schedule:{...base.schedule,action:'create',venue:'第一考点',room:'302'}});
+   applyEmailItem(id,undefined,{createIfMissing:true,targetApplicationId:null,targetScheduleId:null});
+   getDb().prepare('UPDATE email_items SET snippet=? WHERE id=?').run('原文：第一考点302。https://example.com/once?token=secret 验证码：123456',id);
+   checkExistingEmails();const f=findings().find(f=>f.kind==='duplicate-app')!;
+   expect(f.comparison?.columns).toHaveLength(2);
+   expect(JSON.stringify(f.comparison)).toContain('第一考点');
+   expect(JSON.stringify(f.comparison)).toContain('职位编号相同');
+   expect(JSON.stringify(f.comparison)).not.toContain('token=secret');
+   expect(JSON.stringify(f.comparison)).not.toContain('123456');
+   resolveEmailCheck(f.key,f.fingerprint,'ignore');
+   const change=getEmailCheckState().changes[0] as {before_state:string};
+   expect(JSON.parse(change.before_state).comparison).toEqual(f.comparison);
+   getDb().prepare("UPDATE email_items SET snippet='修改后的正文' WHERE id=?").run(id);
+   expect((getEmailCheckState().changes[0] as {before_state:string}).before_state).toBe(change.before_state);
+ });
+ it('拆分展示当前邮件及其他岗位邮件，其他邮件变化会阻止过期确认',()=>{
+   const a=apply();const id=seed({...base,recruitmentId:'JOB-2',positionTitle:'另一岗位'});
+   getDb().prepare("UPDATE email_items SET application_id=?,status='confirmed' WHERE id=?").run(a.item.applicationId,id);
+   checkExistingEmails();const f=findings().find(f=>f.plan.mailId===id && f.kind==='mixed-jobs')!;
+   expect(f.comparison?.columns).toHaveLength(2);
+   expect(JSON.stringify(f.comparison)).toContain('JOB-1');expect(JSON.stringify(f.comparison)).toContain('JOB-2');
+   getDb().prepare("UPDATE email_items SET snippet='新的岗位依据' WHERE id=?").run(a.id);
+   expect(()=>resolveEmailCheck(f.key,f.fingerprint,'confirm')).toThrow('已变化');
+ });
  it('缺失提醒自动补齐，重复检查不改ID、不重复修复、不打开已完成项',()=>{
    const first=apply();const db=getDb();
    db.prepare('UPDATE reminders SET done=1,done_at=? WHERE scheduled_at=?').run('2026-10-16T12:00:00',base.eventTime);

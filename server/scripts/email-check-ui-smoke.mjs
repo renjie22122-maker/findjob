@@ -19,6 +19,14 @@ const browser=await chromium.launch({channel:'msedge',headless:true});const out=
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(base+'/email');await page.getByRole('button',{name:'一键检查已有邮件'}).click();await page.getByText('可能重复的申请 #1 / #2',{exact:true}).waitFor();
+ await page.getByText(/匹配依据：邮件中的职位编号相同/).first().waitFor();
+ assert.equal(await page.getByText('邮件正文（本地保存）',{exact:true}).count(),2);
+ const columns=page.getByTestId('email-evidence-columns').first();
+ const cards=columns.locator(':scope > div');const left=await cards.nth(0).boundingBox(),right=await cards.nth(1).boundingBox();assert.ok(right.x>left.x);
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:out+'email-evidence-overflow.png',fullPage:true,animations:'disabled'});await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+2);
+ await page.screenshot({path:out+'email-evidence-mobile.png',fullPage:true,animations:'disabled'});
+ await page.setViewportSize({width:1440,height:1000});
+ await page.screenshot({path:out+'email-evidence-desktop.png',fullPage:true,animations:'disabled'});
  assert.equal(db.prepare('SELECT COUNT(*) n FROM reminders WHERE done=1').get().n,1);
  await page.getByRole('button',{name:'核对并处理'}).click();await page.getByText('核对本次修复',{exact:true}).waitFor();
  const result=page.waitForResponse(r=>r.url().endsWith('/check/resolve'));await page.getByRole('button',{name:'确 定',exact:true}).click();assert.equal((await result).status(),200);
@@ -27,7 +35,8 @@ try{
  await page.getByText('暂无待确认问题。已完成状态与手工提醒受到保护。',{exact:true}).waitFor();
  const stable=db.prepare('SELECT * FROM reminders ORDER BY id').all();await page.getByRole('button',{name:'一键检查已有邮件'}).click();await page.waitForResponse(r=>r.url().endsWith('/check')&&r.request().method()==='GET');assert.deepEqual(db.prepare('SELECT * FROM reminders ORDER BY id').all(),stable);
  await page.getByText(/检查与修复记录（最近/).click();await page.getByText(/用户确认：可能重复的申请/).first().waitFor();
+ await page.getByText(/用户确认：可能重复的申请/).first().click();await page.getByText(/匹配依据：邮件中的职位编号相同/).first().waitFor();
  await page.locator('.ant-select').filter({has:page.getByRole('combobox',{name:'界面主题'})}).click();await page.getByText('☾ 暗色',{exact:true}).click();await page.keyboard.press('Escape');await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');await page.screenshot({path:out+'email-check-dark.png',fullPage:true,animations:'disabled'});
- await page.setViewportSize({width:390,height:844});await page.goto(base+'/email');await page.getByRole('button',{name:'一键检查已有邮件'}).waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2),false);await page.screenshot({path:out+'email-check-mobile.png',fullPage:true,animations:'disabled'});
+ await page.setViewportSize({width:390,height:844});await page.goto(base+'/email');await page.getByRole('button',{name:'一键检查已有邮件'}).waitFor();await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+2);await page.screenshot({path:out+'email-check-mobile.png',fullPage:true,animations:'disabled'});
  assert.deepEqual(errors,[]);console.log('Email check UI passed: repair, application merge, schedule merge, history, repeat, completed state, dark/mobile.');
 }finally{await browser.close();await new Promise(r=>server.close(r));closeDb();}
