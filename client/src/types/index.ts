@@ -605,7 +605,7 @@ export interface RecruitmentSchedule {
   kind: string;
   status: 'scheduled' | 'cancelled' | 'awaiting_time';
   revision: number;
-  data: Partial<RecruitmentScheduleChange> & {eventTime?: string | null; eventTimeEnd?: string | null; preparationTasks?: EmailExtraction['preparationTasks']};
+  data: Partial<RecruitmentScheduleChange> & {preliminary?:boolean;dateStart?:string;dateEnd?:string;stageLabel?:string;attendanceCondition?:string|null;sharedWithScheduleId?:number;eventTime?: string | null; eventTimeEnd?: string | null; preparationTasks?: EmailExtraction['preparationTasks']};
   sources: Array<{emailId: number | null; action: string; snapshot: string; receivedAt: string; subject: string | null}>;
 }
 export interface EmailCheckRun { id:number;trigger:string;checked:number;repaired:number;review:number;createdAt:string }

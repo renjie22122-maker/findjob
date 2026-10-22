@@ -14,7 +14,7 @@ import { fetchRecentEmails, testEmailConnection, acknowledgeEmail } from './imap
 import { isRecruitmentCandidate } from './filter.js';
 import { eventWindowText, mailTimeToLocal, timelineTime, validEventTime } from './eventTime.js';
 import { attachEvidence } from './evidence.js';
-import { applySchedule, scheduleApplication, applicationFromEventRef, SCHEDULE_KINDS } from './schedules.service.js';
+import { applySchedule, scheduleApplication, applicationFromEventRef, SCHEDULE_KINDS,trackPreliminaryStages } from './schedules.service.js';
 import { matchEmailApplication } from './applicationMatch.js';
 import { adoptUntrackedInvitations, applicationFromRepeatedWindow } from './schedules.service.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
@@ -298,6 +298,7 @@ function applyEmailItemInternal(
   const managedSchedule = Boolean(extracted && SCHEDULE_KINDS.includes(extracted.eventType ?? ''));
   if (managedSchedule && !applicationId) throw AppError.validation('请先关联申请，再创建或更新日程');
   const scheduleResult = managedSchedule && applicationId && extracted ? applySchedule(applicationId, id, row.received_at, extracted, options.targetScheduleId, options.expectedScheduleRevision) : null;
+  if(applicationId && managedSchedule && !scheduleResult?.stale)trackPreliminaryStages(applicationId,id,row.received_at,row.snippet??'');
   if (scheduleResult?.stale) warning = '旧邮件已留档，未覆盖更新的日程和提醒';
   if (scheduleResult?.cancelled) warning = '日程已取消，已撤销该日程自动生成的未完成提醒';
   const now = nowIso();

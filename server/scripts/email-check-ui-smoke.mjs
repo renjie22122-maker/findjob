@@ -33,7 +33,7 @@ try{
  await page.getByText('可能重复的日程 #1 / #2',{exact:true}).waitFor();await page.getByRole('button',{name:'核对并处理'}).click();
  const merged=page.waitForResponse(r=>r.url().endsWith('/check/resolve'));await page.getByRole('button',{name:'确 定',exact:true}).click();assert.equal((await merged).status(),200);
  await page.getByText('暂无待确认问题。已完成状态与手工提醒受到保护。',{exact:true}).waitFor();
- const stable=db.prepare('SELECT * FROM reminders ORDER BY id').all();await page.getByRole('button',{name:'一键检查已有邮件'}).click();await page.waitForResponse(r=>r.url().endsWith('/check')&&r.request().method()==='GET');assert.deepEqual(db.prepare('SELECT * FROM reminders ORDER BY id').all(),stable);
+ const stable=db.prepare('SELECT * FROM reminders ORDER BY id').all();const rechecked=page.waitForResponse(r=>r.url().endsWith('/check')&&r.request().method()==='GET');await page.getByRole('button',{name:'一键检查已有邮件'}).click();await rechecked;assert.deepEqual(db.prepare('SELECT * FROM reminders ORDER BY id').all(),stable);
  await page.getByText(/检查与修复记录（最近/).click();await page.getByText(/用户确认：可能重复的申请/).first().waitFor();
  await page.getByText(/用户确认：可能重复的申请/).first().click();await page.getByText(/匹配依据：邮件中的职位编号相同/).first().waitFor();
  await page.locator('.ant-select').filter({has:page.getByRole('combobox',{name:'界面主题'})}).click();await page.getByText('☾ 暗色',{exact:true}).click();await page.keyboard.press('Escape');await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');await page.screenshot({path:out+'email-check-dark.png',fullPage:true,animations:'disabled'});

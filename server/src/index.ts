@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HOST, PORT, isLoopbackHost } from './config.js';
+import { HOST, PORT, isLoopbackHost,resolveBoundedInt } from './config.js';
 import { closeDb, getDb } from './db/connection.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import { requestLogger } from './middleware/logger.js';
@@ -23,6 +23,7 @@ import autofillRouter from './routes/autofill.js';
 import { startScheduler } from './scheduler.js';
 import settingsRouter from './routes/settings.js';
 import emailRouter from './routes/email.js';
+import {smsRouter,smsGateway} from './routes/sms.js';
 import utilsRouter from './routes/utils.js';
 import recommendationsRouter from './routes/recommendations.js';
 
@@ -54,6 +55,7 @@ export function createApp(): express.Express {
   app.use('/api/crawl', crawlRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/email', emailRouter);
+  app.use('/api/sms',smsRouter);
   app.use('/api/crawl-jobs', crawlJobsRouter);
   app.use('/api/crawl-runs', crawlRunsRouter);
   app.use('/api/oauth2', oauth2Router);
@@ -84,6 +86,10 @@ export function createApp(): express.Express {
 // 直接运行时启动服务
 if (process.argv[1]?.endsWith('index.js') || process.argv[1]?.endsWith('index.ts')) {
   const app = createApp();
+  const smsPort=resolveBoundedInt(process.env.SMS_GATEWAY_PORT,0,{min:1,max:65535}),smsToken=process.env.SMS_GATEWAY_TOKEN;
+  const phoneApp=express();
+  const phoneServer=smsPort && smsToken && smsToken.length>=32 ? phoneApp.use(smsGateway(smsToken)).use(errorHandler).listen(smsPort,process.env.SMS_GATEWAY_HOST??'127.0.0.1') : null;
+  phoneServer?.on('error',()=>console.error('[sms] 手机接入端口启动失败，请检查端口和监听地址；主应用继续运行'));
   if (!isLoopbackHost(HOST)) {
     console.warn(
       `[findjob] 警告：当前监听 ${HOST}，而接口无鉴权（含邮箱 / OAuth / LLM 配置），请勿暴露到公网或不受信任的局域网。`,
@@ -100,6 +106,7 @@ if (process.argv[1]?.endsWith('index.js') || process.argv[1]?.endsWith('index.ts
   const shutdown = (signal: NodeJS.Signals) => {
     if (shuttingDown) return;
     shuttingDown = true;
+    phoneServer?.close();
     console.log(`[findjob] 收到 ${signal}，正在关闭服务…`);
     server.close(() => {
       closeDb();

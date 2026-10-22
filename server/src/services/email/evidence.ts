@@ -2,6 +2,7 @@ import type { EmailExtraction } from '../../domain/types.js';
 import type { RawEmail } from './imap.client.js';
 import { explicitActivityWindow, mailTimeToLocal, validEventTime } from './eventTime.js';
 import {qualificationNotice} from './automationEvidence.js';
+import {localIso} from '../../utils/time.js';
 
 /** Confidence alone cannot authorize a dated event: require source evidence. */
 export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): EmailExtraction {
@@ -16,6 +17,8 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     }
   }
   const change = result.schedule;
+  // A fixed exam with a late-login exclusion is not a freely selectable completion window.
+  if(change?.timeKind==='window' && result.eventType==='written_test' && /考试开始[^。\n]{0,45}(?:未登录|缺考)/.test(sourceText))change.timeKind='start';
   // Activity format is not a round identifier. Avoid invented rounds splitting reminders.
   if (change?.round && /^(?:线上|在线)?AI(?:视频)?面试(?:[（(]正式作答[）)])?$/i.test(change.round)) delete change.round;
   const changeOnly = change && change.action !== 'create';
@@ -41,6 +44,11 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     result.recruitmentId = null;
     result.reviewReasons.push('职位编号未在原文出现，需确认申请关联');
   }
+  const early=[...sourceText.matchAll(/提前(\d{1,2})分钟(?:登录|进入笔试|打开笔试链接)/g)];
+  if(validEventTime(result.eventTime) && early.length===1 && Number(early[0][1])>0 && ['written_test','interview','assessment'].includes(result.eventType??'')){
+    const at=localIso(new Date(new Date(result.eventTime!).getTime()-Number(early[0][1])*60000));
+    if(!(result.preparationTasks??[]).some(t=>t.scheduledAt===at))result.preparationTasks=[...(result.preparationTasks??[]),{title:'提前登录／设备准备（需本人操作）',scheduledAt:at,timeEvidence:early[0][0]}];
+  }
   result.preparationTasks = (result.preparationTasks ?? []).filter(task => {
     const valid = validEventTime(task.scheduledAt);
     const quote = task.timeEvidence?.replace(/\s+/gu, '');
@@ -49,7 +57,9 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     const reference=midnight?new Date(new Date(`${valid!.slice(0,10)}T00:00:00Z`).getTime()-86400000).toISOString():valid;
     const dateMatches = reference && dates.some(m => (!m[1] || m[1] === reference.slice(0, 4)) && Number(m[2]) === Number(reference.slice(5, 7)) && Number(m[3]) === Number(reference.slice(8, 10)));
     const clockMatches = midnight || (valid && [...(quote ?? '').matchAll(/(\d{1,2})(?:[:：](\d{2})|[点时](?:(\d{1,2})分?)?)/g)].some(m => Number(m[1]) === Number(valid.slice(11, 13)) && Number(m[2]??m[3]??0) === Number(valid.slice(14, 16))));
-    if (!valid || !quote || !sourceText.replace(/\s+/gu, '').includes(quote) || !dateMatches || !clockMatches) {
+    const lead=quote?.match(/提前(\d{1,2})分钟(?:登录|进入笔试|打开笔试链接)/);
+    const relative=lead && validEventTime(result.eventTime) && valid===localIso(new Date(new Date(result.eventTime!).getTime()-Number(lead[1])*60000));
+    if (!valid || !quote || !sourceText.replace(/\s+/gu, '').includes(quote) || (!relative && (!dateMatches || !clockMatches))) {
       result.reviewReasons.push('准备事项缺少有效时间或原文依据，未创建该提醒');
       return false;
     }

@@ -1,6 +1,6 @@
 import { scheduleChangeSchema } from '../services/email/schedule.schema.js';
 import { checkExistingEmails, getEmailCheckState, resolveEmailCheck } from '../services/email/check.service.js';
-import { listSchedules, updateScheduleManually } from '../services/email/schedules.service.js';
+import { listSchedules, updateScheduleManually,shareScheduleReminders } from '../services/email/schedules.service.js';
 import { validEventTime } from '../services/email/eventTime.js';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -15,6 +15,7 @@ import {
 } from '../services/email/autoAnalyze.service.js';
 
 const router = Router();
+router.post('/schedules/:id/share',asyncHandler(async(req,res)=>{const input=parse(z.object({targetId:z.number().int().positive()}),req.body);res.json(shareScheduleReminders(parseId(req.params.id),input.targetId));}));
 router.get('/check',asyncHandler(async(_req,res)=>{res.json(getEmailCheckState());}));
 router.post('/check',asyncHandler(async(_req,res)=>{res.status(201).json(checkExistingEmails('manual'));}));
 router.post('/check/resolve',asyncHandler(async(req,res)=>{

@@ -1,6 +1,7 @@
 import type { EmailExtraction } from '../../domain/types.js';
 import type { EmailEventType } from '../../domain/status.js';
 import { detectTimeRangeEnd, explicitActivityWindow, validEventTime } from '../email/eventTime.js';
+import {preliminaryInterview} from '../email/preliminary.js';
 
 const RULES: Array<{ pattern: RegExp; type: EmailEventType }> = [
   { pattern: /感谢信|遗憾|暂不合适|未能通过|没有通过|不匹配|haven.t met the requirements|unfortunately.{0,60}not selected/i, type: 'reject' },
@@ -91,7 +92,8 @@ export function extractWithRules(subject: string, sender: string, snippet: strin
   const summary = explicitAssessment ? `编程测评登录截止（已换算本地时间）；具体时长及不可暂停要求请查看原邮件。` : eventType ? `本地规则识别：${eventType}` : '本地规则识别：招聘相关邮件';
   const explicitReceipt=eventType==='applied' && company && positionTitle && /您的简历我们已经收到|we have received your resume/i.test(snippet);
   const explicitExam=eventType==='written_test' && company && labelled && /开始时间（北京时间）/.test(labelled.evidence) && /考试信息|试卷名称/.test(snippet) && /邀请|进入笔试/.test(snippet) && action==='create';
-  const confidence = explicitAssessment || explicitReceipt || explicitExam ? 0.9 : eventType ? 0.4 : 0.2;
+  const explicitPreNotice=eventType==='written_test' && company && eventTime && eventTimeEnd && /笔试为在线笔试形式/.test(snippet) && preliminaryInterview(snippet,receivedAt??'') && /正式.*通知/.test(snippet);
+  const confidence = explicitAssessment || explicitReceipt || explicitExam || explicitPreNotice ? 0.9 : eventType ? 0.4 : 0.2;
 
   return { schedule, recruitmentId, company, eventType, eventTime, eventTimeEnd, timeEvidence, timeSource: eventTime ? 'body' : 'unknown', positionTitle, summary, confidence };
 }

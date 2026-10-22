@@ -8,6 +8,7 @@ import type { EmailExtraction, EmailItem } from '../types';
 import { EMAIL_EVENT_COLORS, EMAIL_EVENT_LABELS, STATUS_LABELS, formatDateTime } from '../utils/constants';
 import dayjs from 'dayjs';
 import EmailCheckPanel from '../components/EmailCheckPanel';
+import SmsImportPanel from '../components/SmsImportPanel';
 
 export default function EmailAnalysis() {
   const navigate = useNavigate();
@@ -101,6 +102,7 @@ export default function EmailAnalysis() {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <EmailCheckPanel />
+      <SmsImportPanel />
       {!configured && (
         <Alert
           type="warning"

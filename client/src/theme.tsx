@@ -26,6 +26,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     ConfigProvider.config({ holderRender: (children) => <ConfigProvider locale={zhCN} theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}>{children}</ConfigProvider> });
   }, [mode, dark]);
   return <ThemeContext.Provider value={{ mode, dark, setMode }}>
-    <ConfigProvider locale={zhCN} theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm, token: { colorPrimary: dark ? '#69a8ff' : '#1677ff', borderRadius: 8 } }}>{children}</ConfigProvider>
+    <ConfigProvider locale={zhCN} theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm, token: { colorPrimary: dark ? '#69a8ff' : '#1677ff', borderRadius: 12, colorBgLayout: dark ? '#101722' : '#f3f6fb', colorBgContainer: dark ? '#182231' : '#ffffff', colorBorderSecondary: dark ? '#2b394d' : '#e4eaf3', fontFamily: 'Inter, Segoe UI, Microsoft YaHei, sans-serif', controlHeight: 36 } }}>{children}</ConfigProvider>
   </ThemeContext.Provider>;
 }

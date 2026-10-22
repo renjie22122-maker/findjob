@@ -3,6 +3,7 @@ import { AppError } from '../../middleware/error.js';
 import type { EmailExtraction, RecruitmentScheduleChange } from '../../domain/types.js';
 import { nowIso, localIso } from '../../utils/time.js';
 import { explicitActivityWindow, validEventTime } from './eventTime.js';
+import {preliminaryInterview} from './preliminary.js';
 
 export const SCHEDULE_KINDS = ['interview', 'written_test', 'assessment'];
 
@@ -34,6 +35,7 @@ export function adoptUntrackedInvitations(companyId: number, requireEvidence = f
   }
 }
 interface ScheduleData extends Partial<RecruitmentScheduleChange> {
+  preliminary?:boolean;dateStart?:string;dateEnd?:string;stageLabel?:string;attendanceCondition?:string|null;sharedWithScheduleId?:number;
   eventTime?: string | null;
   eventTimeEnd?: string | null;
   timeEvidence?: string | null;
@@ -61,7 +63,8 @@ function matchSchedule(appId: number, e: EmailExtraction, target?: number | null
     const d = JSON.parse(row.data) as ScheduleData;
     if (change?.eventRef) return d.eventRef === change.eventRef;
     if (!matchTime && change?.round && change.action !== 'create') return d.round === change.round;
-    return Boolean(matchTime && (d.eventTime === matchTime || (change?.timeKind === 'deadline' && d.timeKind === 'window' && d.eventTimeEnd === matchTime)) && (!change?.round || !d.round || d.round === change.round));
+    const provisional=d.preliminary && row.status==='awaiting_time' && matchTime && d.dateStart && d.dateEnd && matchTime.slice(0,10)>=d.dateStart && matchTime.slice(0,10)<=d.dateEnd;
+    return Boolean(matchTime && (provisional || d.eventTime === matchTime || (change?.timeKind === 'deadline' && d.timeKind === 'window' && d.eventTimeEnd === matchTime)) && (!change?.round || !d.round || d.round === change.round));
   });
   if (candidates.length > 1) throw AppError.conflict('多个日程符合邮件信息，请明确选择场次');
   return candidates[0];
@@ -72,6 +75,32 @@ export function scheduleApplication(target: number) {
   const row = getDb().prepare('SELECT application_id FROM recruitment_schedules WHERE id=?').get(target) as {application_id:number} | undefined;
   if (!row) throw AppError.notFound('招聘日程');
   return row.application_id;
+}
+
+export function trackPreliminaryStages(appId:number,emailId:number,receivedAt:string,body:string) {
+  const data=preliminaryInterview(body,receivedAt);if(!data)return;
+  const db=getDb();
+  if(db.prepare("SELECT s.id FROM recruitment_schedules s JOIN schedule_sources ss ON ss.schedule_id=s.id WHERE ss.email_id=? AND s.kind='interview'").get(emailId))return;
+  const existing=(db.prepare("SELECT * FROM recruitment_schedules WHERE application_id=? AND kind='interview'").all(appId) as Row[]).filter(s=>{const d:ScheduleData=JSON.parse(s.data);return (d.dateStart===data.dateStart && d.dateEnd===data.dateEnd) || (d.eventTime && d.eventTime.slice(0,10)>=data.dateStart && d.eventTime.slice(0,10)<=data.dateEnd);});
+  if(existing.length>1)throw AppError.conflict('预通知对应多个面试场次，请核对');
+  const now=nowIso();
+  const id=existing[0]?.id??Number(db.prepare("INSERT INTO recruitment_schedules(application_id,kind,status,data,last_received_at,created_at,updated_at) VALUES (?,'interview','awaiting_time',?,?,?,?)").run(appId,JSON.stringify(data),receivedAt,now,now).lastInsertRowid);
+  db.prepare("INSERT INTO schedule_sources(schedule_id,email_id,action,snapshot,received_at,created_at) VALUES (?,?,'preliminary',?,?,?)").run(id,emailId,JSON.stringify(data),receivedAt,now);
+}
+
+/** Explicit user-confirmed shared exam. Applications stay separate; only activity reminders are shared. */
+export function shareScheduleReminders(id:number,targetId:number) {
+  return getDb().transaction(()=>{
+    const db=getDb(),a=db.prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(id) as Row|undefined,b=db.prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(targetId) as Row|undefined;
+    if(!a||!b||id===targetId)throw AppError.validation('请选择两个不同日程');
+    const x:ScheduleData=JSON.parse(a.data),y:ScheduleData=JSON.parse(b.data);
+    if(a.kind!==b.kind || a.status!=='scheduled'|| b.status!=='scheduled'||!x.eventTime||x.eventTime!==y.eventTime||(x.eventTimeEnd??null)!==(y.eventTimeEnd??null)||y.sharedWithScheduleId||db.prepare("SELECT id FROM recruitment_schedules WHERE json_extract(data,'$.sharedWithScheduleId')=?").get(id))throw AppError.conflict('仅可共享同类型、同起止时间的活动，且不能形成共享链');
+    x.sharedWithScheduleId=targetId;
+    db.prepare('UPDATE recruitment_schedules SET data=?,revision=revision+1,updated_at=? WHERE id=?').run(JSON.stringify(x),nowIso(),id);
+    db.prepare("INSERT INTO schedule_sources(schedule_id,email_id,action,snapshot,received_at,created_at) VALUES (?,NULL,'manual:share',?,?,?)").run(id,JSON.stringify({...x,reason:'用户确认同一场考试，共用提醒'}),new Date().toISOString(),nowIso());
+    rebuildReminders({...a,data:JSON.stringify(x)},x,true);
+    return listSchedules(a.application_id).find(s=>s.id===id);
+  })();
 }
 
 export function applicationFromEventRef(companyId: number, eventRef?: string | null): number | undefined {
@@ -86,14 +115,17 @@ export function applicationFromEventRef(companyId: number, eventRef?: string | n
 export function applicationFromRepeatedWindow(companyId: number, e: EmailExtraction, subject: string | null, sender: string | null): number | undefined {
   if (e.recruitmentId || !e.eventTime || !subject || !sender || (e.schedule && e.schedule.action !== 'create')) return undefined;
   const mailbox = (s: string) => (s.match(/<([^>]+)>/)?.[1] ?? s).trim().toLowerCase();
-  const rows = getDb().prepare(`SELECT s.*, a.position_title, m.subject, m.sender FROM recruitment_schedules s JOIN applications a ON a.id=s.application_id JOIN schedule_sources ss ON ss.schedule_id=s.id JOIN email_items m ON m.id=ss.email_id WHERE a.company_id=? AND s.kind=?`).all(companyId,e.eventType) as (Row & {position_title:string;subject:string;sender:string})[];
+  const rows = getDb().prepare(`SELECT s.*, a.position_title, m.subject, m.sender, m.extracted FROM recruitment_schedules s JOIN applications a ON a.id=s.application_id JOIN schedule_sources ss ON ss.schedule_id=s.id JOIN email_items m ON m.id=ss.email_id WHERE a.company_id=? AND s.kind=?`).all(companyId,e.eventType) as (Row & {position_title:string;subject:string;sender:string;extracted:string})[];
   const matches=rows.filter(r=>{
     const d=JSON.parse(r.data) as ScheduleData;
     const title=e.positionTitle?.replace(/\s/g,'').toLowerCase(), oldTitle=r.position_title.replace(/\s/g,'').toLowerCase();
     const compatibleTitle=!title || (title.length>=4 && !/\[[^\]]+\]$/.test(oldTitle) && (oldTitle.includes(title) || title.includes(oldTitle)));
     const sameWindow=d.eventTime===e.eventTime && (d.eventTimeEnd??null)===(e.eventTimeEnd??null);
     const sameDeadline=e.schedule?.timeKind==='deadline' && d.timeKind==='window' && d.eventTimeEnd===e.eventTime && !e.eventTimeEnd;
-    return compatibleTitle && r.subject===subject && r.sender && mailbox(r.sender)===mailbox(sender) && (sameWindow || sameDeadline) && (!e.schedule?.eventRef || !d.eventRef || e.schedule.eventRef===d.eventRef) && (!e.schedule?.round || !d.round || e.schedule.round===d.round);
+    let prior:EmailExtraction|null=null;try{prior=JSON.parse(r.extracted);}catch{/* no evidence */}
+    const quote=(s:string)=>s.replace(/[\s。；，：:.]/g,'');
+    const supplement=/准考证|考场|考点|补充|打印|入场|admission|venue/i.test(subject) && e.timeEvidence && prior?.timeEvidence && quote(e.timeEvidence)===quote(prior.timeEvidence);
+    return compatibleTitle && (r.subject===subject || supplement) && r.sender && mailbox(r.sender)===mailbox(sender) && (sameWindow || sameDeadline) && (!e.schedule?.eventRef || !d.eventRef || e.schedule.eventRef===d.eventRef) && (!e.schedule?.round || !d.round || e.schedule.round===d.round) && ['mode','venue','address','room'].every(k=>!e.schedule?.[k as keyof RecruitmentScheduleChange] || !d[k as keyof ScheduleData] || e.schedule[k as keyof RecruitmentScheduleChange]===d[k as keyof ScheduleData]);
   });
   const schedules=[...new Set(matches.map(r=>r.id))];
   if(schedules.length>1) throw AppError.conflict('相同邮件来源和时间窗口对应多个场次，请人工选择');
@@ -109,6 +141,11 @@ function rebuildReminders(row: Row, data: ScheduleData, keepOverdue = false) {
   const type = row.kind === 'interview' ? 'interview' : 'written_test';
   const title = `${row.kind === 'interview' ? '面试' : '考试'}${data.round ? ` · ${data.round}` : ''}${data.timeKind === 'deadline' ? ' · 截止' : ''}${location ? ` · ${location}` : ''}`;
   const add = (at: string | null | undefined, label: string, kind: string) => {
+    if(kind!=='other' && data.sharedWithScheduleId){
+      const other=db.prepare('SELECT * FROM recruitment_schedules WHERE id=?').get(data.sharedWithScheduleId) as Row|undefined;
+      const shared:ScheduleData=other?JSON.parse(other.data):{};
+      if(other?.status==='scheduled' && other.kind===row.kind && shared.eventTime===data.eventTime && shared.eventTimeEnd===data.eventTimeEnd)return;
+    }
     if (!at || at <= now) return;
     if (db.prepare('SELECT id FROM reminders WHERE application_id=? AND type=? AND scheduled_at=? AND schedule_id IS NULL AND done=0').get(row.application_id,kind,at)) return;
     if (db.prepare("SELECT id FROM reminders WHERE schedule_id=? AND scheduled_at=? AND type=? AND done=1 AND (type<>'other' OR title=?)").get(row.id, at, kind,label)) return;
@@ -162,11 +199,12 @@ export function applySchedule(appId: number, emailId: number | null, receivedAt:
   }
   if (row?.status === 'cancelled' && !['restore','cancel'].includes(change.action)) throw AppError.conflict('日程已取消，仅明确恢复通知或人工选择恢复才会重新提醒');
   if (change.previousTime && old.eventTime !== validEventTime(change.previousTime)) throw AppError.conflict('邮件原时间与当前日程不一致，请复核改期链');
-  if (row && change.action === 'create' && e.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('同一活动编号出现不同时间，请确认是改期还是另一场活动');
+  if (row && !old.preliminary && change.action === 'create' && e.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('同一活动编号出现不同时间，请确认是改期还是另一场活动');
   if (row && ['create','update'].includes(change.action) && e.eventTimeEnd && old.eventTimeEnd && old.eventTimeEnd !== e.eventTimeEnd) throw AppError.conflict('活动截止时间发生变化，请确认改期后更新');
   if (row && change.action === 'update' && e.eventTime && old.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('补充信息含不同活动时间，请明确选择改期');
   if (change.action === 'restore' && !e.eventTime) throw AppError.validation('恢复日程必须确认活动时间');
   const data: ScheduleData = { ...old };
+  if(e.eventTime && old.preliminary){data.preliminary=false;data.attendanceCondition=null;}
   for (const key of ['eventRef','round','mode','venue','address','room','timezone','timeKind','evidence'] as const) {
     const value = change[key];
     if (value !== undefined && value !== null && value !== '') Object.assign(data, { [key]: value });

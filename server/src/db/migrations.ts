@@ -340,6 +340,19 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {version:10,up(db){db.exec(`
+    ALTER TABLE schedule_sources RENAME TO schedule_sources_v9;
+    CREATE TABLE schedule_sources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      schedule_id INTEGER NOT NULL REFERENCES recruitment_schedules(id) ON DELETE CASCADE,
+      email_id INTEGER REFERENCES email_items(id) ON DELETE SET NULL,
+      action TEXT NOT NULL,snapshot TEXT NOT NULL,received_at TEXT NOT NULL,created_at TEXT NOT NULL,
+      UNIQUE(schedule_id,email_id)
+    );
+    INSERT INTO schedule_sources SELECT * FROM schedule_sources_v9;
+    DROP TABLE schedule_sources_v9;
+    CREATE INDEX idx_schedule_source_mail ON schedule_sources(email_id);
+  `);}},
 ];
 
 /** 按 PRAGMA user_version 顺序执行迁移 */
