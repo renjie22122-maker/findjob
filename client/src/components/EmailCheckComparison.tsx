@@ -45,7 +45,7 @@ export default function EmailCheckComparison({data}:{data?:Comparison}) {
             {key:'quote',label:'时间原文',children:value(m.timeEvidence)},
           ]}/>
           <Typography.Text strong>邮件正文（本地保存）</Typography.Text>
-          <pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontFamily:'inherit',maxHeight:280,overflow:'auto',marginBottom:8}}>{m.body || '本地未保存正文，请查看原邮件。'}</pre>
+          <pre style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',fontFamily:'inherit',maxHeight:280,overflow:'auto',marginBottom:8}}>{m.body?.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim() || '本地未保存正文，请查看原邮件。'}</pre>
           {m.attachments?.map((a,j)=><Typography.Paragraph key={j} type="secondary">附件：{a.name} · {a.status==='parsed'?'已提取':'未提取'} · {a.detail}</Typography.Paragraph>)}
         </Card>)}
       </Card>)}

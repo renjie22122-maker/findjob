@@ -1,6 +1,7 @@
 import type { EmailExtraction } from '../../domain/types.js';
 import type { RawEmail } from './imap.client.js';
 import { explicitActivityWindow, mailTimeToLocal, validEventTime } from './eventTime.js';
+import {qualificationNotice} from './automationEvidence.js';
 
 /** Confidence alone cannot authorize a dated event: require source evidence. */
 export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): EmailExtraction {
@@ -43,9 +44,11 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
   result.preparationTasks = (result.preparationTasks ?? []).filter(task => {
     const valid = validEventTime(task.scheduledAt);
     const quote = task.timeEvidence?.replace(/\s+/gu, '');
-    const dates = [...(quote ?? '').matchAll(/(?<![\d:：])(?:(20\d{2})[-年/.])?(\d{1,2})[-月/.](\d{1,2})(?!\d)/g)];
-    const dateMatches = valid && dates.some(m => (!m[1] || m[1] === valid.slice(0, 4)) && Number(m[2]) === Number(valid.slice(5, 7)) && Number(m[3]) === Number(valid.slice(8, 10)));
-    const clockMatches = valid && [...(quote ?? '').matchAll(/(\d{1,2})[:：](\d{2})/g)].some(m => Number(m[1]) === Number(valid.slice(11, 13)) && m[2] === valid.slice(14, 16));
+    const dates = [...(quote ?? '').matchAll(/(?<!\d)(?<!\d[:：])(?:(20\d{2})[-年/.])?(\d{1,2})[-月/.](\d{1,2})(?!\d)/g)];
+    const midnight=Boolean(valid?.endsWith('T00:00:00') && /24(?:点|时|[:：]00)/.test(quote??''));
+    const reference=midnight?new Date(new Date(`${valid!.slice(0,10)}T00:00:00Z`).getTime()-86400000).toISOString():valid;
+    const dateMatches = reference && dates.some(m => (!m[1] || m[1] === reference.slice(0, 4)) && Number(m[2]) === Number(reference.slice(5, 7)) && Number(m[3]) === Number(reference.slice(8, 10)));
+    const clockMatches = midnight || (valid && [...(quote ?? '').matchAll(/(\d{1,2})(?:[:：](\d{2})|[点时](?:(\d{1,2})分?)?)/g)].some(m => Number(m[1]) === Number(valid.slice(11, 13)) && Number(m[2]??m[3]??0) === Number(valid.slice(14, 16))));
     if (!valid || !quote || !sourceText.replace(/\s+/gu, '').includes(quote) || !dateMatches || !clockMatches) {
       result.reviewReasons.push('准备事项缺少有效时间或原文依据，未创建该提醒');
       return false;
@@ -92,7 +95,9 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
   if (result.eventTimeEnd && (!result.eventTime || result.eventTimeEnd <= result.eventTime)) {
     result.eventTimeEnd = null; result.reviewReasons.push('结束时间不晚于开始时间，需复核');
   }
-  if (!result.company || !result.eventType || result.eventType === 'other') result.reviewReasons.push('公司或事件信息不完整，需人工确认');
+  if(result.eventType==='other' && result.company && result.positionTitle && qualificationNotice(sourceText)){
+    result.eventTime=mailTimeToLocal(raw.receivedAt);result.timeSource='received';result.timeEvidence=null;
+  } else if (!result.company || !result.eventType || result.eventType === 'other') result.reviewReasons.push('公司或事件信息不完整，需人工确认');
   result.reviewReasons = [...new Set(result.reviewReasons)];
   return result;
 }

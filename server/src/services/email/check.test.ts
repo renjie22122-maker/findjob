@@ -10,6 +10,12 @@ function apply(e=base){const id=seed(e);return {id,...applyEmailItem(id,undefine
 function findings(){return getEmailCheckState().findings.filter(f=>f.status==='open');}
 beforeEach(()=>{closeDb();getDb();});
 describe('已有邮件检查及修复记录',()=>{
+ it('自动归档状态说明并记录，忽略过的活动不反复要求复核',()=>{
+   const id=seed({...base,eventType:'other'});getDb().prepare('UPDATE email_items SET subject=?,snippet=? WHERE id=?').run('查看申请','如果您已完成申请，可查看状态。如果您仍在处理申请，可继续。',id);
+   const dismissed=seed();getDb().prepare("UPDATE email_items SET status='dismissed',snippet='' WHERE id=?").run(dismissed);
+   expect(checkExistingEmails().review).toBe(0);expect(getDb().prepare('SELECT status FROM email_items WHERE id=?').get(id)).toEqual({status:'dismissed'});
+   expect(getEmailCheckState().changes).toHaveLength(1);expect(checkExistingEmails().repaired).toBe(0);
+ });
  it('并排证据包含原文、地点和编号依据，确认快照脱敏且不随邮件改变',()=>{
    apply();const id=seed({...base,positionTitle:'工程师（项目名）',schedule:{...base.schedule,action:'create',venue:'第一考点',room:'302'}});
    applyEmailItem(id,undefined,{createIfMissing:true,targetApplicationId:null,targetScheduleId:null});

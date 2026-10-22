@@ -17,6 +17,12 @@ export function validEventTime(value: string | null | undefined): string | null 
 
 /** Recover only explicitly labelled, complete ranges. Never infer a deadline from a reminder's receipt. */
 export function explicitActivityWindow(text: string): { start: string; end: string; evidence: string; window: boolean } | null {
+  // A single labelled exam block may coexist with other dates in the overview.
+  const labelled=[...text.matchAll(/开始时间（北京时间）[：:]\s*(20\d{2})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})[^\n]*\s+结束时间（北京时间）[：:]\s*(20\d{2})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/g)];
+  if(labelled.length===1 && /考试信息|试卷名称/.test(text)){
+    const m=labelled[0], at=(i:number)=>validEventTime(`${m[i]}-${m[i+1]}-${m[i+2]}T${m[i+3]}:${m[i+4]}:00+08:00`);
+    const start=at(1),end=at(6);if(start && end && end>start)return {start,end,evidence:m[0],window:false};
+  }
   const stamp = '(20\\d{2})[-年/.](\\d{1,2})[-月/.](\\d{1,2})日?\\s+(\\d{1,2})[:：](\\d{2})';
   const pattern = new RegExp(`(?:面试时间|正式作答时间|测评时间|考试时间|笔试时间|Interview window|Assessment window)[：:][^\\n]{0,65}?${stamp}\\s*(?:至|到|[-~–—]|to)\\s*${stamp}[^\\n]*`, 'gi');
   const found = [...text.matchAll(pattern)].map(m => {

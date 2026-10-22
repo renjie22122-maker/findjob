@@ -1,6 +1,6 @@
 import type { EmailExtraction } from '../../domain/types.js';
 import type { EmailEventType } from '../../domain/status.js';
-import { detectTimeRangeEnd, validEventTime } from '../email/eventTime.js';
+import { detectTimeRangeEnd, explicitActivityWindow, validEventTime } from '../email/eventTime.js';
 
 const RULES: Array<{ pattern: RegExp; type: EmailEventType }> = [
   { pattern: /感谢信|遗憾|暂不合适|未能通过|没有通过|不匹配|haven.t met the requirements|unfortunately.{0,60}not selected/i, type: 'reject' },
@@ -10,7 +10,7 @@ const RULES: Array<{ pattern: RegExp; type: EmailEventType }> = [
   { pattern: /面试|面谈/i, type: 'interview' },
   // 放在拒信之后：若邮件同时含拒绝语义，优先判为拒信
   {
-    pattern: /投递成功|简历投递|感谢投递|投递确认|已投递|申请已提交|thanks for your application|thank you for your application|thank you for taking the time to submit your application|application received/i,
+    pattern: /投递成功|简历投递|感谢(?:你|您)?投递|您的简历我们已经收到|投递确认|已投递|申请已提交|thanks for your application|thank you for your application|thank you for taking the time to submit your application|application received/i,
     type: 'applied',
   },
 ];
@@ -28,7 +28,9 @@ function detectCompany(subject: string, sender: string, body: string): string | 
   if (employer) return '中国银行股份有限公司';
   if (/Microsoft/i.test(subject) || /Microsoft Recruiting|^\s*Microsoft Software Engineer[^\n]*powered by HackerRank/im.test(body)) return 'Microsoft';
   const bracket = subject.match(/[【\[「]([^】\]」]{2,30})[】\]」]/);
-  if (bracket) return bracket[1].trim();
+  if (bracket && !/^(?:重要|通知|提醒|紧急)$/.test(bracket[1].trim())) return bracket[1].trim().replace(/20\d{2}届?(?:校园|秋季|秋招|春招|校招|招聘).*$/,'');
+  const thanked=body.match(/感谢(?:您|你)?应聘([^。\s，！]{2,30})[。\s，！]/);
+  if(thanked)return thanked[1];
   const senderName = sender.split('<')[0]?.trim();
   if (senderName) return senderName.replace(/\s*(校招|招聘|人才|HR|人事).*$/i, '').slice(0, 30);
   return null;
@@ -75,17 +77,21 @@ export function extractWithRules(subject: string, sender: string, snippet: strin
     evidence: snippet.slice(0, 2000),
   } : undefined;
   const company = detectCompany(subject, sender, snippet);
-  const detectedTime = detectSchedule(snippet, receivedAt);
+  const labelled=explicitActivityWindow(snippet);
+  const detectedTime = labelled?{time:labelled.start,evidence:labelled.evidence}:detectSchedule(snippet, receivedAt);
   const eventTime = eventType === 'offer' || eventType === 'applied' ? null : detectedTime.time;
   const timeEvidence = eventTime ? detectedTime.evidence : null;
-  const eventTimeEnd = detectTimeRangeEnd(timeEvidence ?? '', eventTime);
+  const eventTimeEnd = labelled?.end ?? detectTimeRangeEnd(timeEvidence ?? '', eventTime);
   const recruitmentId = text.match(/(?:Job (?:number|id)|requisition(?: id)?|职位编号)\s*[:：#]?\s*([A-Z0-9-]{4,40})/i)?.[1]
     ?? text.match(/Microsoft Software Engineer[^\n]*?\b(\d{7,12})\b/i)?.[1] ?? null;
   const positionTitle = text.match(/application for (.+?)\s*\(Job (?:number|id)/i)?.[1]
+    ?? subject.match(/感谢(?:你|您)?投递.+?公司的(.+?)职位/)?.[1]
     ?? (/Microsoft Software Engineer/i.test(text) ? 'Software Engineer' : null);
   const explicitAssessment = eventType === 'assessment' && company === 'Microsoft' && recruitmentId && positionTitle && eventTime && timeEvidence?.startsWith('End Login Date/Time:');
   const summary = explicitAssessment ? `编程测评登录截止（已换算本地时间）；具体时长及不可暂停要求请查看原邮件。` : eventType ? `本地规则识别：${eventType}` : '本地规则识别：招聘相关邮件';
-  const confidence = explicitAssessment ? 0.9 : eventType ? 0.4 : 0.2;
+  const explicitReceipt=eventType==='applied' && company && positionTitle && /您的简历我们已经收到|we have received your resume/i.test(snippet);
+  const explicitExam=eventType==='written_test' && company && labelled && /开始时间（北京时间）/.test(labelled.evidence) && /考试信息|试卷名称/.test(snippet) && /邀请|进入笔试/.test(snippet) && action==='create';
+  const confidence = explicitAssessment || explicitReceipt || explicitExam ? 0.9 : eventType ? 0.4 : 0.2;
 
   return { schedule, recruitmentId, company, eventType, eventTime, eventTimeEnd, timeEvidence, timeSource: eventTime ? 'body' : 'unknown', positionTitle, summary, confidence };
 }

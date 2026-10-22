@@ -19,6 +19,7 @@ import { matchEmailApplication } from './applicationMatch.js';
 import { adoptUntrackedInvitations, applicationFromRepeatedWindow } from './schedules.service.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
 import { checkExistingEmails } from './check.service.js';
+import {qualificationNotice} from './automationEvidence.js';
 
 interface EmailItemRow {
   id: number;
@@ -492,8 +493,8 @@ export interface ApplyBatchResult {
 export function applyEmailBatch(minConfidence = 0.8, options: ApplyOptions = {}): ApplyBatchResult {
   const db = getDb();
   const rows = db
-    .prepare("SELECT id, extracted FROM email_items WHERE status = 'pending' ORDER BY received_at ASC, id ASC")
-    .all() as { id: number; extracted: string | null }[];
+    .prepare("SELECT id, extracted, subject, snippet FROM email_items WHERE status = 'pending' ORDER BY received_at ASC, id ASC")
+    .all() as { id: number; extracted: string | null; subject:string; snippet:string }[];
 
   const results: ApplyBatchResult['results'] = [];
   let applied = 0;
@@ -506,7 +507,8 @@ export function applyEmailBatch(minConfidence = 0.8, options: ApplyOptions = {})
     } catch {
       extraction = null;
     }
-    if (!extraction || !extraction.timeSource || extraction.timeSource === 'unknown' || extraction.confidence < minConfidence || extraction.reviewReasons?.length || !extraction.company || !extraction.eventType || extraction.eventType === 'other' || (['interview', 'written_test', 'assessment'].includes(extraction.eventType) && !extraction.eventTime && (!extraction.schedule || extraction.schedule.action === 'create'))) {
+    const informational=extraction?.eventType==='other' && extraction.positionTitle && qualificationNotice(`${row.subject}\n${row.snippet}`);
+    if (!extraction || !extraction.timeSource || extraction.timeSource === 'unknown' || extraction.confidence < minConfidence || extraction.reviewReasons?.length || !extraction.company || !extraction.eventType || (extraction.eventType === 'other' && !informational) || (['interview', 'written_test', 'assessment'].includes(extraction.eventType) && !extraction.eventTime && (!extraction.schedule || extraction.schedule.action === 'create'))) {
       skipped++;
       continue;
     }

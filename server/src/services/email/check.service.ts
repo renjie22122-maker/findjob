@@ -3,10 +3,14 @@ import { getDb } from '../../db/connection.js';
 import { AppError } from '../../middleware/error.js';
 import { nowIso } from '../../utils/time.js';
 import type { EmailExtraction } from '../../domain/types.js';
-import { adoptUntrackedInvitations, reconcileScheduleReminders } from './schedules.service.js';
+import { adoptUntrackedInvitations, reconcileScheduleReminders, applicationFromEventRef, applicationFromRepeatedWindow } from './schedules.service.js';
+import {matchEmailApplication} from './applicationMatch.js';
 import { explicitActivityWindow, mailTimeToLocal } from './eventTime.js';
 import { EMAIL_EVENT_TO_TARGET_STATUS } from '../../domain/status.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
+import {informationalNotice,reservationMidnight} from './automationEvidence.js';
+import {extractWithRules} from '../llm/ruleBased.js';
+import {attachEvidence} from './evidence.js';
 
 type RecordRow = Record<string, unknown>;
 type Plan = {action:'merge-app'|'merge-schedule'|'split-mail'|'review'; ids:number[]; targetId?:number; mailId?:number};
@@ -81,6 +85,24 @@ export function checkExistingEmails(trigger:'manual'|'incremental'|'apply'|'conf
     const db=getDb(), now=nowIso(),seen=new Set<string>();
     const runId=Number(db.prepare('INSERT INTO email_check_runs(trigger,created_at) VALUES (?,?)').run(trigger,now).lastInsertRowid);
     const beforeCount=(db.prepare('SELECT COUNT(*) n FROM email_check_changes').get() as {n:number}).n;
+    for(const mail of rows('email_items',"WHERE status='pending'")){
+      const raw={messageId:String(mail.message_id),subject:String(mail.subject??''),sender:String(mail.sender??''),receivedAt:String(mail.received_at),snippet:String(mail.snippet??'')};
+      const info=informationalNotice(raw.subject,raw.snippet);
+      if(info){db.prepare("UPDATE email_items SET status='dismissed' WHERE id=?").run(mail.id);record(runId,null,`自动归档邮件 #${mail.id}：${info}`,mail,{...mail,status:'dismissed'});continue;}
+      const old=parse<EmailExtraction|null>(mail.extracted,null);if(!old || old.timeSource==='manual' || old.attachments?.length)continue;
+      const rule=extractWithRules(raw.subject,raw.sender,raw.snippet,raw.receivedAt);
+      const recoverable=(old.reviewReasons??[]).every(r=>/公司或事件信息不完整|未确定活动时间|准备事项缺少有效时间或原文依据/.test(r));
+      const recoveredTask=reservationMidnight(raw.snippet,raw.receivedAt);
+      if(!recoverable || old.reviewReasons?.some(r=>r.includes('准备事项')) && !old.preparationTasks?.length && !recoveredTask)continue;
+      const candidate=rule.confidence>=0.9 && (!old.eventType || old.eventType===rule.eventType)?rule:{...old,company:old.company==='重要'?rule.company:old.company};
+      if(recoveredTask && !candidate.preparationTasks?.length)candidate.preparationTasks=[recoveredTask];
+      const next=attachEvidence(candidate,raw);
+      // Only replace low-quality extraction with explicit rules, or revalidate existing source evidence.
+      if(!next.reviewReasons?.length && (next.confidence>=0.8 || old.company==='重要' && next.company!==old.company) && hash(next)!==hash(old)){
+        db.prepare('UPDATE email_items SET extracted=? WHERE id=?').run(JSON.stringify(next),mail.id);
+        record(runId,null,`自动补全邮件 #${mail.id} 的可核对依据`,old,next);
+      }
+    }
     // Reconnect only unambiguous confirmed legacy invitations. Each company gets a savepoint.
     for(const company of rows('companies')) {
       const before={schedules:rows('recruitment_schedules'),sources:rows('schedule_sources'),reminders:rows('reminders')};
@@ -128,11 +150,21 @@ export function checkExistingEmails(trigger:'manual'|'incremental'|'apply'|'conf
       if(isAuthenticationMail(String(mail.subject)) || /激活|邮箱验证|邮箱绑定/i.test(String(mail.subject)))continue;
       const e=extraction(mail);if(!e || e.relevant===false)continue;
       const id=Number(mail.id), appId=Number(mail.application_id), plan:Plan={action:'review',ids:appId?[appId]:[],mailId:id};
+      if(mail.status==='dismissed')continue;
       if(!String(mail.snippet ?? '').trim() && !e.attachments?.some(a=>a.status==='parsed')) {
         addFinding(seen,`body:${id}`,'missing-body',`邮件 #${id} 缺少正文`,'仅有旧提取结果，无法核对岗位、地点及时间。请人工查看原邮件；待处理邮件也可使用历史补扫重新分析。',plan);continue;
       }
       if(mail.status==='pending' && (e.reviewReasons?.length || e.confidence<0.8))addFinding(seen,`mail-review:${id}`,'mail-review',`邮件 #${id} 需要复核`,e.reviewReasons?.join('；') || '提取置信度不足，请在邮件确认窗口核对。',plan);
-      if(mail.status==='dismissed' && ['assessment','interview','written_test'].includes(e.eventType ?? ''))addFinding(seen,`dismissed:${id}`,'dismissed',`已忽略的活动邮件 #${id}`,'可能是催办或历史通知，也可能是你主动忽略的邮件；不会自动恢复。请核对后在邮件页重新处理。',plan);
+      if(mail.status==='pending' && !e.reviewReasons?.length && e.confidence>=0.8 && e.company){
+        const company=companies.find(c=>c.name===e.company);
+        if(company)try{
+          const target=applicationFromEventRef(Number(company.id),e.schedule?.eventRef)??applicationFromRepeatedWindow(Number(company.id),e,String(mail.subject),String(mail.sender));
+          matchEmailApplication(Number(company.id),e,target);
+        }catch{
+          addFinding(seen,`mail-association:${id}`,'mail-association',`邮件 #${id} 需要确认所属申请`,'时间信息已识别，但现有岗位或场次无法唯一关联。请在邮件确认窗口选择所属申请；不会仅凭公司名称合并。',plan);
+        }
+      }
+      // An explicit dismissal is a decision, not an unresolved problem. Keep it in the ignored inbox.
       if(mail.status!=='confirmed')continue;
       if(['assessment','interview','written_test'].includes(e.eventType ?? '')) {
         const source=db.prepare('SELECT schedule_id FROM schedule_sources WHERE email_id=?').get(id) as {schedule_id:number}|undefined;

@@ -84,14 +84,14 @@ export function applicationFromEventRef(companyId: number, eventRef?: string | n
 
 /** Same sender + subject + complete window can resolve a shortened job title; never override job IDs. */
 export function applicationFromRepeatedWindow(companyId: number, e: EmailExtraction, subject: string | null, sender: string | null): number | undefined {
-  if (e.recruitmentId || !e.eventTime || (!e.eventTimeEnd && e.schedule?.timeKind !== 'deadline') || !subject || !sender || (e.schedule && e.schedule.action !== 'create')) return undefined;
+  if (e.recruitmentId || !e.eventTime || !subject || !sender || (e.schedule && e.schedule.action !== 'create')) return undefined;
   const mailbox = (s: string) => (s.match(/<([^>]+)>/)?.[1] ?? s).trim().toLowerCase();
   const rows = getDb().prepare(`SELECT s.*, a.position_title, m.subject, m.sender FROM recruitment_schedules s JOIN applications a ON a.id=s.application_id JOIN schedule_sources ss ON ss.schedule_id=s.id JOIN email_items m ON m.id=ss.email_id WHERE a.company_id=? AND s.kind=?`).all(companyId,e.eventType) as (Row & {position_title:string;subject:string;sender:string})[];
   const matches=rows.filter(r=>{
     const d=JSON.parse(r.data) as ScheduleData;
     const title=e.positionTitle?.replace(/\s/g,'').toLowerCase(), oldTitle=r.position_title.replace(/\s/g,'').toLowerCase();
-    const compatibleTitle=title && title.length>=4 && !/\[[^\]]+\]$/.test(oldTitle) && (oldTitle.includes(title) || title.includes(oldTitle));
-    const sameWindow=d.eventTime===e.eventTime && d.eventTimeEnd===e.eventTimeEnd;
+    const compatibleTitle=!title || (title.length>=4 && !/\[[^\]]+\]$/.test(oldTitle) && (oldTitle.includes(title) || title.includes(oldTitle)));
+    const sameWindow=d.eventTime===e.eventTime && (d.eventTimeEnd??null)===(e.eventTimeEnd??null);
     const sameDeadline=e.schedule?.timeKind==='deadline' && d.timeKind==='window' && d.eventTimeEnd===e.eventTime && !e.eventTimeEnd;
     return compatibleTitle && r.subject===subject && r.sender && mailbox(r.sender)===mailbox(sender) && (sameWindow || sameDeadline) && (!e.schedule?.eventRef || !d.eventRef || e.schedule.eventRef===d.eventRef) && (!e.schedule?.round || !d.round || e.schedule.round===d.round);
   });
