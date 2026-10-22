@@ -36,7 +36,11 @@ export async function importSms(input:{body:string;sender?:string;receivedAt?:st
     const id=Number(db.prepare("INSERT INTO email_items(message_id,subject,sender,received_at,snippet,extracted,status,created_at) VALUES (?,?,?,?,?,?,'pending',?)").run(messageId,subject,`短信 · ${sender}`,receivedAt,body,JSON.stringify(extraction),nowIso()).lastInsertRowid);
     let message='短信已入库，待核对';
     if(extraction.confidence>=.8 && !extraction.reviewReasons?.length && extraction.company && extraction.eventType && extraction.eventType!=='other'){
-      try{applyEmailItem(id,undefined,{createIfMissing:true,markApplied:true});message='短信已自动关联并生成日程／时间线';}catch(e){message=e instanceof Error?e.message:'关联需要复核';}
+      try{applyEmailItem(id,undefined,{createIfMissing:true,markApplied:true});message='短信已自动关联并生成日程／时间线';}catch(e){
+        message=e instanceof Error?e.message:'关联需要复核';
+        extraction.reviewReasons=[...new Set([...(extraction.reviewReasons??[]),message])];
+        db.prepare('UPDATE email_items SET extracted=? WHERE id=?').run(JSON.stringify(extraction),id);
+      }
     }
     checkExistingEmails('apply');
     return {id,status:(db.prepare('SELECT status FROM email_items WHERE id=?').get(id) as {status:string}).status,duplicate:false,message};

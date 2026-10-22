@@ -111,6 +111,22 @@ export function applicationFromEventRef(companyId: number, eventRef?: string | n
   return ids[0];
 }
 
+/** Cross-channel identity requires a complete interval and a unique compatible activity. */
+export function applicationFromCrossChannel(companyId:number,e:EmailExtraction,messageId:string):number|undefined {
+  if(!SCHEDULE_KINDS.includes(e.eventType ?? '') || e.recruitmentId || e.positionTitle || !e.eventTime || !e.eventTimeEnd) return;
+  const rows=getDb().prepare(`SELECT DISTINCT s.* FROM recruitment_schedules s JOIN applications a ON a.id=s.application_id
+    JOIN schedule_sources ss ON ss.schedule_id=s.id JOIN email_items m ON m.id=ss.email_id
+    WHERE a.company_id=? AND s.kind=? AND ((? LIKE 'sms:%' AND m.message_id NOT LIKE 'sms:%') OR (? NOT LIKE 'sms:%' AND m.message_id LIKE 'sms:%'))`).all(companyId,e.eventType,messageId,messageId) as Row[];
+  const candidates=rows.filter(row=>{const d:ScheduleData=JSON.parse(row.data);return d.eventTime===e.eventTime && d.eventTimeEnd===e.eventTimeEnd;});
+  if(candidates.length>1) throw AppError.conflict('跨短信和邮件找到多个同时间场次，请确认对应申请；未合并提醒');
+  const row=candidates[0];if(!row)return;
+  const d:ScheduleData=JSON.parse(row.data);
+  for(const key of ['eventRef','round','mode','venue','address','room','timeKind'] as const){
+    if(d[key] && e.schedule?.[key] && d[key]!==e.schedule[key])throw AppError.conflict('跨来源场次信息存在冲突，请核对活动编号、轮次、地点和时间类型');
+  }
+  return row.application_id;
+}
+
 /** Same sender + subject + complete window can resolve a shortened job title; never override job IDs. */
 export function applicationFromRepeatedWindow(companyId: number, e: EmailExtraction, subject: string | null, sender: string | null): number | undefined {
   if (e.recruitmentId || !e.eventTime || !subject || !sender || (e.schedule && e.schedule.action !== 'create')) return undefined;
@@ -202,6 +218,7 @@ export function applySchedule(appId: number, emailId: number | null, receivedAt:
   if (row && !old.preliminary && change.action === 'create' && e.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('同一活动编号出现不同时间，请确认是改期还是另一场活动');
   if (row && ['create','update'].includes(change.action) && e.eventTimeEnd && old.eventTimeEnd && old.eventTimeEnd !== e.eventTimeEnd) throw AppError.conflict('活动截止时间发生变化，请确认改期后更新');
   if (row && change.action === 'update' && e.eventTime && old.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('补充信息含不同活动时间，请明确选择改期');
+  if(row && emailId!==null && change.action==='create' && ['mode','venue','address','room','timeKind'].some(key=>old[key as keyof ScheduleData] && change[key as keyof typeof change] && old[key as keyof ScheduleData]!==change[key as keyof typeof change])) throw AppError.conflict('重复通知的地点或时间类型与已有日程冲突，请确认变更后更新');
   if (change.action === 'restore' && !e.eventTime) throw AppError.validation('恢复日程必须确认活动时间');
   const data: ScheduleData = { ...old };
   if(e.eventTime && old.preliminary){data.preliminary=false;data.attendanceCondition=null;}
@@ -219,7 +236,7 @@ export function applySchedule(appId: number, emailId: number | null, receivedAt:
     if (e.eventTime) data.eventTime = validEventTime(e.eventTime);
     if (e.eventTimeEnd) data.eventTimeEnd = validEventTime(e.eventTimeEnd);
     else if (emailId === null) data.eventTimeEnd = null;
-    if (e.preparationTasks?.length) data.preparationTasks = e.preparationTasks;
+    if (e.preparationTasks?.length) data.preparationTasks = [...new Map([...(old.preparationTasks ?? []),...e.preparationTasks].map(task=>[`${task.scheduledAt}/${task.title}`,task])).values()];
   }
   if (e.timeEvidence) data.timeEvidence = e.timeEvidence;
   if (!row && !data.eventTime) throw AppError.validation('新日程需要确认活动时间');

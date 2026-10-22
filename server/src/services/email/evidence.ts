@@ -44,7 +44,7 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     result.recruitmentId = null;
     result.reviewReasons.push('职位编号未在原文出现，需确认申请关联');
   }
-  const early=[...sourceText.matchAll(/提前(\d{1,2})分钟(?:登录|进入笔试|打开笔试链接)/g)];
+  const early=[...new Map([...sourceText.matchAll(/提前(\d{1,2})分钟(?:登录|进入笔试|打开笔试链接)/g)].map(match=>[match[1],match])).values()];
   if(validEventTime(result.eventTime) && early.length===1 && Number(early[0][1])>0 && ['written_test','interview','assessment'].includes(result.eventType??'')){
     const at=localIso(new Date(new Date(result.eventTime!).getTime()-Number(early[0][1])*60000));
     if(!(result.preparationTasks??[]).some(t=>t.scheduledAt===at))result.preparationTasks=[...(result.preparationTasks??[]),{title:'提前登录／设备准备（需本人操作）',scheduledAt:at,timeEvidence:early[0][0]}];

@@ -16,7 +16,7 @@ import { eventWindowText, mailTimeToLocal, timelineTime, validEventTime } from '
 import { attachEvidence } from './evidence.js';
 import { applySchedule, scheduleApplication, applicationFromEventRef, SCHEDULE_KINDS,trackPreliminaryStages } from './schedules.service.js';
 import { matchEmailApplication } from './applicationMatch.js';
-import { adoptUntrackedInvitations, applicationFromRepeatedWindow } from './schedules.service.js';
+import { adoptUntrackedInvitations, applicationFromRepeatedWindow, applicationFromCrossChannel } from './schedules.service.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
 import { checkExistingEmails } from './check.service.js';
 import {qualificationNotice} from './automationEvidence.js';
@@ -261,7 +261,7 @@ function applyEmailItemInternal(
       if (SCHEDULE_KINDS.includes(extracted.eventType ?? '')) adoptUntrackedInvitations(company.id);
       const selectedApp = typeof options.targetScheduleId === 'number' ? scheduleApplication(options.targetScheduleId) : undefined;
       if (selectedApp && options.targetApplicationId !== undefined && options.targetApplicationId !== selectedApp) throw AppError.conflict('所选申请与日程不一致');
-      const eventApp = selectedApp ?? applicationFromEventRef(company.id, extracted.schedule?.eventRef) ?? applicationFromRepeatedWindow(company.id, extracted, row.subject, row.sender);
+      const eventApp = selectedApp ?? applicationFromEventRef(company.id, extracted.schedule?.eventRef) ?? applicationFromRepeatedWindow(company.id, extracted, row.subject, row.sender) ?? applicationFromCrossChannel(company.id,extracted,row.message_id);
       if (!selectedApp && options.targetApplicationId === undefined && eventApp && extracted.recruitmentId) {
         const byJob = matchEmailApplication(company.id, extracted);
         if (!byJob || byJob.id !== eventApp) throw AppError.conflict('职位编号与活动编号指向不同申请，请人工核对');
