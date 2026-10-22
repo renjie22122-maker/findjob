@@ -375,7 +375,7 @@ export default function Settings() {
             <Space wrap>
               <Input
                 placeholder="本地 git 仓库路径，如 D:\my-pages（需已配置好 origin/main）"
-                style={{ width: 420 }}
+                style={{ width: 'min(420px, 65vw)', maxWidth: '100%' }}
                 value={publishPath}
                 onChange={(e) => setPublishPath(e.target.value)}
               />

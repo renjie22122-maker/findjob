@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import {schedulesConflict} from '../utils/scheduleConflicts';
 import type { RecruitmentSchedule } from '../types';
 import { useState } from 'react';
 import { Alert, Button, Card, Collapse, Empty, Input, Segmented, Space, Tag, Typography, Modal, Form, Select, DatePicker, message } from 'antd';
@@ -8,7 +9,7 @@ import { emailApi } from '../api';
 import {http} from '../api/http';
 import { formatDateTime, EMAIL_EVENT_LABELS } from '../utils/constants';
 
-const actions: Record<string,string> = {create:'首次安排',update:'补充信息',reschedule:'改期',cancel:'取消',restore:'恢复',legacy:'历史邮件接入',stale:'旧邮件留档（未覆盖当前日程）'};
+const actions: Record<string,string> = {supplement:'补充短信来源',share:'确认共用提醒',create:'首次安排',update:'补充信息',reschedule:'改期',cancel:'取消',restore:'恢复',legacy:'历史邮件接入',stale:'旧邮件留档（未覆盖当前日程）'};
 export default function Schedules() {
   const [editing,setEditing]=useState<RecruitmentSchedule|null>(null);
   const [sharing,setSharing]=useState<RecruitmentSchedule|null>(null),[shareTarget,setShareTarget]=useState<number>();
@@ -16,34 +17,28 @@ export default function Schedules() {
   const share=useMutation({mutationFn:()=>http.post(`/email/schedules/${sharing!.id}/share`,{targetId:shareTarget}),onSuccess:()=>{setSharing(null);void queryClient.invalidateQueries();message.success('共用提醒关系已记录，申请与来源仍独立保留');},onError:e=>message.error(e.message)});
   const mutation=useMutation({mutationFn:async()=>{
     const v=await form.validateFields();
-    return emailApi.updateSchedule(editing!.id,{revision:editing!.revision,schedule:{action:v.action,mode:v.mode,venue:v.venue || null,address:v.address || null,room:v.room || null,evidence:'用户在日程页面人工确认'},eventTime:v.time?.format('YYYY-MM-DDTHH:mm:ss') ?? null,eventTimeEnd:v.end?.format('YYYY-MM-DDTHH:mm:ss') ?? null});
+    return emailApi.updateSchedule(editing!.id,{revision:editing!.revision,schedule:{action:v.action,timeKind:v.timeKind,mode:v.mode,venue:v.venue || null,address:v.address || null,room:v.room || null,evidence:'用户在日程页面人工确认'},eventTime:v.time?.format('YYYY-MM-DDTHH:mm:ss') ?? null,eventTimeEnd:v.end?.format('YYYY-MM-DDTHH:mm:ss') ?? null});
   },onSuccess:()=>{setEditing(null);void queryClient.invalidateQueries();message.success('日程和本场自动提醒已更新');},onError:e=>message.error(e instanceof Error?e.message:'更新失败')});
   const [filter,setFilter] = useState('active');
   const [search,setSearch] = useState('');
   const {data,isLoading,error,refetch} = useQuery({queryKey:['schedules'],queryFn:()=>emailApi.schedules(),refetchInterval:30000});
-  const conflicts=(s:RecruitmentSchedule)=>(data?.items??[]).filter(other=>{
-    if(other.id===s.id||other.status!=='scheduled'||s.status!=='scheduled')return false;
-    const sameTime=s.data.eventTime===other.data.eventTime && (s.data.eventTimeEnd??null)===(other.data.eventTimeEnd??null);
-    if(sameTime && (other.data.sharedWithScheduleId===s.id||s.data.sharedWithScheduleId===other.id||(s.data.sharedWithScheduleId && s.data.sharedWithScheduleId===other.data.sharedWithScheduleId)))return false;
-    const a=s.data.eventTime,b=other.data.eventTime;if(!a||!b)return false;
-    return a<(other.data.eventTimeEnd??b) && b<(s.data.eventTimeEnd??a) || a===b;
-  });
-  const rows = (data?.items ?? []).filter(s => (filter === 'all' || (filter === 'conflicts' ? conflicts(s).length > 0 : filter === 'awaiting' ? s.status === 'awaiting_time' : filter === 'cancelled' ? s.status === 'cancelled' : s.status !== 'cancelled')) && `${s.companyName} ${s.positionTitle} ${s.data.venue ?? ''} ${s.data.round ?? ''} ${s.data.address ?? ''} ${s.data.room ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>(a.data.eventTime ?? '9999').localeCompare(b.data.eventTime ?? '9999'));
+  const conflicts=(s:RecruitmentSchedule)=>(data?.items??[]).filter(other=>new Date(s.data.eventTimeEnd??s.data.eventTime??'').getTime()>=Date.now() && new Date(other.data.eventTimeEnd??other.data.eventTime??'').getTime()>=Date.now() && schedulesConflict(s,other));
+  const rows = (data?.items ?? []).filter(s => (filter === 'all' || (filter === 'conflicts' ? conflicts(s).length > 0 : filter === 'awaiting' ? s.status === 'awaiting_time' : filter === 'cancelled' ? s.status === 'cancelled' : s.status !== 'cancelled' && (s.status==='awaiting_time' || !s.data.eventTime || new Date(s.data.eventTimeEnd??s.data.eventTime).getTime()>=Date.now()))) && `${s.companyName} ${s.positionTitle} ${s.data.venue ?? ''} ${s.data.round ?? ''} ${s.data.address ?? ''} ${s.data.room ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>(a.data.eventTime ?? '9999').localeCompare(b.data.eventTime ?? '9999'));
   return <Space direction="vertical" size={16} style={{width:'100%'}}>
     <Card className="schedule-overview" title="招聘日程" extra={<Button onClick={()=>void refetch()}>刷新</Button>}>
-      <Typography.Paragraph type="secondary">按申请与场次管理考试、面试。后续邮件可补充考点、考场，改期或取消后更新本场自动提醒。时间使用本机时区，保留原文时区说明。</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">固定场次检查时间冲突；作答窗口可自行安排，不因窗口重叠标红。邮件和短信共同补充时间、地点与准备事项。</Typography.Paragraph>
       <div className="schedule-metrics" aria-label="日程概览">
         {[{label:'全部日程',value:'all',count:data?.items.length??0},{label:'时间冲突',value:'conflicts',count:(data?.items??[]).filter(s=>conflicts(s).length>0).length},{label:'等待正式时间',value:'awaiting',count:(data?.items??[]).filter(s=>s.status==='awaiting_time').length}].map(metric=><button key={metric.value} className={`schedule-metric ${metric.value==='conflicts'&&metric.count?'is-danger':''}`} aria-pressed={filter===metric.value} onClick={()=>setFilter(metric.value)}><span>{metric.label}</span><strong>{metric.count}</strong><span>查看日程 →</span></button>)}
       </div>
-      <Space wrap><Segmented value={filter} onChange={setFilter} options={[{value:'active',label:'未取消'},{value:'cancelled',label:'已取消'},{value:'all',label:'全部'},{value:'conflicts',label:'冲突'},{value:'awaiting',label:'待通知'}]} /><Input.Search allowClear placeholder="搜索公司、岗位、考点" value={search} onChange={e=>setSearch(e.target.value)} /></Space>
+      <Space wrap><Segmented value={filter} onChange={setFilter} options={[{value:'active',label:'待进行'},{value:'cancelled',label:'已取消'},{value:'all',label:'全部'},{value:'conflicts',label:'冲突'},{value:'awaiting',label:'待通知'}]} /><Input.Search allowClear placeholder="搜索公司、岗位、考点" value={search} onChange={e=>setSearch(e.target.value)} /></Space>
     </Card>
     <Alert type="info" showIcon message="只读取邮件和已附带文件，不打开考试、预约、准考证或身份验证链接。需要本人操作的事项请回到原邮箱完成。" />
     {error && <Alert type="error" message={error instanceof Error ? error.message : '加载失败'} />}
     {isLoading && <Card loading />}
     {!isLoading && !error && !rows.length && <Empty description="暂无符合条件的日程；在邮件分析中确认并应用考试或面试通知" />}
-    {rows.map(s=><Card className={`schedule-card ${conflicts(s).length ? 'has-conflict' : ''}`} key={s.id} title={<Space wrap><Typography.Text strong>{s.companyName} · {s.positionTitle}</Typography.Text><Tag color={s.status==='cancelled'?'red':s.status==='awaiting_time'?'orange':'blue'}>{{scheduled:'已安排',cancelled:'已取消',awaiting_time:s.data.preliminary?'预通知 · 等待正式时间':'延期 · 等待新时间'}[s.status]}</Tag></Space>} extra={<Space><Button size="small" onClick={()=>{setEditing(s);form.setFieldsValue({action:'update',mode:s.data.mode ?? 'unknown',venue:s.data.venue,address:s.data.address,room:s.data.room,time:s.data.eventTime?dayjs(s.data.eventTime):null,end:s.data.eventTimeEnd?dayjs(s.data.eventTimeEnd):null});}}>调整</Button><Link to={`/applications/${s.applicationId}`}>查看申请</Link></Space>}>
+    {rows.map(s=><Card className={`schedule-card ${conflicts(s).length ? 'has-conflict' : ''}`} key={s.id} title={<Space wrap><Typography.Text strong>{s.companyName} · {s.positionTitle}</Typography.Text><Tag color={s.status==='cancelled'?'red':s.status==='awaiting_time'?'orange':'blue'}>{{scheduled:'已安排',cancelled:'已取消',awaiting_time:s.data.preliminary?'预通知 · 等待正式时间':'延期 · 等待新时间'}[s.status]}</Tag></Space>} extra={<Space><Button size="small" onClick={()=>{setEditing(s);form.setFieldsValue({action:'update',mode:s.data.mode ?? 'unknown',timeKind:s.data.timeKind??'start',venue:s.data.venue,address:s.data.address,room:s.data.room,time:s.data.eventTime?dayjs(s.data.eventTime):null,end:s.data.eventTimeEnd?dayjs(s.data.eventTimeEnd):null});}}>调整</Button><Link to={`/applications/${s.applicationId}`}>查看申请</Link></Space>}>
       <Space direction="vertical" style={{width:'100%'}}>
-        <Space wrap><Tag>{EMAIL_EVENT_LABELS[s.kind as keyof typeof EMAIL_EVENT_LABELS] ?? s.kind}</Tag>{s.data.round && <Tag>{s.data.round}</Tag>}{s.data.eventRef && <Tag>活动编号 {s.data.eventRef}</Tag>}<Tag>第 {s.revision} 版</Tag></Space>
+        <Space wrap><Tag color={s.data.timeKind==='window'?'cyan':s.data.timeKind==='deadline'?'orange':'blue'}>{s.data.timeKind==='window'?'灵活作答窗口':s.data.timeKind==='deadline'?'截止事项':s.data.preliminary?'预通知':'固定场次'}</Tag><Tag>{EMAIL_EVENT_LABELS[s.kind as keyof typeof EMAIL_EVENT_LABELS] ?? s.kind}</Tag>{s.data.round && <Tag>{s.data.round}</Tag>}{s.data.eventRef && <Tag>活动编号 {s.data.eventRef}</Tag>}<Tag>第 {s.revision} 版</Tag></Space>
         {conflicts(s).length>0 && <Alert type="error" showIcon message="时间冲突" description={conflicts(s).map(o=>`${o.companyName} · ${EMAIL_EVENT_LABELS[o.kind as keyof typeof EMAIL_EVENT_LABELS]??o.kind} · ${formatDateTime(o.data.eventTime!)}${o.data.eventTimeEnd?' — '+formatDateTime(o.data.eventTimeEnd):''}`).join('；')}/>}
         {s.data.sharedWithScheduleId && <Alert type="info" message={`已确认共用日程 #${s.data.sharedWithScheduleId} 的活动提醒；本申请独立保留`}/>}
         {s.status==='scheduled' && !s.data.sharedWithScheduleId && <Button size="small" onClick={()=>{setSharing(s);setShareTarget(undefined);}}>与同场日程共用提醒</Button>}
@@ -55,7 +50,7 @@ export default function Schedules() {
         {(s.data.preparationTasks ?? []).map((task,i)=><Typography.Text key={i} type="secondary">准备事项：{task.title} · {formatDateTime(task.scheduledAt)}</Typography.Text>)}
         <Collapse style={{width:'100%'}} items={[{key:'sources',label:`来源与变更记录（${s.sources.length} 条记录）`,children:<Space direction="vertical" style={{width:'100%'}}>{s.sources.map((source,i)=>{
           let detail: Record<string,unknown> = {}; try {detail=JSON.parse(source.snapshot);} catch { /* historical invalid JSON */ }
-          return <Card key={i} size="small"><Tag>{source.action.startsWith('manual:') ? `人工${actions[source.action.slice(7)] ?? '调整'}` : actions[source.action] ?? source.action}</Tag><Typography.Text>{source.subject ?? (source.action.startsWith('manual:') ? '人工确认' : '来源邮件已删除')} · 收件 {formatDateTime(source.receivedAt)}</Typography.Text><Typography.Paragraph style={{whiteSpace:'pre-wrap',marginBottom:0}}>{[detail.eventTime,detail.venue,detail.address,detail.room,detail.evidence].filter(v=>typeof v==='string').join('\n')}</Typography.Paragraph></Card>;
+          return <Card key={i} size="small"><Tag>{source.action.startsWith('manual:') ? `人工${actions[source.action.slice(7)] ?? '调整'}` : actions[source.action] ?? source.action}</Tag><Typography.Text>{source.subject ?? (source.action.startsWith('manual:') ? '人工确认' : '来源邮件已删除')} · {detail.receivedAtUnknown ? '收件日期未知（补录来源）' : `收件 ${formatDateTime(source.receivedAt)}`}</Typography.Text><Typography.Paragraph style={{whiteSpace:'pre-wrap',marginBottom:0}}>{[detail.eventTime,detail.venue,detail.address,detail.room,detail.evidence].filter(v=>typeof v==='string').join('\n')}</Typography.Paragraph></Card>;
         })}</Space>}]} />
       </Space>
     </Card>)}
@@ -63,6 +58,7 @@ export default function Schedules() {
       <Typography.Paragraph>更改会记录在历史中，仅更新本场自动提醒。手工提醒请另行核对。</Typography.Paragraph>
       <Form form={form} layout="vertical">
         <Form.Item name="action" label="操作" rules={[{required:true}]}><Select options={[{value:'update',label:'修正地点 / 考场'},{value:'reschedule',label:'改期（新时间空白表示待通知）'},{value:'cancel',label:'取消本场活动'},{value:'restore',label:'恢复已取消活动'}]} /></Form.Item>
+        <Form.Item name="timeKind" label="时间性质"><Select options={[{value:'start',label:'固定场次 · 同时参加会冲突'},{value:'window',label:'灵活作答窗口 · 期限内自行安排'},{value:'deadline',label:'截止事项 · 只提醒截止时间'}]}/></Form.Item>
         <Form.Item name="time" label="新活动时间（更改或清空时间请选择改期）"><DatePicker showTime style={{width:'100%'}} /></Form.Item>
         <Form.Item name="end" label="结束时间"><DatePicker showTime style={{width:'100%'}} /></Form.Item>
         <Form.Item name="mode" label="参加方式"><Select options={[{value:'offline',label:'线下'},{value:'online',label:'线上'},{value:'unknown',label:'待确认'}]} /></Form.Item>

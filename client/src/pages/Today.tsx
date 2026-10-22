@@ -20,10 +20,10 @@ function ReminderCard({
 }) {
   const navigate = useNavigate();
   return (
-    <Card size="small">
+    <Card className="reminder-card" size="small">
       <Space direction="vertical" size={2} style={{ width: '100%' }}>
-        <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-          <Space>
+        <Space wrap className="reminder-heading" style={{ justifyContent: 'space-between', width: '100%' }}>
+          <Space wrap>
             <Tag color={reminder.type === 'deadline' ? 'red' : reminder.type === 'interview' ? 'purple' : 'geekblue'}>
               {REMINDER_TYPE_LABELS[reminder.type]}
             </Tag>
@@ -41,8 +41,9 @@ function ReminderCard({
           </Button>
         </Space>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {reminder.companyName} · {reminder.positionTitle} · {formatDateTime(reminder.scheduledAt)}
+          {reminder.companyName} · {reminder.positionTitle}
         </Typography.Text>
+        <Typography.Text className="reminder-time">{formatDateTime(reminder.scheduledAt)}</Typography.Text>
         <Button
           size="small"
           type="link"
@@ -90,10 +91,11 @@ export default function Today() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Card>
-        <Typography.Title level={5}>
+      <Card className="workspace-hero">
+        <Typography.Title level={3}>
           {data?.date} 今日待办 {total > 0 ? `（剩余 ${total} 项）` : ''}
         </Typography.Title>
+        <Space wrap size={12}><Tag color="blue">今天 {total} 项</Tag><Tag color="orange">未来 3 天 {data?.upcoming.length??0} 项</Tag><Tag color="red">逾期 {data?.overdue.length??0} 项</Tag><Button onClick={()=>void refetch()} loading={isFetching}>刷新待办</Button></Space>
       </Card>
 
       {data && data.overdue.length > 0 && (

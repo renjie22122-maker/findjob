@@ -25,7 +25,7 @@ const MENU_ITEMS = [
   { key: '/schedules', icon: <CalendarOutlined />, label: '招聘日程' },
   { key: '/sources', icon: <GlobalOutlined />, label: '网上找岗位' },
   { key: '/recommendations', icon: <RobotOutlined />, label: '智能推荐' },
-  { key: '/email', icon: <MailOutlined />, label: '邮件分析' },
+  { key: '/email', icon: <MailOutlined />, label: '通知中心' },
   { key: '/companies', icon: <ApartmentOutlined />, label: '公司管理' },
   { key: '/resumes', icon: <IdcardOutlined />, label: '简历管理' },
   { key: '/settings', icon: <SettingOutlined />, label: '设置' },
@@ -53,7 +53,7 @@ export default function AppLayout() {
   const selectedKey = MENU_ITEMS.find((m) => location.pathname === m.key || (m.key !== '/' && location.pathname.startsWith(m.key)))?.key ?? '/';
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout className="app-shell" style={{ minHeight: '100vh' }}>
       <Sider breakpoint="lg" collapsedWidth="0" width={200}>
         <div style={{ color: '#fff', fontSize: 18, fontWeight: 700, textAlign: 'center', padding: '18px 8px' }}>
           🎯 FindJob
@@ -84,7 +84,7 @@ export default function AppLayout() {
         <Header style={{ background: token.colorBgContainer, padding: '12px 24px', gap: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', height: 'auto', minHeight: 64, lineHeight: 'normal' }}>
           <Space align="center" wrap>
             <Typography.Title level={4} style={{ margin: 0 }}>
-              秋招进度实时追踪
+              FindJob · 求职工作台
             </Typography.Title>
             {QUICK_NAV.map((q) => (
               <Link key={q.path} to={q.path} style={{ fontSize: 13 }}>
@@ -95,7 +95,7 @@ export default function AppLayout() {
           <Select aria-label="界面主题" value={mode} onChange={setMode} style={{ width: 132 }} options={[{ value: 'system', label: '跟随系统' }, { value: 'light', label: '☀ 浅色' }, { value: 'dark', label: '☾ 暗色' }]} />
         </Header>
         <Content style={{ margin: 16, minWidth: 0 }}>
-          {location.pathname !== '/today' && ((today?.today.length ?? 0) + (today?.upcoming.length ?? 0) > 0) && <Alert style={{ marginBottom: 12 }} showIcon type="warning" message={`待办提醒：今天 ${today?.today.length ?? 0} 项，未来 7 天 ${today?.upcoming.length ?? 0} 项`} description={(() => { const next = today?.today[0] ?? today?.upcoming[0]; return next ? `${next.companyName ?? ''} · ${next.title} · ${formatDateTime(next.scheduledAt)}` : ''; })()} action={<Button size="small" onClick={() => navigate('/today')}>查看全部</Button>} />}
+          {location.pathname !== '/today' && ((today?.today.length ?? 0) + (today?.upcoming.length ?? 0) > 0) && <Alert style={{ marginBottom: 12 }} showIcon type="warning" message={`待办提醒：今天 ${today?.today.length ?? 0} 项，未来 3 天 ${today?.upcoming.length ?? 0} 项`} description={(() => { const next = today?.today[0] ?? today?.upcoming[0]; return next ? `${next.companyName ?? ''} · ${next.title} · ${formatDateTime(next.scheduledAt)}` : ''; })()} action={<Button size="small" onClick={() => navigate('/today')}>查看全部</Button>} />}
           <Outlet />
         </Content>
       </Layout>

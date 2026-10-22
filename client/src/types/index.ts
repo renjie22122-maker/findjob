@@ -88,6 +88,8 @@ export interface RecruitmentScheduleChange {
 }
 
 export interface EmailExtraction {
+  receivedAtUnknown?: boolean;
+  sourceType?: 'sms' | 'email';
   schedule?: RecruitmentScheduleChange;
   recruitmentId?: string | null;
   preparationTasks?: Array<{ title: string; scheduledAt: string; timeEvidence: string }>;

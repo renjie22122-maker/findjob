@@ -55,6 +55,21 @@ try {
   await page.getByText('【示例科技】面试邀请', { exact: true }).waitFor();
   await page.screenshot({ path: out + 'email-mobile.png', fullPage: true, animations: 'disabled' });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2), false, 'Mobile page should not overflow horizontally');
+  for(const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
+    await page.setViewportSize(viewport);
+    await page.goto(base);
+    await page.locator('.trend-chart canvas').waitFor();
+    await page.waitForFunction(()=>{const legend=document.querySelector('.trend-chart .chart-legend').getBoundingClientRect();const plot=document.querySelector('.trend-chart .chart-plot').getBoundingClientRect();return legend.bottom<=plot.top+1;});
+    const toggle=page.locator('.trend-chart').getByRole('button',{name:'投递',exact:true});
+    await toggle.click();assert.equal(await toggle.getAttribute('aria-pressed'),'false');await toggle.click();
+    await page.screenshot({path:out+`dashboard-layout-${viewport.width}.png`,fullPage:true,animations:'disabled'});
+  }
+  for(const route of ['/applications','/companies','/today','/sources','/recommendations','/resumes','/settings','/schedules']) {
+    await page.goto(base+route);
+    await page.locator('.ant-layout-content').waitFor();
+    await page.waitForFunction(()=>!document.querySelector('[role="status"][aria-live="polite"]'));
+    try {await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+2,{},{timeout:10000});}catch(error){await page.screenshot({path:out+'overflow-diagnostic.png',fullPage:true});console.log('OVERFLOW',route,await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+2).slice(0,15).map(e=>({tag:e.tagName,cls:e.className,width:e.getBoundingClientRect().width}))));throw error;}
+  }
   assert.deepEqual(errors, []);
   console.log('UI smoke passed: dark/light/system, persistence, modal, charts, mobile, no runtime errors.');
 } finally { await browser.close(); await new Promise((resolve) => server.close(resolve)); closeDb(); }

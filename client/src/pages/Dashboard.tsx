@@ -32,21 +32,10 @@ export default function Dashboard() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Alert
-        type="info"
-        showIcon
-        message="📋 投递板块入口"
-        description={
-          <span>
-            全部投递记录在「投递管理」页：点击顶部导航或下方「总投递」卡片进入；新建投递点右上角「新建投递」按钮。
-            <Button type="link" size="small" onClick={() => navigate('/applications')}>
-              立即进入投递管理 →
-            </Button>
-          </span>
-        }
-      />
-      <QuickCrawlCard />
-      <Row gutter={16}>
+      <Card className="workspace-hero">
+        <div className="workspace-heading"><div><Typography.Text className="eyebrow">求职工作台</Typography.Text><Typography.Title level={2}>下一步，清晰可见</Typography.Title><Typography.Paragraph type="secondary">集中查看申请进展、招聘通知和待办，优先处理临近的考试与面试。</Typography.Paragraph></div><Space wrap><Button type="primary" icon={<CalendarOutlined />} onClick={()=>navigate('/schedules')}>查看招聘日程</Button><Button onClick={()=>navigate('/email')}>邮件与短信</Button><Button onClick={()=>navigate('/applications')}>管理申请</Button></Space></div>
+      </Card>
+      <Row gutter={[16,16]}>
         <Col xs={12} md={6}>
           <StatCard
             title="总投递"
@@ -94,7 +83,7 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      <Row gutter={16}>
+      <Row gutter={[16,16]}>
         <Col xs={24} md={12}>
           <Card title="状态分布" size="small">
             <StatusPieChart stats={stats ?? { byStatus: {}, funnel: { applied: 0, interviewed: 0, offer: 0 } } as never} />
@@ -118,6 +107,7 @@ export default function Dashboard() {
           loading={!recent}
           dataSource={recent?.items ?? []}
           pagination={false}
+          scroll={{x:720}}
           onRow={(row) => ({ onClick: () => navigate(`/applications/${row.id}`), style: { cursor: 'pointer' } })}
           columns={[
             { title: '公司', dataIndex: 'companyName', width: 180 },
@@ -133,6 +123,7 @@ export default function Dashboard() {
           ]}
         />
       </Card>
+      <QuickCrawlCard />
       <ActionListCard />
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         近 7 天新投递 {stats?.recentApplied7d ?? 0} 条 · 被拒 {stats?.rejected ?? 0} 条

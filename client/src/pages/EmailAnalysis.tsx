@@ -122,7 +122,7 @@ export default function EmailAnalysis() {
         size="small"
         title={
           <Space>
-            <MailOutlined /> 邮件智能分析
+            <MailOutlined /> 招聘通知中心
           </Space>
         }
         extra={
@@ -178,15 +178,15 @@ export default function EmailAnalysis() {
 
         <Space direction="vertical" style={{ width: '100%', marginTop: 12 }}>
           {(data?.items ?? []).length === 0 && !isLoading && (
-            <Typography.Text type="secondary">暂无{tab === 'pending' ? '待处理' : tab === 'confirmed' ? '已应用' : '已忽略'}邮件</Typography.Text>
+            <Typography.Text type="secondary">暂无{tab === 'pending' ? '待处理' : tab === 'confirmed' ? '已应用' : '已忽略'}通知</Typography.Text>
           )}
           {(data?.items ?? []).map((item) => (
-            <Card key={item.id} size="small" loading={isLoading}>
+            <Card className={`notification-card ${item.status==='pending'?'needs-review':''}`} key={item.id} size="small" loading={isLoading}>
               <Space direction="vertical" size={6} style={{ width: '100%' }}>
                 <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
-                  <Typography.Text strong>{item.subject}</Typography.Text>
+                  <Space wrap><Tag color={item.messageId.startsWith('sms:')?'purple':'blue'}>{item.messageId.startsWith('sms:')?'短信':'邮件'}</Tag><Typography.Text strong>{item.subject}</Typography.Text></Space>
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {item.sender} · {formatDateTime(item.receivedAt)}
+                    {item.sender} · {item.extracted?.receivedAtUnknown ? `收件日期未知 · 补录 ${formatDateTime(item.createdAt)}` : formatDateTime(item.receivedAt)}
                   </Typography.Text>
                 </Space>
                 <Space wrap size={8}>
