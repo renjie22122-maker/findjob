@@ -10,6 +10,14 @@ function apply(e=base){const id=seed(e);return {id,...applyEmailItem(id,undefine
 function findings(){return getEmailCheckState().findings.filter(f=>f.status==='open');}
 beforeEach(()=>{closeDb();getDb();});
 describe('已有邮件检查及修复记录',()=>{
+ it('本地复查自动放行明确回执的宣传图片，并保留附件信息与修复记录',()=>{
+   const a={name:'校招头图.png',status:'skipped' as const,detail:'不支持的附件（图片、压缩包、程序等需人工查看）'};
+   const id=seed({...base,recruitmentId:null,eventType:'applied',schedule:undefined,attachments:[a],reviewReasons:[`${a.name}：${a.detail}`]});
+   getDb().prepare('UPDATE email_items SET snippet=? WHERE id=?').run('你投递的工程师职位已成功完成简历提交',id);
+   checkExistingEmails();const row=getDb().prepare('SELECT status,extracted FROM email_items WHERE id=?').get(id) as {status:string;extracted:string};
+   expect(row.status).toBe('confirmed');expect(JSON.parse(row.extracted).attachments).toEqual([a]);expect(getEmailCheckState().changes.length).toBeGreaterThan(0);
+   expect(checkExistingEmails().repaired).toBe(0);
+ });
  it('自动归档状态说明并记录，忽略过的活动不反复要求复核',()=>{
    const id=seed({...base,eventType:'other'});getDb().prepare('UPDATE email_items SET subject=?,snippet=? WHERE id=?').run('查看申请','如果您已完成申请，可查看状态。如果您仍在处理申请，可继续。',id);
    const dismissed=seed();getDb().prepare("UPDATE email_items SET status='dismissed',snippet='' WHERE id=?").run(dismissed);

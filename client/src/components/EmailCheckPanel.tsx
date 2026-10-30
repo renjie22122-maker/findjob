@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import RecruitmentAssistant from './RecruitmentAssistant';
 import EmailCheckComparison, {savedComparison} from './EmailCheckComparison';
 import {Alert,Button,Card,Collapse,Empty,Modal,Select,Space,Tag,Typography,message} from 'antd';
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
@@ -8,6 +9,7 @@ import type {EmailCheckFinding} from '../types';
 import {formatDateTime} from '../utils/constants';
 
 export default function EmailCheckPanel(){
+  const [showDetails,setShowDetails]=useState(false);
   const client=useQueryClient();const [selected,setSelected]=useState<EmailCheckFinding|null>(null),[target,setTarget]=useState<number>();
   const {data,error,isLoading}=useQuery({queryKey:['email','check'],queryFn:emailApi.checkState,refetchInterval:30000});
   const refresh=()=>void client.invalidateQueries();
@@ -17,10 +19,12 @@ export default function EmailCheckPanel(){
   return <Card title="已有邮件核查" extra={<Button type="primary" loading={check.isPending} onClick={()=>check.mutate()}>一键检查已有邮件</Button>}>
     <Space direction="vertical" style={{width:'100%'}} size={12}>
       <Typography.Text type="secondary">检查本地已保存的邮件和日程，自动补齐提醒、去重同场自动待办。增量分析后也会检查；不会重新读取邮箱或打开任何邮件链接。</Typography.Text>
+      <RecruitmentAssistant/>
       {latest && <Typography.Text>最近检查：{formatDateTime(latest.createdAt)} · {latest.checked} 封 · 修复 {latest.repaired} 项 · <Tag color={open.length?'orange':'green'}>待确认 {open.length} 项</Tag></Typography.Text>}
       {error && <Alert type="error" message={error.message}/>}
       {!isLoading && !open.length && <Typography.Text type="secondary">{latest?'暂无待确认问题。已完成状态与手工提醒受到保护。':'尚未检查，可点击上方按钮。'}</Typography.Text>}
-      {open.map(f=><Card key={f.key} size="small" title={f.title}>
+      {!!open.length&&<Button onClick={()=>setShowDetails(!showDetails)}>{showDetails?'收起详细核查列表':`展开详细核查列表（${open.length}）`}</Button>}
+      {showDetails&&open.map(f=><Card key={f.key} size="small" title={f.title}>
         <EmailCheckComparison data={f.comparison}/>
         <Space wrap style={{marginTop:12}}>
           {f.plan.action!=='review' && <Button onClick={()=>{setSelected(f);setTarget(f.plan.targetId);}}>核对并处理</Button>}

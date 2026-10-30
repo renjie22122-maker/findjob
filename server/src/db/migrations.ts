@@ -353,6 +353,14 @@ const migrations: Migration[] = [
     DROP TABLE schedule_sources_v9;
     CREATE INDEX idx_schedule_source_mail ON schedule_sources(email_id);
   `);}},
+  {version:11,up(db){db.exec(`CREATE TABLE IF NOT EXISTS sms_gateway_receipts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, received_at TEXT NOT NULL, outcome TEXT NOT NULL,
+    item_id INTEGER, duplicate INTEGER NOT NULL DEFAULT 0, diagnostic INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS recruitment_chat (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL, content TEXT NOT NULL,
+    plan TEXT, fingerprint TEXT, status TEXT NOT NULL DEFAULT 'message', created_at TEXT NOT NULL
+  );`);}},
 ];
 
 /** 按 PRAGMA user_version 顺序执行迁移 */

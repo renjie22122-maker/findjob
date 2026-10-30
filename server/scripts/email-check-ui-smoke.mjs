@@ -18,7 +18,7 @@ db.prepare('UPDATE reminders SET done=1,done_at=? WHERE id=1').run('2026-10-16')
 const browser=await chromium.launch({channel:'msedge',headless:true});const out=fileURLToPath(new URL('../data/ui-review/',import.meta.url));mkdirSync(out,{recursive:true});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto(base+'/email');await page.getByRole('button',{name:'一键检查已有邮件'}).click();await page.getByText('可能重复的申请 #1 / #2',{exact:true}).waitFor();
+ await page.goto(base+'/email');await page.getByRole('button',{name:'一键检查已有邮件'}).click();await page.getByRole('button',{name:/展开详细核查列表/}).click();await page.getByText('可能重复的申请 #1 / #2',{exact:true}).waitFor();
  await page.getByText(/匹配依据：邮件中的职位编号相同/).first().waitFor();
  assert.equal(await page.getByText('邮件正文（本地保存）',{exact:true}).count(),2);
  const columns=page.getByTestId('email-evidence-columns').first();

@@ -4,10 +4,17 @@ import { explicitActivityWindow, mailTimeToLocal, validEventTime } from './event
 import {qualificationNotice} from './automationEvidence.js';
 import {localIso} from '../../utils/time.js';
 
+/** Decorative images cannot block an explicit application receipt; other attachments still do. */
+export function decorativeReceiptWarning(e:EmailExtraction,body:string,warning:string):boolean {
+  if(e.eventType!=='applied' || !e.positionTitle || !body.includes(e.positionTitle) || !/已成功完成简历提交|已成功提交|已完成简历提交|投递成功|申请已提交/.test(body))return false;
+  return Boolean(e.attachments?.some(a=>a.status==='skipped' && /\.(png|jpe?g|gif|webp)$/i.test(a.name) && /头图|二维码|logo|banner/i.test(a.name) && warning===`${a.name}：${a.detail}` && a.detail.startsWith('不支持的附件')));
+}
+
 /** Confidence alone cannot authorize a dated event: require source evidence. */
 export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): EmailExtraction {
   const result = { ...extraction, schedule: extraction.schedule ? {...extraction.schedule} : undefined, attachments: raw.content?.attachments ?? [], reviewReasons: [...(raw.content?.warnings ?? [])] };
   const sourceText = `${raw.subject}\n${raw.content?.body ?? raw.snippet}\n${raw.content?.attachmentText ?? ''}`;
+  result.reviewReasons=result.reviewReasons.filter(w=>!decorativeReceiptWarning(result,raw.content?.body ?? raw.snippet,w));
   const recovered = ['interview','assessment','written_test'].includes(result.eventType ?? '') && (!result.schedule || ['create','update'].includes(result.schedule.action)) ? explicitActivityWindow(sourceText) : null;
   if (recovered) {
     if ((result.eventTime && validEventTime(result.eventTime) !== recovered.start) || (result.eventTimeEnd && validEventTime(result.eventTimeEnd) !== recovered.end)) result.reviewReasons.push('模型时间与明确活动时间段冲突，请复核');
@@ -19,6 +26,7 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
   const change = result.schedule;
   // A fixed exam with a late-login exclusion is not a freely selectable completion window.
   if(change?.timeKind==='window' && result.eventType==='written_test' && /考试开始[^。\n]{0,45}(?:未登录|缺考)/.test(sourceText))change.timeKind='start';
+  if(change?.timeKind==='window' && result.eventType==='written_test' && result.eventTime && result.eventTimeEnd && result.eventTime.slice(0,10)===result.eventTimeEnd.slice(0,10) && /远程监考|统一开考|统一笔试|线下机考/.test(sourceText) && !/任选|随时|任意时间|时间段内完成/.test(sourceText))change.timeKind='start';
   // Activity format is not a round identifier. Avoid invented rounds splitting reminders.
   if (change?.round && /^(?:线上|在线)?AI(?:视频)?面试(?:[（(]正式作答[）)])?$/i.test(change.round)) delete change.round;
   const changeOnly = change && change.action !== 'create';
@@ -84,7 +92,11 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     result.timeSource = source ?? 'unknown';
     if (source && evidence && result.eventTime) {
       const dates = [...evidence.matchAll(/(20\d{2})[-年/.](\d{1,2})[-月/.](\d{1,2})/g)].map(m=>`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`);
-      if (dates.length && !dates.includes(result.eventTime.slice(0,10))) result.reviewReasons.push('提取日期与原文日期不一致，需复核时区或日期');
+      const midnight = result.eventTime.endsWith('T00:00:00') && [...evidence.matchAll(/(20\d{2})年(\d{1,2})月(\d{1,2})日(?:[（(][^）)\n]{1,10}[）)])?\s*24(?:点|时|:00|：00)(?!\d)/g)].some(m=>{
+        const y=Number(m[1]),month=Number(m[2]),day=Number(m[3]);
+        return month>=1 && month<=12 && day>=1 && day<=new Date(Date.UTC(y,month,0)).getUTCDate() && new Date(Date.UTC(y,month-1,day+1)).toISOString().slice(0,10)===result.eventTime!.slice(0,10);
+      });
+      if (dates.length && !dates.includes(result.eventTime.slice(0,10)) && !midnight) result.reviewReasons.push('提取日期与原文日期不一致，需复核时区或日期');
       if (change?.action === 'reschedule' && change.previousTime && validEventTime(change.previousTime) === result.eventTime) result.reviewReasons.push('改期后的时间仍等于原时间，请复核');
       if (['written_test', 'interview', 'assessment'].includes(result.eventType ?? '') && !/\d[:：点时]\d|T\d{6}|\d点/.test(evidence)) result.reviewReasons.push('原文未明确具体时刻，需人工确认活动时间');
       if (result.eventType === 'offer' && /入职|报到|截止|回复|deadline|start date/i.test(evidence)) {

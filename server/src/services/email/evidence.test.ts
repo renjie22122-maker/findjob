@@ -9,6 +9,20 @@ const raw = { messageId: 'test', subject: '面试', sender: 'HR', receivedAt, sn
 const base: EmailExtraction = { company: '测试公司', eventType: 'interview', eventTime: '2026-10-15T14:00:00', positionTitle: '工程师', summary: null, confidence: 0.95, timeEvidence: '2026-10-15 14:00' };
 
 describe('事件时间依据与危险信息', () => {
+  it('24点正确跨日，错误跨日仍复核',()=>{
+    const snippet='请于2026年10月31日（周六）24点（北京时间）之前完成测评';
+    const e={...base,eventType:'assessment' as const,eventTime:'2026-11-01T00:00:00',timeEvidence:snippet,schedule:{action:'create' as const,timeKind:'deadline' as const}};
+    expect(attachEvidence(e,{...raw,snippet}).reviewReasons).toEqual([]);
+    expect(attachEvidence({...e,eventTime:'2026-11-02T00:00:00'},{...raw,snippet}).reviewReasons?.join()).toContain('日期不一致');
+  });
+  it('明确投递回执的装饰图片不阻断，考场图片和非回执仍复核',()=>{
+    const snippet='工程师职位已成功完成简历提交',a={name:'招聘头图.png',status:'skipped' as const,detail:'不支持的附件（图片、压缩包、程序等需人工查看）'};
+    const content={body:snippet,attachmentText:'',attachments:[a],warnings:[`${a.name}：${a.detail}`]};
+    expect(attachEvidence({...base,eventType:'applied'},{...raw,snippet,content}).reviewReasons).toEqual([]);
+    expect(attachEvidence(base,{...raw,snippet,content}).reviewReasons?.length).toBeGreaterThan(0);
+    const exam={...a,name:'考场安排.png'};
+    expect(attachEvidence({...base,eventType:'applied'},{...raw,snippet,content:{...content,attachments:[exam],warnings:[`${exam.name}：${exam.detail}`]}}).reviewReasons?.length).toBeGreaterThan(0);
+  });
   it('从正式作答窗口补全模型遗漏的时间引文，移除虚构形式轮次', () => {
     const snippet='线上AI面试，链接有效期72小时\n正式作答时间：2026-10-15 18:16 至 2026-10-18 18:16 （请在本时间段内完成AI视频面试）';
     const result=attachEvidence({...base,eventTime:null,timeEvidence:null,schedule:{action:'create',round:'线上AI面试（正式作答）',mode:'online'}},{...raw,snippet});

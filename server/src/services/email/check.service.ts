@@ -9,8 +9,9 @@ import { explicitActivityWindow, mailTimeToLocal } from './eventTime.js';
 import { EMAIL_EVENT_TO_TARGET_STATUS } from '../../domain/status.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
 import {informationalNotice,reservationMidnight} from './automationEvidence.js';
+import {applyEmailItem} from './email.service.js';
 import {extractWithRules} from '../llm/ruleBased.js';
-import {attachEvidence} from './evidence.js';
+import {attachEvidence,decorativeReceiptWarning} from './evidence.js';
 
 type RecordRow = Record<string, unknown>;
 type Plan = {action:'merge-app'|'merge-schedule'|'split-mail'|'review'; ids:number[]; targetId?:number; mailId?:number};
@@ -89,18 +90,23 @@ export function checkExistingEmails(trigger:'manual'|'incremental'|'apply'|'conf
       const raw={messageId:String(mail.message_id),subject:String(mail.subject??''),sender:String(mail.sender??''),receivedAt:String(mail.received_at),snippet:String(mail.snippet??'')};
       const info=informationalNotice(raw.subject,raw.snippet);
       if(info){db.prepare("UPDATE email_items SET status='dismissed' WHERE id=?").run(mail.id);record(runId,null,`自动归档邮件 #${mail.id}：${info}`,mail,{...mail,status:'dismissed'});continue;}
-      const old=parse<EmailExtraction|null>(mail.extracted,null);if(!old || old.timeSource==='manual' || old.attachments?.length)continue;
+      const old=parse<EmailExtraction|null>(mail.extracted,null);if(!old || old.timeSource==='manual')continue;
+      const decorative=(old.reviewReasons??[]).length>0 && old.reviewReasons!.every(w=>decorativeReceiptWarning(old,raw.snippet,w));
+      if(old.attachments?.length && !decorative)continue;
       const rule=extractWithRules(raw.subject,raw.sender,raw.snippet,raw.receivedAt);
-      const recoverable=(old.reviewReasons??[]).every(r=>/公司或事件信息不完整|未确定活动时间|准备事项缺少有效时间或原文依据/.test(r));
+      const recoverable=decorative || (old.reviewReasons??[]).every(r=>/公司或事件信息不完整|未确定活动时间|准备事项缺少有效时间或原文依据|提取日期与原文日期不一致/.test(r));
       const recoveredTask=reservationMidnight(raw.snippet,raw.receivedAt);
       if(!recoverable || old.reviewReasons?.some(r=>r.includes('准备事项')) && !old.preparationTasks?.length && !recoveredTask)continue;
       const candidate=rule.confidence>=0.9 && (!old.eventType || old.eventType===rule.eventType)?rule:{...old,company:old.company==='重要'?rule.company:old.company};
       if(recoveredTask && !candidate.preparationTasks?.length)candidate.preparationTasks=[recoveredTask];
-      const next=attachEvidence(candidate,raw);
+      const next=attachEvidence(candidate,decorative?{...raw,content:{body:raw.snippet,attachmentText:'',attachments:old.attachments??[],warnings:old.reviewReasons??[]}}:raw);
       // Only replace low-quality extraction with explicit rules, or revalidate existing source evidence.
       if(!next.reviewReasons?.length && (next.confidence>=0.8 || old.company==='重要' && next.company!==old.company) && hash(next)!==hash(old)){
         db.prepare('UPDATE email_items SET extracted=? WHERE id=?').run(JSON.stringify(next),mail.id);
         record(runId,null,`自动补全邮件 #${mail.id} 的可核对依据`,old,next);
+        if(decorative){
+          try{const applied=applyEmailItem(Number(mail.id),undefined,{createIfMissing:true,markApplied:true});record(runId,null,`自动应用正文明确的投递回执 #${mail.id}`,mail,applied.item);}catch{/* Existing matching safeguards leave ambiguous applications for review. */}
+        }
       }
     }
     // Reconnect only unambiguous confirmed legacy invitations. Each company gets a savepoint.

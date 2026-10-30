@@ -24,6 +24,7 @@ describe('短信接入边界',()=>{
      expect((await fetch(url+'/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:'验证码123456'})})).status).toBe(401);
      expect(await (await fetch(url+'/ingest',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({body:'验证码123456'})})).json()).toMatchObject({status:'filtered'});
      expect((await fetch(url+'/api/settings',{headers:{Authorization:`Bearer ${token}`}})).status).toBe(404);
+     const receipts=getDb().prepare('SELECT * FROM sms_gateway_receipts').all();expect(receipts).toHaveLength(1);expect(JSON.stringify(receipts)).not.toContain('123456');expect(receipts[0]).toMatchObject({outcome:'filtered',item_id:null});
    }finally{await new Promise<void>(r=>server.close(()=>r()));}
  });
 });

@@ -141,7 +141,7 @@ export function applicationFromRepeatedWindow(companyId: number, e: EmailExtract
     let prior:EmailExtraction|null=null;try{prior=JSON.parse(r.extracted);}catch{/* no evidence */}
     const quote=(s:string)=>s.replace(/[\s。；，：:.]/g,'');
     const supplement=/准考证|考场|考点|补充|打印|入场|admission|venue/i.test(subject) && e.timeEvidence && prior?.timeEvidence && quote(e.timeEvidence)===quote(prior.timeEvidence);
-    return compatibleTitle && (r.subject===subject || supplement) && r.sender && mailbox(r.sender)===mailbox(sender) && (sameWindow || sameDeadline) && (!e.schedule?.eventRef || !d.eventRef || e.schedule.eventRef===d.eventRef) && (!e.schedule?.round || !d.round || e.schedule.round===d.round) && ['mode','venue','address','room'].every(k=>!e.schedule?.[k as keyof RecruitmentScheduleChange] || !d[k as keyof ScheduleData] || e.schedule[k as keyof RecruitmentScheduleChange]===d[k as keyof ScheduleData]);
+    return compatibleTitle && (r.subject===subject || supplement || sameDeadline) && r.sender && mailbox(r.sender)===mailbox(sender) && (sameWindow || sameDeadline) && (!e.schedule?.eventRef || !d.eventRef || e.schedule.eventRef===d.eventRef) && (!e.schedule?.round || !d.round || e.schedule.round===d.round) && ['mode','venue','address','room'].every(k=>!e.schedule?.[k as keyof RecruitmentScheduleChange] || !d[k as keyof ScheduleData] || e.schedule[k as keyof RecruitmentScheduleChange]===d[k as keyof ScheduleData]);
   });
   const schedules=[...new Set(matches.map(r=>r.id))];
   if(schedules.length>1) throw AppError.conflict('相同邮件来源和时间窗口对应多个场次，请人工选择');

@@ -1,4 +1,5 @@
 import { scheduleChangeSchema } from '../services/email/schedule.schema.js';
+import {chatHistory,askRecruitmentAssistant,executeChatPlan} from '../services/email/chat.service.js';
 import { checkExistingEmails, getEmailCheckState, resolveEmailCheck } from '../services/email/check.service.js';
 import { listSchedules, updateScheduleManually,shareScheduleReminders } from '../services/email/schedules.service.js';
 import { validEventTime } from '../services/email/eventTime.js';
@@ -15,6 +16,9 @@ import {
 } from '../services/email/autoAnalyze.service.js';
 
 const router = Router();
+router.get('/chat',(_req,res)=>res.json(chatHistory()));
+router.post('/chat',asyncHandler(async(req,res)=>{const {message}=parse(z.object({message:z.string().trim().min(1).max(4000)}),req.body);res.json(await askRecruitmentAssistant(message));}));
+router.post('/chat/:id/confirm',asyncHandler(async(req,res)=>{res.json(executeChatPlan(parseId(req.params.id)));}));
 router.post('/schedules/:id/share',asyncHandler(async(req,res)=>{const input=parse(z.object({targetId:z.number().int().positive()}),req.body);res.json(shareScheduleReminders(parseId(req.params.id),input.targetId));}));
 router.get('/check',asyncHandler(async(_req,res)=>{res.json(getEmailCheckState());}));
 router.post('/check',asyncHandler(async(_req,res)=>{res.status(201).json(checkExistingEmails('manual'));}));
