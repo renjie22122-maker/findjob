@@ -17,8 +17,8 @@ function scheduleCard(s,state){
         card.append(button(s.done ? t('已完成 · 撤销', 'Completed · undo') : t('标记完成', 'Mark complete'), () => { CareerFlow.complete(s.id, !s.done); render(); }));
         const details = node('details', '');
         details.append(node('summary', t('关联依据', 'Linked evidence') + ' · ' + s.sources.length));
-        for (const source of s.sources)
-            details.append(node('small', source.source + ' · ' + new Date(source.received).toLocaleString()), node('pre', source.body));
+        details.ontoggle=()=>{if(!details.open||details.querySelector("pre"))return;for (const source of s.sources)
+            details.append(node('small', source.source + ' · ' + new Date(source.received).toLocaleString()), node('pre', source.body));};
         card.append(button(t('编辑安排','Edit event'),()=>openEditor(s)),details);
 return card;
 }
@@ -29,6 +29,7 @@ function renderMobile(state){
  const labels={tasksTitle:['待办','Tasks'],tasksHelp:['先看下一步。时间均为北京时间，弹性测评只按截止时间提醒。','Your next actions, in UTC+8. Flexible assessments use deadline reminders.'],addEvent:['＋ 新建','＋ Add'],calendarTitle:['日历','Calendar'],calendarToday:['今天','Today'],calendarHelp:['蓝点：固定场次 · 紫点：弹性窗口 · 红点：截止事项。点日期查看详情。','Blue: appointment · purple: flexible window · red: deadline. Tap a day for details.'],pipelineTitle:['阶段分布','Stage breakdown'],applicationsTitle:['公司与岗位进展','Companies & roles'],backgroundSettings:['检查系统后台设置','Open background settings']};
  for(const [id,pair] of Object.entries(labels))$(id).textContent=t(...pair);
  $('taskSearch').placeholder=t('搜索公司、岗位或地点','Search company, role or location');$('taskSearch').setAttribute('aria-label',$('taskSearch').placeholder);
+ if(active==='home'){
  $('metrics').replaceChildren();for(const [value,label,fn] of [[today.length,t('今天要做','Today'),()=>{taskFilter='today';navigate('schedule');}],[upcoming.length,t('待完成','Upcoming'),()=>{taskFilter='upcoming';navigate('schedule');}],[overdue.length,t('已过期未完成','Overdue'),()=>{taskFilter='overdue';navigate('schedule');}]]){const metric=button('',fn);metric.className='metric';metric.append(node('strong',String(value)),node('span',label));$('metrics').append(metric);}
  const paused=health.mailEnabled===false;const syncText=paused?t('邮箱同步已暂停或未连接','Mail sync paused or not connected'):$('mailStatus').textContent;
  $('homeHealth').replaceChildren(node('span',syncText),button(t('同步','Sync'),()=>{CareerFlow.syncMail();feedback(t('同步已排队','Sync queued'));}));
@@ -41,12 +42,17 @@ function renderMobile(state){
  $('pipeline').replaceChildren(node('p',t('按日程阶段统计，不代表申请转化率。','Counts by event stage, not application conversion rates.')));const max=Math.max(1,...counts.values());for(const [key,count] of counts){const row=node('div','');row.className='stage-row';const fill=node('div','');fill.className='stage-fill';fill.style.width=Math.max(5,count/max*100)+'%';row.append(node('span',stage(key)),node('strong',String(count)),fill);$('pipeline').append(row);}
  const groups=new Map();for(const s of state.schedules){const key=[s.company,s.role,s.ref].join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(s);}
  $('applications').replaceChildren(node('p',t('按公司、岗位和编号整理；不同岗位不自动合并。','Grouped by company, role and reference; different roles stay separate.')));for(const list of groups.values()){const d=node('details','');d.append(node('summary',list[0].company+' · '+(list[0].role||t('岗位待补充','Role unknown'))));for(const s of MobileModel.sort(list))d.append(button(stage(s.stage)+' · '+time(s.start||s.end),()=>{openEditor(s);}));$('applications').append(d);}
+ }
+ if(active==='schedule'){
  $('taskFilters').replaceChildren();for(const [key,zh,en] of [['upcoming','待完成','Upcoming'],['today','今天','Today'],['overdue','已过期','Overdue'],['done','已完成','Done'],['all','全部','All']]){const b=button(t(zh,en),()=>{taskFilter=key;render();});b.setAttribute('aria-pressed',taskFilter===key);$('taskFilters').append(b);}
  const tasks=MobileModel.tasks(state.schedules,taskFilter,$('taskSearch').value);$('schedules').replaceChildren(...tasks.map(s=>scheduleCard(s,state)));if(!tasks.length)$('schedules').append(node('p',t('此分类暂无事项','No tasks in this view')));
+ }
+ if(active==='calendar'){
  $('monthLabel').textContent=new Intl.DateTimeFormat(english?'en-GB':'zh-CN',{year:'numeric',month:'long',timeZone:'UTC'}).format(new Date(calendarMonth+'-01T00:00:00Z'));
  $('calendarWeek').replaceChildren(...(english?['M','T','W','T','F','S','S']:['一','二','三','四','五','六','日']).map(x=>node('span',x)));
  $('calendarGrid').replaceChildren();for(const date of MobileModel.month(calendarMonth)){const events=state.schedules.filter(s=>MobileModel.live(s)&&MobileModel.onDay(s,date));const b=button('',()=>{selectedDate=date;render();});b.className='calendar-day'+(date.slice(0,7)!==calendarMonth?' outside':'')+(date===MobileModel.day()?' today':'');b.setAttribute('aria-pressed',date===selectedDate);b.setAttribute('aria-label',date+' · '+events.length+t(' 项',' events'));b.append(node('span',String(Number(date.slice(-2)))));const dots=node('span','');dots.className='day-dots';for(const kind of [...new Set(events.map(e=>e.kind))]){const dot=node('i','');dot.dataset.kind=kind;dots.append(dot);}b.append(dots);$('calendarGrid').append(b);}
  $('selectedDay').textContent=selectedDate+' · '+t('当天安排','Agenda');const selected=MobileModel.sort(state.schedules.filter(s=>!s.cancelled&&MobileModel.onDay(s,selectedDate)));$('calendarEvents').replaceChildren(...selected.map(s=>scheduleCard(s,state)));if(!selected.length)$('calendarEvents').append(node('p',t('当天没有安排','No events on this day')));
+ }
  $('inboxActions').replaceChildren(button(t('自动检查全部','Auto-check saved messages'),()=>{CareerFlow.recheck();feedback(t('后台自动整理中','Organizing in background'));}));$('inboxFilters').replaceChildren();for(const [key,zh,en] of [['all','全部','All'],['pending','分析中','Pending'],['review','关联冲突','Conflicts'],['waiting','等后续通知','Waiting'],['linked','已关联','Linked']]){const b=button(t(zh,en),()=>{inboxFilter=key;render();});b.setAttribute('aria-pressed',inboxFilter===key);$('inboxFilters').append(b);}
  $('backgroundHealth').textContent=[health.restricted?t('系统限制后台运行','Background execution restricted'):t('后台任务已注册；省电模式可能延迟同步','Background tasks registered; battery saver may delay sync'),health.smsAllowed?t('短信权限已允许','SMS permission granted'):t('短信权限尚未允许','SMS permission not granted'),health.nextAlarm?t('下次提醒：','Next alarm: ')+new Date(health.nextAlarm).toLocaleString():t('暂无已排定提醒','No alarm scheduled'),health.lastReminderCheck?t('最近检查：','Last check: ')+new Date(health.lastReminderCheck).toLocaleString():'',t('三星手机：应用信息 → 电池 → 不受限制；从“深度休眠应用”移除。强行停止后需重新打开应用。','Samsung: App info → Battery → Unrestricted; remove from Deep sleeping apps. Reopen after force stop.')].filter(Boolean).join('\n');
 }

@@ -25,7 +25,12 @@ class LocalStore(context:Context,databaseName:String="careerflow.db"):SQLiteOpen
   return writableDatabase.insertWithOnConflict("notices",null,ContentValues().apply{put("fingerprint",key);put("body",safe);put("received",date);put("source",source)},SQLiteDatabase.CONFLICT_IGNORE)
  }
  fun items():JSONArray {val r=JSONArray();readableDatabase.rawQuery("SELECT * FROM notices ORDER BY received DESC LIMIT 200",null).use{c->while(c.moveToNext())r.put(JSONObject().put("id",c.getLong(0)).put("body",c.getString(2)).put("received",c.getLong(3)).put("analysis",c.getString(4)?.let{JSONObject(it)}?:JSONObject.NULL).put("state",c.getString(5)).put("done",c.getInt(6)==1).put("source",c.getString(7)))};return r}
- fun schedules():JSONArray {val r=JSONArray();readableDatabase.rawQuery("SELECT id,data,done,cancelled,revision FROM schedules ORDER BY id DESC",null).use{c->while(c.moveToNext()){val j=JSONObject(c.getString(1)).put("id",c.getLong(0)).put("done",c.getInt(2)==1).put("cancelled",c.getInt(3)==1).put("revision",c.getInt(4));val sources=JSONArray();readableDatabase.rawQuery("SELECT n.source,n.body,n.received FROM evidence e JOIN notices n ON n.id=e.notice WHERE e.schedule=? ORDER BY n.received DESC",arrayOf(c.getLong(0).toString())).use{s->while(s.moveToNext())sources.put(JSONObject().put("source",s.getString(0)).put("body",s.getString(1)).put("received",s.getLong(2)))};r.put(j.put("sources",sources))}};return r}
+ fun schedules(includeSources:Boolean=true):JSONArray {
+  val result=JSONArray();val indexed=mutableMapOf<Long,JSONObject>()
+  readableDatabase.rawQuery("SELECT id,data,done,cancelled,revision FROM schedules ORDER BY id DESC",null).use{c->while(c.moveToNext()){val item=JSONObject(c.getString(1)).put("id",c.getLong(0)).put("done",c.getInt(2)==1).put("cancelled",c.getInt(3)==1).put("revision",c.getInt(4)).put("sources",JSONArray());indexed[c.getLong(0)]=item;result.put(item)}}
+  if(includeSources)readableDatabase.rawQuery("SELECT e.schedule,n.source,n.body,n.received FROM evidence e JOIN notices n ON n.id=e.notice ORDER BY n.received DESC",null).use{c->while(c.moveToNext())indexed[c.getLong(0)]?.getJSONArray("sources")?.put(JSONObject().put("source",c.getString(1)).put("body",c.getString(2)).put("received",c.getLong(3)))}
+  return result
+ }
  fun history():JSONArray{val r=JSONArray();readableDatabase.rawQuery("SELECT at,detail FROM repairs ORDER BY id DESC LIMIT 50",null).use{c->while(c.moveToNext())r.put(JSONObject().put("at",c.getLong(0)).put("detail",c.getString(1)))};return r}
  private fun record(detail:String){writableDatabase.insert("repairs",null,ContentValues().apply{put("at",System.currentTimeMillis());put("detail",detail)})}
  fun reviewIds():List<Long>{val ids=mutableListOf<Long>();readableDatabase.rawQuery("SELECT id FROM notices WHERE state IN ('review','waiting') ORDER BY received DESC LIMIT 50",null).use{while(it.moveToNext())ids.add(it.getLong(0))};return ids}
@@ -43,14 +48,14 @@ class LocalStore(context:Context,databaseName:String="careerflow.db"):SQLiteOpen
    val e=EventJson.read(events.getJSONObject(i));
    if(e.stage in listOf("applied","offer","reject")){val workspace=WorkspaceStore(contextRef);try{if(!workspace.applicationNotice(e,body,received(id))){waiting=true;reasons.put("申请信息待补充 / Waiting for application details")}}finally{workspace.close()};if(e.stage!="offer"||e.start.isBlank())continue}
    val proposed=if(e.start.isBlank()&&e.action=="create")e.copy(action="update")else e
-   val target=AnalysisContext.target(events.getJSONObject(i),proposed,schedules())
+   val target=if(events.getJSONObject(i).optLong("targetScheduleId")>0)AnalysisContext.target(events.getJSONObject(i),proposed,schedules())else null
    if(target!=null&&ScheduleRules.verified(proposed,body,received(id))){apply(id,i,proposed,target);record("AI 跨通知关联 / Cross-notice link #$id → #$target · "+events.getJSONObject(i).optString("linkReason").take(300));continue}
    if(e.start.isBlank()&&e.action=="create"){
-    val all=schedules();val known=(0 until all.length()).map{all.getJSONObject(it)}.filter{ScheduleRules.sameIdentity(e,EventJson.read(it))};
+    val all=schedules(false);val known=(0 until all.length()).map{all.getJSONObject(it)}.filter{ScheduleRules.sameIdentity(e,EventJson.read(it))};
     if(known.size==1&&ScheduleRules.verified(e.copy(action="update"),body,received(id))){apply(id,i,e.copy(action="update"),known[0].getLong("id"));continue}
     waiting=true;reasons.put("时间待后续通知 / Awaiting schedule time");continue}
    if(!ScheduleRules.verified(e,body,received(id))){waiting=true;reasons.put("时间原文尚未对应 / Time extraction will be checked again");continue}
-   val all=schedules();val candidates=(0 until all.length()).map{all.getJSONObject(it)}.filter{ScheduleRules.match(e,EventJson.read(it))}
+   val all=schedules(false);val candidates=(0 until all.length()).map{all.getJSONObject(it)}.filter{ScheduleRules.match(e,EventJson.read(it))}
    val related=(0 until all.length()).map{all.getJSONObject(it)}.any{ScheduleRules.company(it.optString("company"))==ScheduleRules.company(e.company)&&it.optString("stage")==e.stage&&(it.optString("round").isBlank()||e.round.isBlank()||it.optString("round")==e.round)&&(it.optString("role").isBlank()||e.role.isBlank()||it.optString("role")==e.role)&&(it.optString("ref").isBlank()||e.ref.isBlank()||it.optString("ref")==e.ref)}
    if(candidates.size>1||(candidates.isEmpty()&&(related||e.action!="create"))){review=true;reasons.put("多个岗位或场次无法唯一关联 / Multiple possible jobs or events");continue}
    apply(id,i,e,candidates.firstOrNull()?.getLong("id"));
@@ -69,6 +74,9 @@ class LocalStore(context:Context,databaseName:String="careerflow.db"):SQLiteOpen
   }else{sid=db.insertOrThrow("schedules",null,ContentValues().apply{put("data",EventJson.write(data).toString());put("done",db.rawQuery("SELECT done FROM notices WHERE id=?",arrayOf(notice.toString())).use{if(it.moveToFirst())it.getInt(0) else 0})})}
   db.insertOrThrow("evidence",null,ContentValues().apply{put("notice",notice);put("ordinal",ordinal);put("schedule",sid)})
   record("#${notice}/${ordinal} → #$sid · ${e.action}")
+  // Advance applications when a notice changes a schedule, never during UI polling.
+  if(data.role.isNotBlank()){val workspace=WorkspaceStore(contextRef);try{workspace.ensureApplication(data.company,data.role,data.stage,data.applicationStatus)}finally{workspace.close()}}
+
  }
  fun resolve(id:Long,ordinal:Int,target:Long?,overrides:JSONObject=JSONObject()){val db=writableDatabase;db.beginTransaction();try{val result=db.rawQuery("SELECT analysis FROM notices WHERE id=?",arrayOf(id.toString())).use{if(!it.moveToFirst())throw IllegalArgumentException();JSONObject(it.getString(0))};val original=EventJson.read(result.getJSONArray("events").getJSONObject(ordinal));val e=original.copy(start=overrides.optString("start",original.start),end=overrides.optString("end",original.end),location=overrides.optString("location",original.location));require(e.company.isNotBlank()&&e.stage.isNotBlank());require(e.start.isBlank()||ScheduleRules.time(e.start)!=null);require(target!=null||e.start.isNotBlank());require(e.end.isBlank()||ScheduleRules.time(e.end)!=null);require(e.end.isBlank()||e.start.isBlank()||ScheduleRules.time(e.end)!!>=ScheduleRules.time(e.start)!!);require(e.kind!="window"||e.end.isNotBlank());apply(id,ordinal,e,target);record("User confirmed #$id/$ordinal · ${e.start} → ${e.end} · ${e.location}");db.update("notices",ContentValues().apply{put("state",if(db.rawQuery("SELECT count(*) FROM evidence WHERE notice=?",arrayOf(id.toString())).use{it.moveToFirst();it.getInt(0)}>=result.getJSONArray("events").length())"linked" else "review")},"id=?",arrayOf(id.toString()));db.setTransactionSuccessful()}finally{db.endTransaction()}}
  fun done(id:Long,value:Boolean){writableDatabase.update("notices",ContentValues().apply{put("done",if(value)1 else 0)},"id=?",arrayOf(id.toString()))}

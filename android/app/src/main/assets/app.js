@@ -42,8 +42,9 @@ function render() {
     document.querySelector('.permission-hint').hidden = state.notifications && state.exact;
     $('apiState').textContent = state.configured ? t('密钥已加密保存', 'Key stored securely') : t('配置后自动分析招聘通知', 'Configure to analyze recruitment messages');
     renderMobile(state);
-    renderWorkspace();
-    renderApiSettings();
+    if(active==='home'||active==='workspace')renderWorkspace();
+    if(active==='settings')renderApiSettings();
+    if(active==='inbox'){
     $('inbox').replaceChildren();
     if (!state.items.length) {
         const empty = node('div', t('还没有招聘通知。新的邮件和短信会显示在这里。', 'No recruitment messages yet. New email and SMS will appear here.'));
@@ -56,7 +57,7 @@ function render() {
             card.className = 'review';
         card.append(node('small', item.source + ' · ' + new Date(item.received).toLocaleString()), node('p', item.analysis?.summary || ({failed:t('分析失败，可重试','Analysis failed; retry available'),analyzing:t('AI 正在自动整理','AI is organizing this message'),retrying:t('连接暂时失败，正在重试','Connection issue; retrying')}[item.state] || t('等待后台分析','Queued for analysis'))));
         const details = node('details', '');
-        details.append(node('summary', t('查看原文', 'View source')), node('pre', item.body));
+        details.append(node('summary', t('查看原文', 'View source')));details.ontoggle=()=>{if(details.open&&!details.querySelector('pre'))details.append(node('pre',item.body));};
         card.append(details);
         if (item.state === 'waiting')card.append(node('small',t('等待后续通知，收到后自动补齐','Waiting for a follow-up; will fill automatically')));
         if (item.state === 'informational')card.append(node('small',t('流程信息，无需操作','Information only; no action needed')));
@@ -88,7 +89,8 @@ function render() {
         card.append(button(t('重新分析', 'Analyze again'), () => { CareerFlow.analyze(item.id); feedback(t('已加入后台队列', 'Queued for background analysis')); }));
         $('inbox').append(card);
     }
-    $('history').replaceChildren(...state.history.map(h => node('p', new Date(h.at).toLocaleString() + ' · ' + h.detail)));
+    }
+    if(active==='settings')$('history').replaceChildren(...state.history.map(h => node('p', new Date(h.at).toLocaleString() + ' · ' + h.detail)));
 }
 
 function renderOAuth() {
@@ -128,7 +130,7 @@ $('disableMail').onclick = () => { CareerFlow.disableMail(); feedback(t('已暂�
 $('testReminder').onclick = () => { CareerFlow.testReminder(); feedback(t('请锁屏等待测试通知；未允许精确闹钟时可能延迟', 'Lock the screen and wait for the test notification; exact alarm access avoids scheduling delay')); };
 $('notifications').onclick = () => CareerFlow.notificationPermission();
 $('alarms').onclick = () => CareerFlow.alarmPermission();
-setInterval(() => { if (!document.hidden && (!document.querySelector('dialog[open]') && !document.querySelector('.page-panel:not([hidden]) article details[open]') && !['INPUT', 'SELECT','TEXTAREA'].includes(document.activeElement?.tagName)) && CareerFlow.state() !== lastSnapshot)
+setInterval(() => { if (!document.hidden && !['settings','workspace'].includes(active) && (!document.querySelector('dialog[open]') && !document.querySelector('.page-panel:not([hidden]) article details[open]') && !['INPUT', 'SELECT','TEXTAREA'].includes(document.activeElement?.tagName)) && CareerFlow.state() !== lastSnapshot)
     render(); }, 15000);
 
 setInterval(() => { if (!document.hidden && active === "settings") renderOAuth(); }, 1000);

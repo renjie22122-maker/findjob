@@ -32,7 +32,7 @@ class WorkspaceStore(private val context:Context,name:String="workspace.db",priv
   }finally{db.endTransaction()};return key
  }
  fun restore(id:String,versionId:Long){val old=readableDatabase.rawQuery("SELECT data FROM versions WHERE record=? AND id=?",arrayOf(id,versionId.toString())).use{require(it.moveToFirst());JSONObject(it.getString(0))};val kind=readableDatabase.rawQuery("SELECT kind FROM records WHERE id=?",arrayOf(id)).use{require(it.moveToFirst());it.getString(0)};save(kind,old,id,"用户编辑 / Edited")}
- fun trackSchedules(){val local=LocalStore(context,scheduleDatabase);try{val schedules=local.schedules();for(i in 0 until schedules.length()){val s=schedules.getJSONObject(i);if(s.optBoolean("cancelled"))continue;ensureApplication(s.optString("company"),s.optString("role").ifBlank{"岗位待补充 / Role pending"},s.optString("stage"),s.optString("applicationStatus"))}}finally{local.close()}}
+ fun trackSchedules(){val local=LocalStore(context,scheduleDatabase);try{val schedules=local.schedules(false);for(i in 0 until schedules.length()){val s=schedules.getJSONObject(i);if(s.optBoolean("cancelled"))continue;ensureApplication(s.optString("company"),s.optString("role").ifBlank{"岗位待补充 / Role pending"},s.optString("stage"),s.optString("applicationStatus"))}}finally{local.close()}}
  fun applicationNotice(e:Event,body:String,received:Long):Boolean {
   if(e.company.isBlank()||e.evidence.isBlank()||!body.contains(e.evidence)||e.role.isBlank())return false
   if(e.stage=="reject"&&Regex("如果|若|if your|if you",RegexOption.IGNORE_CASE).containsMatchIn(e.evidence))return false

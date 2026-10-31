@@ -11,7 +11,8 @@ import org.json.JSONObject
 class MainActivity:Activity(){
  private lateinit var web:WebView
  private var printWeb:WebView?=null
- override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);web=WebView(this);setContentView(web);MailWorker.configure(this);WorkspaceWorker.configure(this);Reminders.periodic(this);Reminders.refresh(this);Reminders.recoverAnalysis(this)
+ private val maintenance=java.util.concurrent.Executors.newSingleThreadExecutor()
+ override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);web=WebView(this);setContentView(web);maintenance.execute{try{WorkspaceWorker.retireLegacyBacklog(this);MailWorker.configure(this);WorkspaceWorker.configure(this);Reminders.periodic(this);Reminders.refresh(this);Reminders.recoverAnalysis(this)}catch(_:Exception){}}
   val assets=WebViewAssetLoader.Builder().addPathHandler("/assets/",WebViewAssetLoader.AssetsPathHandler(this)).build()
   web.settings.javaScriptEnabled=true;web.settings.domStorageEnabled=true;web.settings.allowFileAccess=false;web.settings.allowContentAccess=false
   web.webViewClient=object:WebViewClient(){override fun shouldInterceptRequest(view:WebView,request:WebResourceRequest):WebResourceResponse?=assets.shouldInterceptRequest(request.url);override fun shouldOverrideUrlLoading(view:WebView,request:WebResourceRequest)=true}
@@ -44,9 +45,9 @@ class MainActivity:Activity(){
   @JavascriptInterface fun disableMail(){val old=Secrets(this@MainActivity).read("mail")?:return;Secrets(this@MainActivity).save(JSONObject(old).put("enabled",false).toString(),"mail")}
   @JavascriptInterface fun syncMail(){val c=this@MainActivity;val config=Secrets(c).read("mail")?:return;Secrets(c).save(JSONObject(config).put("enabled",true).toString(),"mail");MailWorker.configure(c);MailWorker.sync(c)}
   @JavascriptInterface fun llmSettings()=LlmApi.publicState(this@MainActivity).toString()
-  @JavascriptInterface fun saveLlm(raw:String):Boolean=try{val ok=LlmApi.save(this@MainActivity,JSONObject(raw));if(ok){Reminders.recoverAnalysis(this@MainActivity);WorkspaceWorker.enqueue(this@MainActivity,"all")};ok}catch(_:Exception){false}
+  @JavascriptInterface fun saveLlm(raw:String):Boolean=try{val ok=LlmApi.save(this@MainActivity,JSONObject(raw));if(ok){maintenance.execute{try{Reminders.recoverAnalysis(this@MainActivity)}catch(_:Exception){}}};ok}catch(_:Exception){false}
   @JavascriptInterface fun probeLlm(models:Boolean){LlmProbeWorker.enqueue(this@MainActivity,models)}
-  @JavascriptInterface fun workspace():String {val store=WorkspaceStore(this@MainActivity);return try{store.trackSchedules();JSONObject().put("records",store.list()).put("aiStatus",getSharedPreferences("workspace-ai",0).getString("status","idle")).toString()}finally{store.close()}}
+  @JavascriptInterface fun workspace():String {val store=WorkspaceStore(this@MainActivity);return try{JSONObject().put("records",store.list()).put("aiStatus",getSharedPreferences("workspace-ai",0).getString("status","idle")).toString()}finally{store.close()}}
   @JavascriptInterface fun saveWorkspace(kind:String,id:String,raw:String):Boolean{val store=WorkspaceStore(this@MainActivity);return try{val key=store.save(kind,JSONObject(raw),id);WorkspaceWorker.enqueue(this@MainActivity,key);true}catch(_:Exception){false}finally{store.close()}}
   @JavascriptInterface fun workspaceHistory(id:String):String{val s=WorkspaceStore(this@MainActivity);return try{s.history(id).toString()}finally{s.close()}}
   @JavascriptInterface fun restoreWorkspace(id:String,version:Long){val s=WorkspaceStore(this@MainActivity);try{s.restore(id,version)}finally{s.close()};WorkspaceWorker.enqueue(this@MainActivity,"all")}
@@ -60,7 +61,7 @@ class MainActivity:Activity(){
   @JavascriptInterface fun saveEvent(raw:String):Boolean{val store=LocalStore(this@MainActivity);return try{store.manual(JSONObject(raw));Reminders.refresh(this@MainActivity);true}catch(_:Exception){false}finally{store.close()}}
   @JavascriptInterface fun assistantState():String {val p=getSharedPreferences("assistant",0);return JSONObject().put("status",p.getString("status","idle")).put("messages",org.json.JSONArray(p.getString("messages","[]"))).toString()}
   @JavascriptInterface fun ask(question:String):Boolean {if(question.isBlank()||question.length>3000)return false;AssistantWorker.send(this@MainActivity,question);return true}
-  @JavascriptInterface fun recheck(){val c=this@MainActivity;val store=LocalStore(c);try{store.recheck();store.reviewIds().forEach{AnalysisWorker.enqueue(c,it)}}finally{store.close()};Reminders.recoverAnalysis(c);Reminders.refresh(c)}
+  @JavascriptInterface fun recheck(){val c=applicationContext;maintenance.execute{val store=LocalStore(c);try{store.recheck();store.reviewIds().forEach{AnalysisWorker.enqueue(c,it)}}finally{store.close()};Reminders.recoverAnalysis(c);Reminders.refresh(c)}}
   @JavascriptInterface fun theme(mode:String){runOnUiThread{val dark=mode=="dark"||(mode=="system"&&resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK==android.content.res.Configuration.UI_MODE_NIGHT_YES);window.statusBarColor=android.graphics.Color.parseColor(if(dark)"#0D1420" else "#F3F5FA");window.navigationBarColor=android.graphics.Color.parseColor(if(dark)"#182231" else "#FFFFFF");window.decorView.systemUiVisibility=if(dark)0 else android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR}}
   @JavascriptInterface fun testReminder(){Reminders.test(this@MainActivity)}
   @JavascriptInterface fun notificationPermission(){runOnUiThread{if(android.os.Build.VERSION.SDK_INT>=33)requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),11)}}
@@ -72,6 +73,7 @@ class MainActivity:Activity(){
  }
 
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:android.content.Intent?){super.onActivityResult(requestCode,resultCode,data);if(requestCode!=40||resultCode!=RESULT_OK)return;val uri=data?.data?:return;Thread{try{val bytes=contentResolver.openInputStream(uri)?.use{val out=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192);while(true){val n=it.read(buffer);if(n<0)break;require(out.size()+n<=2*1024*1024);out.write(buffer,0,n)};out.toByteArray()}?:return@Thread;require(bytes.size<=2*1024*1024);val mime=contentResolver.getType(uri)?:"text/plain";val part=javax.mail.internet.MimeBodyPart();part.dataHandler=javax.activation.DataHandler(javax.mail.util.ByteArrayDataSource(bytes,mime));part.fileName=if(mime.contains("pdf"))"resume.pdf" else if(mime.contains("wordprocessing"))"resume.docx" else "resume.txt";com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(this);val text=MailText.extract(part);require(text.isNotBlank()&&!text.trim().startsWith("[PDF未解析")&&!text.trim().startsWith("[文档未解析")&&!text.trim().startsWith("[附件"));val store=WorkspaceStore(this);val id=try{store.save("resume",JSONObject().put("name","导入简历 / Imported resume").put("content",text).put("targetRole","").put("education",org.json.JSONArray()).put("experience",org.json.JSONArray()).put("projects",org.json.JSONArray()).put("skills",org.json.JSONArray()))}finally{store.close()};WorkspaceWorker.enqueue(this,id);getSharedPreferences("workspace-ai",0).edit().putString("status","queued").apply()}catch(_:Exception){getSharedPreferences("workspace-ai",0).edit().putString("status","import_failed").apply()}}.start()}
- override fun onResume(){super.onResume();Reminders.refresh(this)}
- override fun onDestroy(){web.removeJavascriptInterface("CareerFlow");web.destroy();printWeb?.destroy();super.onDestroy()}
+ override fun onResume(){super.onResume();web.onResume();maintenance.execute{try{Reminders.refresh(applicationContext)}catch(_:Exception){}}}
+ override fun onPause(){web.onPause();super.onPause()}
+ override fun onDestroy(){maintenance.shutdown();web.removeJavascriptInterface("CareerFlow");web.destroy();printWeb?.destroy();super.onDestroy()}
 }

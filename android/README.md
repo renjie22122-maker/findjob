@@ -134,3 +134,13 @@ adb emu sms send 15551234567 "CareerFlow background interview smoke 2026-11-05 1
 ### English — 0.4.0
 
 The local mobile workspace adds applications, versioned resumes and sourced job matching. AI settings support configurable HTTPS OpenAI-compatible endpoints, models and compatibility options. Related email/SMS/attachment text is supplied as bounded context for source-backed linking; completed events and newer decisions are preserved. Sync remains deferred, and job discovery/crawling is not included. Install over the previous release using the same signing identity. Device-specific background restrictions still apply.
+
+## 0.4.1 性能与 API 诊断修复
+
+- 「测试当前配置」「读取模型列表」改用独立、单请求后台执行器，不再排在邮件分析的 WorkManager 队列之后。重复点击不会增加请求；请求设置 30 秒总时限和连接/读取超时。界面区分 HTTP、超时、DNS、TLS、输出上限、JSON 格式错误；进程重启后不永久显示旧的排队状态。
+- 启动、恢复及手动自动核查时的数据库/提醒维护离开主线程。工作台查询不再隐式写入、扫描和推进所有申请；日程来源批量查询，提醒和匹配仅需要概要时不加载原文。只渲染当前页面，关联原文展开后再建立节点，设置页面不轮询整份邮件数据库。
+- 加密存储保持不变。对已解密值使用最多 16 项的进程内缓存，密文变化即失效，避免设置状态轮询不断调用 Android Keystore；不把密钥放入页面或日志。
+- 不再在保存 API 配置时触发全部历史重分析。升级清理旧版已分析通知的排队重跑任务，不删除通知，也不取消尚未首次分析的通知。历史升级复核改为充电时每次最多 5 条；自动关联复核同一条通知每 30 分钟最多调度一次，手动重试不受此限制。新通知与本地闹钟保留原流程。
+- 验证包含原生慢请求/重复点击/失败后重试、200 条带原文日程读取、WebView 模型按钮响应、真实配置 API 的模型列表和合成 JSON 请求，以及原有关联/后台提醒测试。没有连接用户手机读取 ANR 堆栈或测温，不能把模拟器测试解释为实机温度已经测量或所有闪退原因均已确认。
+
+Install **CareerFlow-0.4.1.apk** over the existing version; do not uninstall. Interactive API diagnostics use an independent executor with bounded requests. Background maintenance and hidden-page rendering are reduced; existing data and completed state are preserved.
