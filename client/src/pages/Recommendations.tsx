@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import {
   Alert,
   Button,
@@ -54,10 +55,10 @@ import type {
 const { Paragraph, Text, Title } = Typography;
 
 const STATUS_META: Record<RecommendationStatus, { label: string; color: string }> = {
-  new: { label: '新推荐', color: 'blue' },
-  saved: { label: '已收藏', color: 'gold' },
-  dismissed: { label: '已忽略', color: 'default' },
-  imported: { label: '已导入', color: 'green' },
+  new: { label: translate("新推荐"), color: 'blue' },
+  saved: { label: translate("已收藏"), color: 'gold' },
+  dismissed: { label: translate("已忽略"), color: 'default' },
+  imported: { label: translate("已导入"), color: 'green' },
 };
 
 const FREQUENCY_LABEL: Record<SearchProfile['frequency'], string> = {
@@ -92,6 +93,8 @@ function scoreColor(score: number) {
 }
 
 export default function Recommendations() {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [profileForm] = Form.useForm<ProfileFormValues>();
   const [manualForm] = Form.useForm<ManualRecommendationInput>();
@@ -233,7 +236,7 @@ export default function Recommendations() {
       return;
     }
     Modal.confirm({
-      title: '确认开启自动导入？',
+      title: translate("确认开启自动导入？"),
       content: '运行画像时，达到最低匹配分的岗位会直接进入投递管理。建议先关闭此选项观察推荐质量。',
       okText: '确认开启并保存',
       cancelText: '返回检查',
@@ -282,7 +285,7 @@ export default function Recommendations() {
       return;
     }
     Modal.confirm({
-      title: '运行会自动导入匹配岗位',
+      title: translate("运行会自动导入匹配岗位"),
       content: `此画像已开启自动导入，达到 ${profile.minScore} 分的岗位会进入投递管理。是否继续？`,
       okText: '确认运行',
       cancelText: '取消',
@@ -396,7 +399,7 @@ export default function Recommendations() {
       <div role="status" style={{ minHeight: 280, display: 'grid', placeItems: 'center' }}>
         <Space direction="vertical" align="center">
           <Spin size="large" />
-          <Text>正在加载智能推荐中心…</Text>
+          <Text>{translate("正在加载智能推荐中心…")}</Text>
         </Space>
       </div>
     );
@@ -407,7 +410,7 @@ export default function Recommendations() {
       <Alert
         type="error"
         showIcon
-        message="智能推荐中心加载失败"
+        message={translate("智能推荐中心加载失败")}
         description={getErrorMessage(profilesQuery.error ?? resumesQuery.error, '请检查后端服务后重试')}
         action={
           <Button
@@ -416,9 +419,7 @@ export default function Recommendations() {
               void profilesQuery.refetch();
               void resumesQuery.refetch();
             }}
-          >
-            重试
-          </Button>
+          >{translate("重试")}</Button>
         }
       />
     );
@@ -430,18 +431,13 @@ export default function Recommendations() {
         <Row gutter={[16, 12]} align="middle" justify="space-between">
           <Col flex="auto">
             <Title level={3} style={{ margin: 0 }}>
-              <RobotOutlined /> 智能推荐中心
-            </Title>
-            <Text type="secondary">从简历画像生成找岗条件，抓取公开岗位后评分，由你决定收藏、忽略或导入。</Text>
+              <RobotOutlined />{translate("智能推荐中心")}</Title>
+            <Text type="secondary">{translate("从简历画像生成找岗条件，抓取公开岗位后评分，由你决定收藏、忽略或导入。")}</Text>
           </Col>
           <Col>
             <Space wrap>
-              <Button icon={<PlusOutlined />} onClick={openManualModal} disabled={!selectedProfile}>
-                粘贴岗位
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateProfile} disabled={!resumes.length}>
-                新建画像
-              </Button>
+              <Button icon={<PlusOutlined />} onClick={openManualModal} disabled={!selectedProfile}>{translate("粘贴岗位")}</Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateProfile} disabled={!resumes.length}>{translate("新建画像")}</Button>
             </Space>
           </Col>
         </Row>
@@ -451,8 +447,8 @@ export default function Recommendations() {
         <Alert
           type="warning"
           showIcon
-          message="请先创建一份简历"
-          description={<span>智能推荐需要简历作为匹配依据。请前往 <Link to="/resumes">简历管理</Link> 创建或导入简历。</span>}
+          message={translate("请先创建一份简历")}
+          description={<span>{translate("智能推荐需要简历作为匹配依据。请前往")} <Link to="/resumes">{translate("简历管理")}</Link> {translate("创建或导入简历。")}</span>}
         />
       )}
 
@@ -462,26 +458,24 @@ export default function Recommendations() {
             image={<InboxOutlined style={{ fontSize: 56, color: '#bfbfbf' }} />}
             description={
               <Space direction="vertical" size={2}>
-                <Text strong>还没有找岗画像</Text>
-                <Text type="secondary">选择简历并设定目标城市、岗位和匹配分，即可开始找岗。</Text>
+                <Text strong>{translate("还没有找岗画像")}</Text>
+                <Text type="secondary">{translate("选择简历并设定目标城市、岗位和匹配分，即可开始找岗。")}</Text>
               </Space>
             }
           >
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateProfile} disabled={!resumes.length}>
-              创建第一个画像
-            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateProfile} disabled={!resumes.length}>{translate("创建第一个画像")}</Button>
           </Empty>
         </Card>
       ) : (
         <Row gutter={[16, 16]}>
           <Col xs={24} xl={8}>
             <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Card size="small" title="找岗画像">
+              <Card size="small" title={translate("找岗画像")}>
                 <Select
                   value={selectedProfileId}
                   onChange={setSelectedProfileId}
                   style={{ width: '100%' }}
-                  aria-label="选择找岗画像"
+                  aria-label={translate("选择找岗画像")}
                   options={profiles.map((profile) => ({ value: profile.id, label: profile.name }))}
                 />
                 {selectedProfile && (
@@ -493,18 +487,17 @@ export default function Recommendations() {
                           {selectedProfile.enabled ? '定时任务已启用' : '定时任务已停用'}
                         </Tag>
                         <Tag>{FREQUENCY_LABEL[selectedProfile.frequency]}</Tag>
-                        {selectedProfile.autoImport ? <Tag color="orange">自动导入</Tag> : <Tag>人工确认导入</Tag>}
+                        {selectedProfile.autoImport ? <Tag color="orange">{translate("自动导入")}</Tag> : <Tag>{translate("人工确认导入")}</Tag>}
                       </Space>
                       <Descriptions size="small" column={1} colon={false}>
-                        <Descriptions.Item label="关键词">
+                        <Descriptions.Item label={translate("关键词")}>
                           {selectedProfile.keywords.length ? selectedProfile.keywords.join('、') : '由简历自动生成'}
                         </Descriptions.Item>
-                        <Descriptions.Item label="城市">
+                        <Descriptions.Item label={translate("城市")}>
                           {selectedProfile.cities.length ? selectedProfile.cities.join('、') : '不限'}
                         </Descriptions.Item>
-                        <Descriptions.Item label="条件">
-                          {selectedProfile.recruitType === 'intern' ? '实习' : '校招'} · ≥{selectedProfile.minScore} 分 · 最多 {selectedProfile.maxPages} 页
-                        </Descriptions.Item>
+                        <Descriptions.Item label={translate("条件")}>
+                          {selectedProfile.recruitType === 'intern' ? '实习' : '校招'} · ≥{selectedProfile.minScore} {translate("分 · 最多")} {selectedProfile.maxPages}{translate("页")}</Descriptions.Item>
                       </Descriptions>
                       <Button
                         type="primary"
@@ -513,24 +506,18 @@ export default function Recommendations() {
                         loading={runningProfileId === selectedProfile.id}
                         disabled={Boolean(runningProfileId)}
                         onClick={() => requestRun(selectedProfile)}
-                      >
-                        立即运行画像
-                      </Button>
+                      >{translate("立即运行画像")}</Button>
                       <Space wrap>
-                        <Button size="small" icon={<EditOutlined />} onClick={() => openEditProfile(selectedProfile)}>
-                          编辑
-                        </Button>
+                        <Button size="small" icon={<EditOutlined />} onClick={() => openEditProfile(selectedProfile)}>{translate("编辑")}</Button>
                         <Popconfirm
-                          title="删除这个找岗画像？"
-                          description="画像及推荐记录将被删除，已导入的投递不会受影响。"
-                          okText="删除"
-                          cancelText="取消"
+                          title={translate("删除这个找岗画像？")}
+                          description={translate("画像及推荐记录将被删除，已导入的投递不会受影响。")}
+                          okText={translate("删除")}
+                          cancelText={translate("取消")}
                           okButtonProps={{ danger: true, loading: pendingAction === `delete-${selectedProfile.id}` }}
                           onConfirm={() => removeProfile(selectedProfile)}
                         >
-                          <Button size="small" danger icon={<DeleteOutlined />}>
-                            删除
-                          </Button>
+                          <Button size="small" danger icon={<DeleteOutlined />}>{translate("删除")}</Button>
                         </Popconfirm>
                       </Space>
                     </Space>
@@ -538,18 +525,18 @@ export default function Recommendations() {
                 )}
               </Card>
 
-              <Card size="small" title="最近运行">
+              <Card size="small" title={translate("最近运行")}>
                 {runsQuery.isLoading ? (
                   <Spin />
                 ) : runsQuery.isError ? (
                   <Alert
                     type="error"
                     showIcon
-                    message="运行记录加载失败"
-                    action={<Button size="small" onClick={() => void runsQuery.refetch()}>重试</Button>}
+                    message={translate("运行记录加载失败")}
+                    action={<Button size="small" onClick={() => void runsQuery.refetch()}>{translate("重试")}</Button>}
                   />
                 ) : !runsQuery.data?.items.length ? (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未运行" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={translate("尚未运行")} />
                 ) : (
                   <List
                     size="small"
@@ -565,8 +552,7 @@ export default function Recommendations() {
                               {new Date(run.startedAt).toLocaleString('zh-CN')}
                             </Text>
                           </Space>
-                          <Text style={{ fontSize: 12 }}>
-                            抓取 {run.fetched} · 匹配 {run.matched} · 新增 {run.saved} · 导入 {run.imported}
+                          <Text style={{ fontSize: 12 }}>{translate("抓取")}{run.fetched} {translate("· 匹配")} {run.matched} {translate("· 新增")} {run.saved} {translate("· 导入")} {run.imported}
                           </Text>
                           {run.error && <Text type="danger" style={{ fontSize: 12 }}>{run.error}</Text>}
                         </Space>
@@ -581,22 +567,20 @@ export default function Recommendations() {
           <Col xs={24} xl={16}>
             <Card
               size="small"
-              title="推荐岗位"
+              title={translate("推荐岗位")}
               extra={
                 <Space wrap>
                   <Select
-                    aria-label="筛选推荐状态"
+                    aria-label={translate("筛选推荐状态")}
                     value={status ?? 'all'}
                     onChange={(value) => setStatus(value === 'all' ? undefined : value as RecommendationStatus)}
                     style={{ width: 120 }}
                     options={[
-                      { value: 'all', label: '全部状态' },
+                      { value: 'all', label: translate("全部状态") },
                       ...Object.entries(STATUS_META).map(([value, meta]) => ({ value, label: meta.label })),
                     ]}
                   />
-                  <Button icon={<ReloadOutlined />} onClick={() => void recommendationsQuery.refetch()}>
-                    刷新
-                  </Button>
+                  <Button icon={<ReloadOutlined />} onClick={() => void recommendationsQuery.refetch()}>{translate("刷新")}</Button>
                 </Space>
               }
             >
@@ -608,9 +592,9 @@ export default function Recommendations() {
                 <Alert
                   type="error"
                   showIcon
-                  message="推荐岗位加载失败"
+                  message={translate("推荐岗位加载失败")}
                   description={getErrorMessage(recommendationsQuery.error, '请稍后重试')}
-                  action={<Button icon={<ReloadOutlined />} onClick={() => void recommendationsQuery.refetch()}>重试</Button>}
+                  action={<Button icon={<ReloadOutlined />} onClick={() => void recommendationsQuery.refetch()}>{translate("重试")}</Button>}
                 />
               ) : !recommendationItems.length ? (
                 <Empty
@@ -621,10 +605,8 @@ export default function Recommendations() {
                   }
                 >
                   <Space wrap>
-                    <Button icon={<SearchOutlined />} onClick={() => selectedProfile && requestRun(selectedProfile)}>
-                      运行画像
-                    </Button>
-                    <Button icon={<PlusOutlined />} onClick={openManualModal}>粘贴岗位</Button>
+                    <Button icon={<SearchOutlined />} onClick={() => selectedProfile && requestRun(selectedProfile)}>{translate("运行画像")}</Button>
+                    <Button icon={<PlusOutlined />} onClick={openManualModal}>{translate("粘贴岗位")}</Button>
                   </Space>
                 </Empty>
               ) : (
@@ -637,17 +619,14 @@ export default function Recommendations() {
                         setSelectedIds(event.target.checked ? selectableIds : []);
                       }}
                       disabled={!selectableIds.length}
-                    >
-                      选择本页可导入岗位
-                    </Checkbox>
+                    >{translate("选择本页可导入岗位")}</Checkbox>
                     <Button
                       type="primary"
                       icon={<ExportOutlined />}
                       disabled={!selectedIds.length}
                       loading={pendingAction === 'import-batch'}
                       onClick={importSelected}
-                    >
-                      批量导入（{selectedIds.length}）
+                    >{translate("批量导入（")}{selectedIds.length}）
                     </Button>
                   </Space>
                   <List
@@ -678,7 +657,7 @@ export default function Recommendations() {
                                   size={68}
                                   percent={item.score}
                                   strokeColor={scoreColor(item.score)}
-                                  format={(value) => <span style={{ fontSize: 16, fontWeight: 700 }}>{value}分</span>}
+                                  format={(value) => <span style={{ fontSize: 16, fontWeight: 700 }}>{value}{translate("分")}</span>}
                                 />
                               </Col>
                               <Col xs={24} sm={18} md={19}>
@@ -702,9 +681,7 @@ export default function Recommendations() {
                                   )}
                                   <Space wrap>
                                     {(item.jdDescription || safeUrl) && (
-                                      <Button size="small" icon={<LinkOutlined />} onClick={() => setViewingJd(item)}>
-                                        查看 JD
-                                      </Button>
+                                      <Button size="small" icon={<LinkOutlined />} onClick={() => setViewingJd(item)}>{translate("查看 JD")}</Button>
                                     )}
                                     {item.status === 'new' && (
                                       <Button
@@ -712,9 +689,7 @@ export default function Recommendations() {
                                         icon={<SaveOutlined />}
                                         loading={pendingAction === `status-${item.id}`}
                                         onClick={() => updateStatus(item, 'saved')}
-                                      >
-                                        收藏
-                                      </Button>
+                                      >{translate("收藏")}</Button>
                                     )}
                                     {(item.status === 'new' || item.status === 'saved') && (
                                       <Button
@@ -722,18 +697,14 @@ export default function Recommendations() {
                                         icon={<StopOutlined />}
                                         loading={pendingAction === `status-${item.id}`}
                                         onClick={() => updateStatus(item, 'dismissed')}
-                                      >
-                                        忽略
-                                      </Button>
+                                      >{translate("忽略")}</Button>
                                     )}
                                     {item.status === 'dismissed' && (
                                       <Button
                                         size="small"
                                         loading={pendingAction === `status-${item.id}`}
                                         onClick={() => updateStatus(item, 'new')}
-                                      >
-                                        恢复
-                                      </Button>
+                                      >{translate("恢复")}</Button>
                                     )}
                                     {selectable && (
                                       <Button
@@ -742,12 +713,10 @@ export default function Recommendations() {
                                         icon={<ExportOutlined />}
                                         loading={pendingAction === `import-${item.id}`}
                                         onClick={() => importOne(item)}
-                                      >
-                                        导入投递
-                                      </Button>
+                                      >{translate("导入投递")}</Button>
                                     )}
                                     {item.status === 'imported' && item.applicationId && (
-                                      <Link to={`/applications/${item.applicationId}`}>查看投递</Link>
+                                      <Link to={`/applications/${item.applicationId}`}>{translate("查看投递")}</Link>
                                     )}
                                   </Space>
                                 </Space>
@@ -780,7 +749,7 @@ export default function Recommendations() {
 
       {selectedProfile && (
         <Card
-          title={<Space><span aria-hidden="true">in</span><span>LinkedIn 合规找岗助手</span></Space>}
+          title={<Space><span aria-hidden="true">in</span><span>{translate("LinkedIn 合规找岗助手")}</span></Space>}
           size="small"
           extra={
             <Button
@@ -789,16 +758,14 @@ export default function Recommendations() {
               href="https://www.linkedin.com/"
               target="_blank"
               rel="noopener noreferrer"
-            >
-              打开 LinkedIn
-            </Button>
+            >{translate("打开 LinkedIn")}</Button>
           }
         >
           <Alert
             type="warning"
             showIcon
-            message="仅提供人工辅助，不抓取 LinkedIn，也不会自动申请"
-            description="请复制下方搜索词，在 LinkedIn Jobs 页面自行粘贴搜索；查看岗位后可把信息主动粘贴回本应用。最终申请与提交始终由你本人完成。"
+            message={translate("仅提供人工辅助，不抓取 LinkedIn，也不会自动申请")}
+            description={translate("请复制下方搜索词，在 LinkedIn Jobs 页面自行粘贴搜索；查看岗位后可把信息主动粘贴回本应用。最终申请与提交始终由你本人完成。")}
             style={{ marginBottom: 16 }}
           />
           {linkedinPlanQuery.isLoading ? (
@@ -807,9 +774,9 @@ export default function Recommendations() {
             <Alert
               type="error"
               showIcon
-              message="搜索方案生成失败"
+              message={translate("搜索方案生成失败")}
               description={getErrorMessage(linkedinPlanQuery.error, '请稍后重试')}
-              action={<Button size="small" onClick={() => void linkedinPlanQuery.refetch()}>重试</Button>}
+              action={<Button size="small" onClick={() => void linkedinPlanQuery.refetch()}>{translate("重试")}</Button>}
             />
           ) : (
             <>
@@ -824,23 +791,19 @@ export default function Recommendations() {
                           {query.location && <Tag>{query.location}</Tag>}
                         </Space>
                         <Text code style={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{query.queryText}</Text>
-                        <Button block icon={<CopyOutlined />} onClick={() => copyQuery(query.queryText)}>
-                          复制搜索词
-                        </Button>
+                        <Button block icon={<CopyOutlined />} onClick={() => copyQuery(query.queryText)}>{translate("复制搜索词")}</Button>
                       </Space>
                     </Card>
                   </Col>
                 ))}
               </Row>
               {!linkedinPlanQuery.data?.queries.length && (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="画像暂未生成搜索词，请补充关键词后重试" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={translate("画像暂未生成搜索词，请补充关键词后重试")} />
               )}
               <Divider />
               <Space wrap>
-                <Text>已经找到合适岗位？</Text>
-                <Button type="primary" icon={<PlusOutlined />} onClick={openManualModal}>
-                  主动粘贴岗位信息
-                </Button>
+                <Text>{translate("已经找到合适岗位？")}</Text>
+                <Button type="primary" icon={<PlusOutlined />} onClick={openManualModal}>{translate("主动粘贴岗位信息")}</Button>
               </Space>
             </>
           )}
@@ -851,8 +814,8 @@ export default function Recommendations() {
         title={editingProfile ? '编辑找岗画像' : '新建找岗画像'}
         open={profileModalOpen}
         width={720}
-        okText="保存画像"
-        cancelText="取消"
+        okText={translate("保存画像")}
+        cancelText={translate("取消")}
         confirmLoading={profileSaving}
         onOk={submitProfile}
         onCancel={() => setProfileModalOpen(false)}
@@ -861,21 +824,21 @@ export default function Recommendations() {
         <Alert
           type="info"
           showIcon
-          message="关键词和城市可以留空"
-          description="留空时后端会根据所选简历生成搜索条件；你也可以手动补充多个标签。"
+          message={translate("关键词和城市可以留空")}
+          description={translate("留空时后端会根据所选简历生成搜索条件；你也可以手动补充多个标签。")}
           style={{ marginBottom: 16 }}
         />
         <Form form={profileForm} layout="vertical" requiredMark="optional">
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item name="name" label="画像名称" rules={[{ required: true, message: '请输入画像名称' }, { max: 100 }]}> 
-                <Input placeholder="如：伦敦后端校招" maxLength={100} showCount />
+              <Form.Item name="name" label={translate("画像名称")} rules={[{ required: true, message: translate("请输入画像名称") }, { max: 100 }]}>
+                <Input placeholder={translate("如：伦敦后端校招")} maxLength={100} showCount />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item name="resumeId" label="匹配简历" rules={[{ required: true, message: '请选择简历' }]}> 
+              <Form.Item name="resumeId" label={translate("匹配简历")} rules={[{ required: true, message: translate("请选择简历") }]}>
                 <Select
-                  placeholder="选择一份简历"
+                  placeholder={translate("选择一份简历")}
                   options={resumes.map((resume) => ({
                     value: resume.id,
                     label: resume.targetRole ? `${resume.name} · ${resume.targetRole}` : resume.name,
@@ -884,45 +847,45 @@ export default function Recommendations() {
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="keywords" label="岗位关键词">
-            <Select mode="tags" tokenSeparators={[',', '，']} placeholder="如：Backend Engineer、Java；回车添加" />
+          <Form.Item name="keywords" label={translate("岗位关键词")}>
+            <Select mode="tags" tokenSeparators={[',', '，']} placeholder={translate("如：Backend Engineer、Java；回车添加")} />
           </Form.Item>
-          <Form.Item name="cities" label="目标城市">
-            <Select mode="tags" tokenSeparators={[',', '，']} placeholder="如：London、上海；留空表示不限" />
+          <Form.Item name="cities" label={translate("目标城市")}>
+            <Select mode="tags" tokenSeparators={[',', '，']} placeholder={translate("如：London、上海；留空表示不限")} />
           </Form.Item>
           <Row gutter={16}>
             <Col xs={24} sm={12} md={6}>
-              <Form.Item name="recruitType" label="招聘类型" rules={[{ required: true }]}> 
-                <Select options={[{ value: 'school', label: '校招' }, { value: 'intern', label: '实习' }]} />
+              <Form.Item name="recruitType" label={translate("招聘类型")} rules={[{ required: true }]}>
+                <Select options={[{ value: 'school', label: translate("校招") }, { value: 'intern', label: translate("实习") }]} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Form.Item name="minScore" label="最低匹配分" rules={[{ required: true }]}> 
+              <Form.Item name="minScore" label={translate("最低匹配分")} rules={[{ required: true }]}>
                 <InputNumber min={0} max={100} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Form.Item name="maxPages" label="每词抓取页数" rules={[{ required: true }]}> 
+              <Form.Item name="maxPages" label={translate("每词抓取页数")} rules={[{ required: true }]}>
                 <InputNumber min={1} max={10} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Form.Item name="frequency" label="运行频率" rules={[{ required: true }]}> 
+              <Form.Item name="frequency" label={translate("运行频率")} rules={[{ required: true }]}>
                 <Select options={Object.entries(FREQUENCY_LABEL).map(([value, label]) => ({ value, label }))} />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="sourceIds" label="岗位数据源" rules={[{ required: true, message: '请至少选择一个数据源' }]}> 
-            <Checkbox.Group options={[{ label: '牛客网', value: 'nowcoder' }]} />
+          <Form.Item name="sourceIds" label={translate("岗位数据源")} rules={[{ required: true, message: translate("请至少选择一个数据源") }]}>
+            <Checkbox.Group options={[{ label: translate("牛客网"), value: 'nowcoder' }]} />
           </Form.Item>
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item name="enabled" label="启用定时任务" valuePropName="checked">
+              <Form.Item name="enabled" label={translate("启用定时任务")} valuePropName="checked">
                 <Switch checkedChildren="启用" unCheckedChildren="停用" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item name="autoImport" label="达到最低分后自动导入" valuePropName="checked">
+              <Form.Item name="autoImport" label={translate("达到最低分后自动导入")} valuePropName="checked">
                 <Switch checkedChildren="自动导入" unCheckedChildren="人工确认" />
               </Form.Item>
             </Col>
@@ -930,18 +893,18 @@ export default function Recommendations() {
           <Alert
             type="warning"
             showIcon
-            message="建议使用人工确认"
-            description="自动导入会在运行画像时直接创建投递记录。开启前请先通过几轮推荐检查匹配质量。"
+            message={translate("建议使用人工确认")}
+            description={translate("自动导入会在运行画像时直接创建投递记录。开启前请先通过几轮推荐检查匹配质量。")}
           />
         </Form>
       </Modal>
 
       <Modal
-        title="主动粘贴岗位"
+        title={translate("主动粘贴岗位")}
         open={manualModalOpen}
         width={760}
-        okText="加入并匹配"
-        cancelText="取消"
+        okText={translate("加入并匹配")}
+        cancelText={translate("取消")}
         confirmLoading={manualSaving}
         onOk={submitManual}
         onCancel={() => setManualModalOpen(false)}
@@ -950,44 +913,44 @@ export default function Recommendations() {
         <Alert
           type="info"
           showIcon
-          message="信息只由你主动提供"
-          description="应用不会访问你的 LinkedIn 账号，也不会代你抓取或投递。建议至少粘贴完整 JD，以获得更准确的简历匹配分。"
+          message={translate("信息只由你主动提供")}
+          description={translate("应用不会访问你的 LinkedIn 账号，也不会代你抓取或投递。建议至少粘贴完整 JD，以获得更准确的简历匹配分。")}
           style={{ marginBottom: 16 }}
         />
         <Form form={manualForm} layout="vertical" requiredMark="optional">
-          <Form.Item name="profileId" label="匹配画像" rules={[{ required: true, message: '请选择画像' }]}> 
+          <Form.Item name="profileId" label={translate("匹配画像")} rules={[{ required: true, message: translate("请选择画像") }]}>
             <Select options={profiles.map((profile) => ({ value: profile.id, label: profile.name }))} />
           </Form.Item>
           <Form.Item name="sourceId" hidden><Input /></Form.Item>
           <Form.Item name="channel" hidden><Input /></Form.Item>
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item name="companyName" label="公司" rules={[{ required: true, message: '请输入公司名称' }, { max: 200 }]}> 
-                <Input placeholder="公司名称" maxLength={200} />
+              <Form.Item name="companyName" label={translate("公司")} rules={[{ required: true, message: translate("请输入公司名称") }, { max: 200 }]}>
+                <Input placeholder={translate("公司名称")} maxLength={200} />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item name="positionTitle" label="岗位" rules={[{ required: true, message: '请输入岗位名称' }, { max: 200 }]}> 
-                <Input placeholder="岗位名称" maxLength={200} />
+              <Form.Item name="positionTitle" label={translate("岗位")} rules={[{ required: true, message: translate("请输入岗位名称") }, { max: 200 }]}>
+                <Input placeholder={translate("岗位名称")} maxLength={200} />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
             <Col xs={24} sm={8}>
-              <Form.Item name="city" label="城市"><Input placeholder="如：London" maxLength={100} /></Form.Item>
+              <Form.Item name="city" label={translate("城市")}><Input placeholder={translate("如：London")} maxLength={100} /></Form.Item>
             </Col>
             <Col xs={24} sm={8}>
-              <Form.Item name="salary" label="薪资"><Input placeholder="如：£45k–£55k" maxLength={100} /></Form.Item>
+              <Form.Item name="salary" label={translate("薪资")}><Input placeholder={translate("如：£45k–£55k")} maxLength={100} /></Form.Item>
             </Col>
             <Col xs={24} sm={8}>
-              <Form.Item name="jobType" label="类型">
-                <Select options={[{ value: 'school', label: '校招' }, { value: 'intern', label: '实习' }]} />
+              <Form.Item name="jobType" label={translate("类型")}>
+                <Select options={[{ value: 'school', label: translate("校招") }, { value: 'intern', label: translate("实习") }]} />
               </Form.Item>
             </Col>
           </Row>
           <Form.Item
             name="jdUrl"
-            label="岗位链接"
+            label={translate("岗位链接")}
             rules={[
               {
                 validator: (_, value?: string) =>
@@ -1001,10 +964,10 @@ export default function Recommendations() {
           </Form.Item>
           <Form.Item
             name="jdDescription"
-            label="岗位描述（JD）"
-            rules={[{ required: true, whitespace: true, message: '请粘贴岗位描述以完成匹配' }]}
+            label={translate("岗位描述（JD）")}
+            rules={[{ required: true, whitespace: true, message: translate("请粘贴岗位描述以完成匹配") }]}
           >
-            <Input.TextArea rows={9} placeholder="粘贴岗位职责、任职要求等内容" maxLength={10_000} showCount />
+            <Input.TextArea rows={9} placeholder={translate("粘贴岗位职责、任职要求等内容")} maxLength={10_000} showCount />
           </Form.Item>
         </Form>
       </Modal>
@@ -1021,26 +984,24 @@ export default function Recommendations() {
               href={asSafeExternalUrl(viewingJd.jdUrl)!}
               target="_blank"
               rel="noopener noreferrer"
-            >
-              打开原页面
-            </Button>
+            >{translate("打开原页面")}</Button>
           ) : null
         }
       >
         {viewingJd && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="匹配分">{viewingJd.score}</Descriptions.Item>
-              <Descriptions.Item label="城市">{viewingJd.city || viewingJd.companyCity || '-'}</Descriptions.Item>
-              <Descriptions.Item label="薪资">{viewingJd.salary || '-'}</Descriptions.Item>
-              <Descriptions.Item label="来源">{viewingJd.sourceId}</Descriptions.Item>
+              <Descriptions.Item label={translate("匹配分")}>{viewingJd.score}</Descriptions.Item>
+              <Descriptions.Item label={translate("城市")}>{viewingJd.city || viewingJd.companyCity || '-'}</Descriptions.Item>
+              <Descriptions.Item label={translate("薪资")}>{viewingJd.salary || '-'}</Descriptions.Item>
+              <Descriptions.Item label={translate("来源")}>{viewingJd.sourceId}</Descriptions.Item>
             </Descriptions>
             <div>
-              <Title level={5}>岗位描述</Title>
+              <Title level={5}>{translate("岗位描述")}</Title>
               {viewingJd.jdDescription ? (
                 <Paragraph style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{viewingJd.jdDescription}</Paragraph>
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有保存 JD 全文，请打开原页面查看" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={translate("没有保存 JD 全文，请打开原页面查看")} />
               )}
             </div>
           </Space>

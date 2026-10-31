@@ -1,7 +1,9 @@
+import {translate} from '../i18n';
+function labels<T extends Record<string,string>>(value:T):T{return new Proxy(value,{get:(target,key)=>typeof key==='string'&&typeof target[key]==='string'?translate(target[key]):Reflect.get(target,key)});}
 import type { AppStatus, EmailEventType, JobType, Priority, ReminderType } from '../types';
 
 /** 与后端 domain/status.ts 保持同步（ADR-1 注释同步） */
-export const STATUS_LABELS: Record<AppStatus, string> = {
+export const STATUS_LABELS: Record<AppStatus, string> = labels({
   WISHLIST: '待投递',
   APPLIED: '已投递',
   SCREENING: '简历筛选',
@@ -14,7 +16,7 @@ export const STATUS_LABELS: Record<AppStatus, string> = {
   SIGNED: '已签约',
   REJECTED: '已拒绝',
   WITHDRAWN: '已放弃',
-};
+});
 
 export const STATUS_COLORS: Record<AppStatus, string> = {
   WISHLIST: 'default',
@@ -35,16 +37,16 @@ export const TERMINAL_STATUSES: AppStatus[] = ['SIGNED', 'REJECTED', 'WITHDRAWN'
 
 export const ALL_STATUSES = Object.keys(STATUS_LABELS) as AppStatus[];
 
-export const JOB_TYPE_LABELS: Record<JobType, string> = {
+export const JOB_TYPE_LABELS: Record<JobType, string> = labels({
   school: '校招',
   intern: '实习',
-};
+});
 
-export const PRIORITY_LABELS: Record<Priority, string> = {
+export const PRIORITY_LABELS: Record<Priority, string> = labels({
   HIGH: '高',
   MEDIUM: '中',
   LOW: '低',
-};
+});
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
   HIGH: 'red',
@@ -54,14 +56,14 @@ export const PRIORITY_COLORS: Record<Priority, string> = {
 
 export const CHANNEL_OPTIONS = ['官网', '牛客网', 'Boss直聘', '拉勾', '内推', '其他'];
 
-export const REMINDER_TYPE_LABELS: Record<ReminderType, string> = {
+export const REMINDER_TYPE_LABELS: Record<ReminderType, string> = labels({
   written_test: '笔试',
   interview: '面试',
   deadline: '截止',
   other: '其他',
-};
+});
 
-export const EMAIL_EVENT_LABELS: Record<EmailEventType, string> = {
+export const EMAIL_EVENT_LABELS: Record<EmailEventType, string> = labels({
   written_test: '笔试',
   interview: '面试',
   assessment: '测评',
@@ -69,7 +71,7 @@ export const EMAIL_EVENT_LABELS: Record<EmailEventType, string> = {
   reject: '拒信',
   applied: '投递确认',
   other: '其他',
-};
+});
 
 export const EMAIL_EVENT_COLORS: Record<EmailEventType, string> = {
   written_test: 'geekblue',

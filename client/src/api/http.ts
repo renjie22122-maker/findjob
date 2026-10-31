@@ -42,7 +42,7 @@ async function fetchApi(path: string, init: RequestInit, timeoutMs: number): Pro
     if (name === 'AbortError') {
       throw new ApiError(0, 'ABORTED', '请求已取消');
     }
-    throw new ApiError(0, 'NETWORK_ERROR', '无法连接后端服务：请确认已执行 pnpm dev，且 http://localhost:3001/api/health 可访问');
+    throw new ApiError(0, 'NETWORK_ERROR', '暂时无法连接服务。请检查网络或稍后重试；尚未提交的操作不会自动执行。 / Service unavailable. Check your connection and try again.');
   }
 }
 

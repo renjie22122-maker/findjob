@@ -1,3 +1,4 @@
+import {translate, useLanguage} from './i18n';
 import { lazy, Suspense, type ReactNode } from 'react';
 import { App as AntApp, Spin } from 'antd';
 import { ThemeProvider } from './theme';
@@ -19,6 +20,7 @@ const Schedules = lazy(() => import('./pages/Schedules'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Resumes = lazy(() => import('./pages/Resumes'));
 const Recommendations = lazy(() => import('./pages/Recommendations'));
+const Assistant = lazy(() => import('./pages/Assistant'));
 
 dayjs.locale('zh-cn');
 
@@ -35,6 +37,8 @@ const queryClient = new QueryClient({
 });
 
 function LazyPage({ children }: { children: ReactNode }) {
+  useLanguage();
+
   return (
     <Suspense
       fallback={
@@ -44,7 +48,7 @@ function LazyPage({ children }: { children: ReactNode }) {
           style={{ minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}
         >
           <Spin size="large" />
-          <span>页面加载中…</span>
+          <span>{translate("页面加载中…")}</span>
         </div>
       }
     >
@@ -54,6 +58,8 @@ function LazyPage({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  useLanguage();
+
   return (
     <ThemeProvider>
       <AntApp>
@@ -64,6 +70,7 @@ export default function App() {
               <Routes>
                 <Route element={<AppLayout />}>
                   <Route path="/" element={<LazyPage><Dashboard /></LazyPage>} />
+                  <Route path="/assistant" element={<LazyPage><Assistant /></LazyPage>} />
                   <Route path="/applications" element={<LazyPage><Applications /></LazyPage>} />
                   <Route path="/applications/:id" element={<LazyPage><ApplicationDetail /></LazyPage>} />
                   <Route path="/companies" element={<LazyPage><Companies /></LazyPage>} />

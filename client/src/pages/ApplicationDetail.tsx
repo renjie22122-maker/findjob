@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Button, Card, Col, Descriptions, Form, Input, List, Modal, Popconfirm, Progress, Result, Row, Select, Space, Typography, message, DatePicker } from 'antd';
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, FormOutlined, PlusOutlined, IdcardOutlined, RobotOutlined } from '@ant-design/icons';
 import { useState } from 'react';
@@ -16,6 +17,8 @@ import ReactMarkdown from 'react-markdown';
 import { Collapse } from 'antd';
 
 export default function ApplicationDetail() {
+  useLanguage();
+
   const { id } = useParams<{ id: string }>();
   const appId = Number(id);
   const hasValidAppId = Number.isInteger(appId) && appId > 0;
@@ -139,26 +142,26 @@ export default function ApplicationDetail() {
     return (
       <Result
         status="404"
-        title="无效的投递编号"
+        title={translate("无效的投递编号")}
         subTitle="请从投递列表重新选择一条记录。"
-        extra={<Button type="primary" onClick={() => navigate('/applications')}>返回投递列表</Button>}
+        extra={<Button type="primary" onClick={() => navigate('/applications')}>{translate("返回投递列表")}</Button>}
       />
     );
   }
 
   if (isLoading) {
-    return <Card loading><span role="status">正在加载投递详情…</span></Card>;
+    return <Card loading><span role="status">{translate("正在加载投递详情…")}</span></Card>;
   }
 
   if (isError) {
     return (
       <Result
         status="error"
-        title="无法加载投递详情"
+        title={translate("无法加载投递详情")}
         subTitle={error instanceof Error ? error.message : '请求失败，请稍后重试。'}
         extra={[
-          <Button key="retry" type="primary" loading={isFetching} onClick={() => void refetch()}>重新加载</Button>,
-          <Button key="back" onClick={() => navigate('/applications')}>返回投递列表</Button>,
+          <Button key="retry" type="primary" loading={isFetching} onClick={() => void refetch()}>{translate("重新加载")}</Button>,
+          <Button key="back" onClick={() => navigate('/applications')}>{translate("返回投递列表")}</Button>,
         ]}
       />
     );
@@ -168,9 +171,9 @@ export default function ApplicationDetail() {
     return (
       <Result
         status="404"
-        title="未找到这条投递"
+        title={translate("未找到这条投递")}
         subTitle="该记录可能已被删除。"
-        extra={<Button type="primary" onClick={() => navigate('/applications')}>返回投递列表</Button>}
+        extra={<Button type="primary" onClick={() => navigate('/applications')}>{translate("返回投递列表")}</Button>}
       />
     );
   }
@@ -181,7 +184,7 @@ export default function ApplicationDetail() {
       <Card
         title={
           <Space>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label="返回投递列表" onClick={() => navigate('/applications')} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={translate("返回投递列表")} onClick={() => navigate('/applications')} />
             <span>
               {app.companyName} · {app.positionTitle}
             </span>
@@ -192,33 +195,27 @@ export default function ApplicationDetail() {
         extra={
           <Space>
             <TransitionButton applicationId={app.id} status={app.status} size="middle" />
-            <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
-              编辑
-            </Button>
-            <Popconfirm title="确认删除该投递记录及其时间线/提醒？" onConfirm={() => deleteMutation.mutate()}>
-              <Button danger icon={<DeleteOutlined />}>
-                删除
-              </Button>
+            <Button icon={<EditOutlined />} onClick={() => setEditOpen(true)}>{translate("编辑")}</Button>
+            <Popconfirm title={translate("确认删除该投递记录及其时间线/提醒？")} onConfirm={() => deleteMutation.mutate()}>
+              <Button danger icon={<DeleteOutlined />}>{translate("删除")}</Button>
             </Popconfirm>
           </Space>
         }
       >
         <Descriptions column={{ xs: 1, md: 2, lg: 3 }} size="small">
-          <Descriptions.Item label="类型">{JOB_TYPE_LABELS[app.jobType]}</Descriptions.Item>
-          <Descriptions.Item label="渠道">{app.channel || '-'}</Descriptions.Item>
-          <Descriptions.Item label="投递日期">{app.appliedAt || (app.status === 'WISHLIST' ? '尚未投递' : '未知（未收到回执，可手动补录）')}</Descriptions.Item>
-          <Descriptions.Item label="截止日期">{app.deadline ? formatDateTime(app.deadline) : '-'}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{formatDateTime(app.updatedAt)}</Descriptions.Item>
-          <Descriptions.Item label="JD 链接">
+          <Descriptions.Item label={translate("类型")}>{JOB_TYPE_LABELS[app.jobType]}</Descriptions.Item>
+          <Descriptions.Item label={translate("渠道")}>{app.channel || '-'}</Descriptions.Item>
+          <Descriptions.Item label={translate("投递日期")}>{app.appliedAt || (app.status === 'WISHLIST' ? '尚未投递' : '未知（未收到回执，可手动补录）')}</Descriptions.Item>
+          <Descriptions.Item label={translate("截止日期")}>{app.deadline ? formatDateTime(app.deadline) : '-'}</Descriptions.Item>
+          <Descriptions.Item label={translate("更新时间")}>{formatDateTime(app.updatedAt)}</Descriptions.Item>
+          <Descriptions.Item label={translate("JD 链接")}>
             {app.jdUrl ? (
-              <a href={app.jdUrl} target="_blank" rel="noreferrer">
-                打开链接
-              </a>
+              <a href={app.jdUrl} target="_blank" rel="noreferrer">{translate("打开链接")}</a>
             ) : (
               '-'
             )}
           </Descriptions.Item>
-          <Descriptions.Item label="备注" span={3}>
+          <Descriptions.Item label={translate("备注")} span={3}>
             {app.note || '-'}
           </Descriptions.Item>
         </Descriptions>
@@ -227,23 +224,20 @@ export default function ApplicationDetail() {
       <Card
         title={
           <Space>
-            <RobotOutlined /> 简历与 AI
-          </Space>
+            <RobotOutlined />{translate("简历与 AI")}</Space>
         }
         size="small"
       >
         <Space wrap>
           <Select
-            placeholder="关联简历版本"
+            placeholder={translate("关联简历版本")}
             style={{ width: 220 }}
             allowClear
             value={app.resumeId ?? undefined}
             onChange={(v) => resumeLinkMutation.mutate(v ?? null)}
             options={resumes.map((r) => ({ value: r.id, label: r.name }))}
             notFoundContent={
-              <Button type="link" size="small" onClick={() => navigate('/resumes')}>
-                去简历管理创建
-              </Button>
+              <Button type="link" size="small" onClick={() => navigate('/resumes')}>{translate("去简历管理创建")}</Button>
             }
           />
           <Button
@@ -259,9 +253,7 @@ export default function ApplicationDetail() {
               setMatching(true);
               matchMutation.mutate(resumeId);
             }}
-          >
-            AI 岗位匹配打分
-          </Button>
+          >{translate("AI 岗位匹配打分")}</Button>
           <Button
             icon={<RobotOutlined />}
             loading={questionsLoading}
@@ -279,9 +271,7 @@ export default function ApplicationDetail() {
                 .catch((err) => message.error(err instanceof Error ? err.message : '生成失败（需配置 LLM）'))
                 .finally(() => setQuestionsLoading(false));
             }}
-          >
-            AI 面试题
-          </Button>
+          >{translate("AI 面试题")}</Button>
           <Button
             icon={<RobotOutlined />}
             loading={coverLoading}
@@ -295,12 +285,10 @@ export default function ApplicationDetail() {
               setCoverLoading(true);
               coverLetterMutation.mutate(resumeId);
             }}
-          >
-            生成定制求职信
-          </Button>
+          >{translate("生成定制求职信")}</Button>
           {app.jdUrl && (
             <a href={app.jdUrl} target="_blank" rel="noreferrer">
-              <Button size="small">打开 JD 原链接</Button>
+              <Button size="small">{translate("打开 JD 原链接")}</Button>
             </a>
           )}
         </Space>
@@ -316,27 +304,26 @@ export default function ApplicationDetail() {
                 status={matchResult.score >= 70 ? 'success' : matchResult.score >= 50 ? 'normal' : 'exception'}
               />
               <div>
-                <Typography.Text strong>
-                  匹配度 {matchResult.score}/100{matchResult.ruleBased ? '（规则降级）' : ''}
+                <Typography.Text strong>{translate("匹配度")}{matchResult.score}/100{matchResult.ruleBased ? '（规则降级）' : ''}
                 </Typography.Text>
                 <div style={{ fontSize: 12, color: 'var(--app-muted)' }}>{matchResult.summary}</div>
               </div>
             </Space>
             {matchResult.strengths.length > 0 && (
               <>
-                <Typography.Text strong>✅ 匹配亮点</Typography.Text>
+                <Typography.Text strong>{translate("✅ 匹配亮点")}</Typography.Text>
                 <List size="small" dataSource={matchResult.strengths} renderItem={(s) => <List.Item>{s}</List.Item>} />
               </>
             )}
             {matchResult.gaps.length > 0 && (
               <>
-                <Typography.Text strong>⚠️ 差距</Typography.Text>
+                <Typography.Text strong>{translate("⚠️ 差距")}</Typography.Text>
                 <List size="small" dataSource={matchResult.gaps} renderItem={(s) => <List.Item>{s}</List.Item>} />
               </>
             )}
             {matchResult.suggestions.length > 0 && (
               <>
-                <Typography.Text strong>💡 建议</Typography.Text>
+                <Typography.Text strong>{translate("💡 建议")}</Typography.Text>
                 <List size="small" dataSource={matchResult.suggestions} renderItem={(s) => <List.Item>{s}</List.Item>} />
               </>
             )}
@@ -348,32 +335,29 @@ export default function ApplicationDetail() {
         <Card
           title={
             <Space>
-              <IdcardOutlined /> 投递行动卡
-            </Space>
+              <IdcardOutlined />{translate("投递行动卡")}</Space>
           }
           size="small"
         >
           <Space direction="vertical" size={8} style={{ width: '100%' }}>
-            <Typography.Text>投递准备清单：</Typography.Text>
+            <Typography.Text>{translate("投递准备清单：")}</Typography.Text>
             <Space wrap>
-              <Tag color={app.resumeId ? 'green' : 'orange'}>简历 {app.resumeId ? '✅ 已关联' : '⚠️ 未关联'}</Tag>
-              <Tag>成绩单扫描件</Tag>
-              <Tag>证书扫描件</Tag>
-              <Tag>内推码（如有）</Tag>
+              <Tag color={app.resumeId ? 'green' : 'orange'}>{translate("简历")} {app.resumeId ? '✅ 已关联' : '⚠️ 未关联'}</Tag>
+              <Tag>{translate("成绩单扫描件")}</Tag>
+              <Tag>{translate("证书扫描件")}</Tag>
+              <Tag>{translate("内推码（如有）")}</Tag>
             </Space>
             <Space wrap>
               {app.jdUrl && (
                 <a href={app.jdUrl} target="_blank" rel="noreferrer">
-                  <Button type="primary">打开官网投递页</Button>
+                  <Button type="primary">{translate("打开官网投递页")}</Button>
                 </a>
               )}
               <Button
                 icon={<FormOutlined />}
                 loading={autofilling}
                 onClick={handleAutofill}
-              >
-                自动填表助手
-              </Button>
+              >{translate("自动填表助手")}</Button>
               <Button
                 loading={quickApplied}
                 onClick={() => {
@@ -393,13 +377,9 @@ export default function ApplicationDetail() {
                     .catch((err) => message.error(err instanceof Error ? err.message : '操作失败'))
                     .finally(() => setQuickApplied(false));
                 }}
-              >
-                已投递，标记状态
-              </Button>
+              >{translate("已投递，标记状态")}</Button>
             </Space>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              辅助投递模式：自动填表助手会打开投递页并按关联简历填充常见字段（姓名/邮箱/电话/学校/专业/学历），请人工核对后自行点击提交——投递提交永远由你完成（合规要求，不做全自动投递）。
-            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{translate("辅助投递模式：自动填表助手会打开投递页并按关联简历填充常见字段（姓名/邮箱/电话/学校/专业/学历），请人工核对后自行点击提交——投递提交永远由你完成（合规要求，不做全自动投递）。")}</Typography.Text>
           </Space>
         </Card>
       )}
@@ -407,12 +387,10 @@ export default function ApplicationDetail() {
       <Row gutter={16}>
         <Col xs={24} md={14}>
           <Card
-            title="时间线"
+            title={translate("时间线")}
             size="small"
             extra={
-              <Button size="small" icon={<PlusOutlined />} onClick={() => setNoteOpen(true)}>
-                追加笔记
-              </Button>
+              <Button size="small" icon={<PlusOutlined />} onClick={() => setNoteOpen(true)}>{translate("追加笔记")}</Button>
             }
           >
             <AppTimeline events={data.timeline} />
@@ -420,15 +398,13 @@ export default function ApplicationDetail() {
         </Col>
         <Col xs={24} md={10}>
           <Card
-            title="提醒"
+            title={translate("提醒")}
             size="small"
             extra={
-              <Button size="small" icon={<PlusOutlined />} onClick={() => setReminderOpen(true)}>
-                新建提醒
-              </Button>
+              <Button size="small" icon={<PlusOutlined />} onClick={() => setReminderOpen(true)}>{translate("新建提醒")}</Button>
             }
           >
-            {reminders.length === 0 && <Typography.Text type="secondary">暂无提醒</Typography.Text>}
+            {reminders.length === 0 && <Typography.Text type="secondary">{translate("暂无提醒")}</Typography.Text>}
             <Space direction="vertical" style={{ width: '100%' }}>
               {reminders.map((r) => (
                 <Card
@@ -457,7 +433,7 @@ export default function ApplicationDetail() {
       <ApplicationFormModal open={editOpen} onClose={() => setEditOpen(false)} editing={app} />
 
       <Modal
-        title="追加笔记"
+        title={translate("追加笔记")}
         open={noteOpen}
         onCancel={() => setNoteOpen(false)}
         onOk={() => noteForm.submit()}
@@ -465,16 +441,16 @@ export default function ApplicationDetail() {
         destroyOnClose
       >
         <Form form={noteForm} layout="vertical" onFinish={(v) => noteMutation.mutate(v)}>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
-            <Input placeholder="如：内推人反馈进入简历池" />
+          <Form.Item name="title" label={translate("标题")} rules={[{ required: true, message: translate("请输入标题") }]}>
+            <Input placeholder={translate("如：内推人反馈进入简历池")} />
           </Form.Item>
-          <Form.Item name="description" label="内容">
+          <Form.Item name="description" label={translate("内容")}>
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item label="面试记录 AI 解析（可选）">
+          <Form.Item label={translate("面试记录 AI 解析（可选）")}>
             <Input.TextArea
               rows={3}
-              placeholder="把面试原始描述粘贴到这里，如：今天字节二面问了Redis持久化，答得一般，感觉要挂…"
+              placeholder={translate("把面试原始描述粘贴到这里，如：今天字节二面问了Redis持久化，答得一般，感觉要挂…")}
               value={rawNote}
               onChange={(e) => setRawNote(e.target.value)}
             />
@@ -509,15 +485,13 @@ export default function ApplicationDetail() {
                   setParsingNote(false);
                 }
               }}
-            >
-              AI 解析为结构化笔记
-            </Button>
+            >{translate("AI 解析为结构化笔记")}</Button>
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="新建提醒"
+        title={translate("新建提醒")}
         open={reminderOpen}
         onCancel={() => setReminderOpen(false)}
         onOk={() => reminderForm.submit()}
@@ -535,29 +509,27 @@ export default function ApplicationDetail() {
             })
           }
         >
-          <Form.Item name="type" label="类型">
+          <Form.Item name="type" label={translate("类型")}>
             <Select
               options={Object.entries(REMINDER_TYPE_LABELS).map(([value, label]) => ({ value, label }))}
             />
           </Form.Item>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
-            <Input placeholder="如：一面面试" />
+          <Form.Item name="title" label={translate("标题")} rules={[{ required: true, message: translate("请输入标题") }]}>
+            <Input placeholder={translate("如：一面面试")} />
           </Form.Item>
-          <Form.Item name="scheduledAt" label="提醒时间" rules={[{ required: true, message: '请选择时间' }]}>
+          <Form.Item name="scheduledAt" label={translate("提醒时间")} rules={[{ required: true, message: translate("请选择时间") }]}>
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="定制求职信"
+        title={translate("定制求职信")}
         open={Boolean(coverLetter)}
         onCancel={() => setCoverLetter(null)}
         width={700}
         footer={
-          <Button type="primary" onClick={() => setCoverLetter(null)}>
-            关闭
-          </Button>
+          <Button type="primary" onClick={() => setCoverLetter(null)}>{translate("关闭")}</Button>
         }
       >
         <div className="markdown-body">
@@ -571,9 +543,7 @@ export default function ApplicationDetail() {
         onCancel={() => setQuestions(null)}
         width={760}
         footer={
-          <Button type="primary" onClick={() => setQuestions(null)}>
-            关闭
-          </Button>
+          <Button type="primary" onClick={() => setQuestions(null)}>{translate("关闭")}</Button>
         }
       >
         <Collapse
@@ -591,9 +561,9 @@ export default function ApplicationDetail() {
             ),
             children: (
               <Space direction="vertical" size={6}>
-                <Typography.Text strong>回答要点：</Typography.Text>
+                <Typography.Text strong>{translate("回答要点：")}</Typography.Text>
                 <Typography.Text>{q.tips}</Typography.Text>
-                <Typography.Text strong>参考答案：</Typography.Text>
+                <Typography.Text strong>{translate("参考答案：")}</Typography.Text>
                 <Typography.Text>{q.sample}</Typography.Text>
               </Space>
             ),

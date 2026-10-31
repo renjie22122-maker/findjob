@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Alert, Button, Modal, Space, Spin, Typography, message } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,6 +15,8 @@ interface Props {
 
 /** Outlook OAuth2 设备码授权流程弹窗 */
 export default function DeviceCodeModal({ open, tenant, clientId, onClose, onConnected }: Props) {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [step, setStep] = useState<'start' | 'waiting' | 'done' | 'error'>('start');
   const [device, setDevice] = useState<DeviceCodeStart | null>(null);
@@ -79,7 +82,7 @@ export default function DeviceCodeModal({ open, tenant, clientId, onClose, onCon
 
   return (
     <Modal
-      title="连接 Outlook（Microsoft 账户授权）"
+      title={translate("连接 Outlook（Microsoft 账户授权）")}
       open={open}
       onCancel={() => {
         stopPolling();
@@ -88,10 +91,8 @@ export default function DeviceCodeModal({ open, tenant, clientId, onClose, onCon
       footer={
         step === 'start' ? (
           <>
-            <Button onClick={onClose}>取消</Button>
-            <Button type="primary" onClick={handleStart}>
-              生成验证码
-            </Button>
+            <Button onClick={onClose}>{translate("取消")}</Button>
+            <Button type="primary" onClick={handleStart}>{translate("生成验证码")}</Button>
           </>
         ) : (
           <Button onClick={onClose}>{step === 'done' ? '完成' : '关闭'}</Button>
@@ -99,41 +100,34 @@ export default function DeviceCodeModal({ open, tenant, clientId, onClose, onCon
       }
     >
       {step === 'start' && (
-        <Typography.Paragraph type="secondary">
-          点击「生成验证码」后，将在新窗口打开微软登录页，使用你的 Outlook 账户完成授权（个人账户选「consumers」）。授权仅用于读取邮件（IMAP）。
-        </Typography.Paragraph>
+        <Typography.Paragraph type="secondary">{translate("点击「生成验证码」后，将在新窗口打开微软登录页，使用你的 Outlook 账户完成授权（个人账户选「consumers」）。授权仅用于读取邮件（IMAP）。")}</Typography.Paragraph>
       )}
 
       {step === 'waiting' && device && (
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
-          <Typography.Paragraph>
-            1. 打开 <a href={device.verificationUri} target="_blank" rel="noreferrer">{device.verificationUri}</a>；
-            2. 输入验证码并完成登录授权：
-          </Typography.Paragraph>
+          <Typography.Paragraph>{translate("1. 打开")}<a href={device.verificationUri} target="_blank" rel="noreferrer">{device.verificationUri}</a>{translate("； 2. 输入验证码并完成登录授权：")}</Typography.Paragraph>
           <Typography.Title level={2} copyable style={{ textAlign: 'center', letterSpacing: 4 }}>
             {device.userCode}
           </Typography.Title>
           <Space>
             <Spin size="small" />
-            <Typography.Text type="secondary">等待授权中（约 {device.expiresIn}s 内有效）…</Typography.Text>
+            <Typography.Text type="secondary">{translate("等待授权中（约")} {device.expiresIn}{translate("s 内有效）…")}</Typography.Text>
           </Space>
         </Space>
       )}
 
       {step === 'done' && (
-        <Alert type="success" showIcon message="授权成功！Outlook 邮箱已连接，可前往「邮件分析」页使用。" />
+        <Alert type="success" showIcon message={translate("授权成功！Outlook 邮箱已连接，可前往「邮件分析」页使用。")} />
       )}
 
       {step === 'error' && (
         <Alert
           type="error"
           showIcon
-          message="连接失败"
+          message={translate("连接失败")}
           description={error}
           action={
-            <Button size="small" onClick={() => setStep('start')}>
-              重试
-            </Button>
+            <Button size="small" onClick={() => setStep('start')}>{translate("重试")}</Button>
           }
         />
       )}

@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Modal, Form, Input, Select, DatePicker, Button, Checkbox, message, Space, Typography } from 'antd';
 import { LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
@@ -15,6 +16,8 @@ interface Props {
 }
 
 export default function ApplicationFormModal({ open, onClose, editing }: Props) {
+  useLanguage();
+
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const [companyModalOpen, setCompanyModalOpen] = useState(false);
@@ -129,7 +132,7 @@ export default function ApplicationFormModal({ open, onClose, editing }: Props) 
         onCancel={onClose}
         onOk={() => form.submit()}
         confirmLoading={mutation.isPending}
-        okText="保存"
+        okText={translate("保存")}
         destroyOnClose
       >
         <Form
@@ -138,86 +141,80 @@ export default function ApplicationFormModal({ open, onClose, editing }: Props) 
           onFinish={(v) => mutation.mutate(v)}
           initialValues={{ jobType: 'school', priority: 'MEDIUM', createDeadlineReminder: true }}
         >
-          <Form.Item name="companyId" label="公司" rules={[{ required: true, message: '请选择公司' }]}>
+          <Form.Item name="companyId" label={translate("公司")} rules={[{ required: true, message: translate("请选择公司") }]}>
             <Select
               showSearch
-              placeholder="选择或搜索公司"
+              placeholder={translate("选择或搜索公司")}
               optionFilterProp="label"
               options={companies.map((c) => ({ value: c.id, label: c.name }))}
               dropdownRender={(menu) => (
                 <>
                   {menu}
-                  <Button type="link" icon={<PlusOutlined />} onClick={() => setCompanyModalOpen(true)}>
-                    新建公司
-                  </Button>
+                  <Button type="link" icon={<PlusOutlined />} onClick={() => setCompanyModalOpen(true)}>{translate("新建公司")}</Button>
                 </>
               )}
             />
           </Form.Item>
-          <Form.Item name="positionTitle" label="岗位名称" rules={[{ required: true, message: '请输入岗位名称' }]}>
-            <Input placeholder="如：后端开发工程师" />
+          <Form.Item name="positionTitle" label={translate("岗位名称")} rules={[{ required: true, message: translate("请输入岗位名称") }]}>
+            <Input placeholder={translate("如：后端开发工程师")} />
           </Form.Item>
           <Space.Compact block>
-            <Form.Item name="jdUrl" label="JD 链接" style={{ width: '100%' }}>
-              <Input placeholder="粘贴官网/招聘链接（可选）" />
+            <Form.Item name="jdUrl" label={translate("JD 链接")} style={{ width: '100%' }}>
+              <Input placeholder={translate("粘贴官网/招聘链接（可选）")} />
             </Form.Item>
             <Form.Item label=" " style={{ width: 'auto' }}>
-              <Button icon={<LinkOutlined />} loading={parsing} onClick={handleParseJd}>
-                解析预填
-              </Button>
+              <Button icon={<LinkOutlined />} loading={parsing} onClick={handleParseJd}>{translate("解析预填")}</Button>
             </Form.Item>
           </Space.Compact>
           <Form.Item
             name="jdDescription"
-            label="JD 描述"
+            label={translate("JD 描述")}
             extra="解析预填后可继续修改；保存完整 JD 可提升简历匹配、求职信和面试题质量。"
           >
-            <Input.TextArea rows={4} maxLength={4000} showCount placeholder="粘贴或解析岗位职责、任职要求（可选）" />
+            <Input.TextArea rows={4} maxLength={4000} showCount placeholder={translate("粘贴或解析岗位职责、任职要求（可选）")} />
           </Form.Item>
           <Space size="large" wrap>
-            <Form.Item name="jobType" label="类型">
+            <Form.Item name="jobType" label={translate("类型")}>
               <Select
                 style={{ width: 120 }}
                 options={[
-                  { value: 'school', label: '校招' },
-                  { value: 'intern', label: '实习' },
+                  { value: 'school', label: translate("校招") },
+                  { value: 'intern', label: translate("实习") },
                 ]}
               />
             </Form.Item>
-            <Form.Item name="channel" label="渠道">
-              <Select style={{ width: 140 }} allowClear placeholder="选择渠道" options={CHANNEL_OPTIONS.map((c) => ({ value: c, label: c }))} />
+            <Form.Item name="channel" label={translate("渠道")}>
+              <Select style={{ width: 140 }} allowClear placeholder={translate("选择渠道")} options={CHANNEL_OPTIONS.map((c) => ({ value: c, label: c }))} />
             </Form.Item>
-            <Form.Item name="priority" label="优先级">
+            <Form.Item name="priority" label={translate("优先级")}>
               <Select
                 style={{ width: 100 }}
                 options={[
-                  { value: 'HIGH', label: '高' },
-                  { value: 'MEDIUM', label: '中' },
-                  { value: 'LOW', label: '低' },
+                  { value: 'HIGH', label: translate("高") },
+                  { value: 'MEDIUM', label: translate("中") },
+                  { value: 'LOW', label: translate("低") },
                 ]}
               />
             </Form.Item>
           </Space>
           <Space size="large" wrap>
-            <Form.Item name="appliedAt" label="投递日期">
+            <Form.Item name="appliedAt" label={translate("投递日期")}>
               <DatePicker />
             </Form.Item>
-            <Form.Item name="deadline" label="截止日期">
+            <Form.Item name="deadline" label={translate("截止日期")}>
               <DatePicker showTime />
             </Form.Item>
           </Space>
           {!editing && (
             <Form.Item name="createDeadlineReminder" valuePropName="checked">
-              <Checkbox>填写截止日期时，同时创建站内提醒</Checkbox>
+              <Checkbox>{translate("填写截止日期时，同时创建站内提醒")}</Checkbox>
             </Form.Item>
           )}
           {editing && (
-            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-              状态请通过「推进状态」按钮变更（当前：{STATUS_LABELS[editing.status]}）；新建记录初始状态为「待投递」，状态枚举共{' '}
-              {ALL_STATUSES.length} 种。
-            </Typography.Text>
+            <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>{translate("状态请通过「推进状态」按钮变更（当前：")}{STATUS_LABELS[editing.status]}{translate("）；新建记录初始状态为「待投递」，状态枚举共")}{' '}
+              {ALL_STATUSES.length}{translate("种。")}</Typography.Text>
           )}
-          <Form.Item name="note" label="备注">
+          <Form.Item name="note" label={translate("备注")}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>

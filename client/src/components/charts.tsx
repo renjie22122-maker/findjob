@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts/core';
 import { BarChart, LineChart, PieChart, FunnelChart as EChartsFunnel } from 'echarts/charts';
@@ -14,10 +15,14 @@ echarts.use([BarChart, LineChart, PieChart, EChartsFunnel, GridComponent, Legend
 function useChart(option: EChartsCoreOption) {
   const { dark } = useAppTheme();
   const ref = useRef<HTMLDivElement>(null);
+  const instance=useRef<ReturnType<typeof echarts.init>|null>(null);
+  const latest=useRef(option);latest.current=option;
+  const signature=JSON.stringify(option);
   useEffect(() => {
     if (!ref.current) return;
     const chart = echarts.init(ref.current, dark ? 'dark' : undefined);
-    chart.setOption({ ...option, backgroundColor: 'transparent' });
+    instance.current=chart;
+    chart.setOption({ ...latest.current, backgroundColor: 'transparent' });
     const onResize = () => chart.resize();
     const observer = new ResizeObserver(onResize);
     observer.observe(ref.current);
@@ -26,12 +31,16 @@ function useChart(option: EChartsCoreOption) {
       observer.disconnect();
       window.removeEventListener('resize', onResize);
       chart.dispose();
+      instance.current=null;
     };
-  }, [option, dark]);
+  }, [dark]);
+  useEffect(()=>{instance.current?.setOption({...latest.current,backgroundColor:'transparent'},{notMerge:true,lazyUpdate:true});},[signature,dark]);
   return ref;
 }
 
 export function TrendChart({ trends }: { trends: TrendPoint[] }) {
+  useLanguage();
+
   const [hidden,setHidden]=useState<string[]>([]);
   const labels=['投递','笔试/面试','Offer','被拒'];
   const colors=['#1677ff','#9254de','#faad14','#ff4d4f'];
@@ -45,12 +54,14 @@ export function TrendChart({ trends }: { trends: TrendPoint[] }) {
       { name: '笔试/面试', type: 'line', smooth: true, data: trends.map((t) => t.interviewed), color: '#9254de' },
       { name: 'Offer', type: 'line', smooth: true, data: trends.map((t) => t.offer), color: '#faad14' },
       { name: '被拒', type: 'line', smooth: true, data: trends.map((t) => t.rejected), color: '#ff4d4f' },
-    ].filter(series=>!hidden.includes(series.name)),
+    ].filter(series=>!hidden.includes(series.name)).map(series=>({...series,name:translate(series.name)})),
   });
-  return <section className="trend-chart" aria-label="投递趋势图"><div className="chart-legend" aria-label="趋势图图例">{labels.map((label,i)=><button key={label} aria-pressed={!hidden.includes(label)} onClick={()=>setHidden(prev=>prev.includes(label)?prev.filter(x=>x!==label):[...prev,label])}><span style={{background:colors[i]}}/>{label}</button>)}</div><div className="chart-plot" ref={ref} style={{ width: '100%', height: 280 }} /></section>;
+  return <section className="trend-chart" aria-label={translate("投递趋势图")}><div className="chart-legend" aria-label={translate("趋势图图例")}>{labels.map((label,i)=><button key={label} aria-pressed={!hidden.includes(label)} onClick={()=>setHidden(prev=>prev.includes(label)?prev.filter(x=>x!==label):[...prev,label])}><span style={{background:colors[i]}}/>{translate(label)}</button>)}</div><div className="chart-plot" ref={ref} style={{ width: '100%', height: 280 }} /></section>;
 }
 
 export function FunnelChart({ stats }: { stats: OverviewStats }) {
+  useLanguage();
+
   const ref = useChart({
     tooltip: { confine: true },
     series: [
@@ -67,8 +78,8 @@ export function FunnelChart({ stats }: { stats: OverviewStats }) {
         labelLine: { length: 10, lineStyle: { opacity: .5 } },
         itemStyle: { borderWidth: 0, opacity: .95 },
         data: [
-          { value: stats.funnel.applied, name: '已投递', itemStyle: { color: '#5470c6' } },
-          { value: stats.funnel.interviewed, name: '笔试/面试', itemStyle: { color: '#73c0de' } },
+          { value: stats.funnel.applied, name: translate('已投递'), itemStyle: { color: '#5470c6' } },
+          { value: stats.funnel.interviewed, name: translate('笔试/面试'), itemStyle: { color: '#73c0de' } },
           { value: stats.funnel.offer, name: 'Offer', itemStyle: { color: '#91cc75' } },
         ],
       },
@@ -90,6 +101,8 @@ const PIE_COLORS: Record<string, string> = {
 };
 
 export function StatusPieChart({ stats }: { stats: OverviewStats }) {
+  useLanguage();
+
   const data = ALL_STATUSES.filter((s) => (stats.byStatus[s] ?? 0) > 0).map((s) => ({
     name: STATUS_LABELS[s as AppStatus],
     value: stats.byStatus[s] ?? 0,
@@ -100,5 +113,5 @@ export function StatusPieChart({ stats }: { stats: OverviewStats }) {
 
     series: [{ type: 'pie', radius: ['35%', '65%'], center: ['50%', '50%'], data, label: { show: false } }],
   });
-  return <section aria-label="申请状态分布"><div ref={ref} style={{ width: '100%', height: 210 }} /><div className="chart-legend chart-legend-static">{data.map(item=><span key={item.name}><i style={{background:item.itemStyle.color}}/>{item.name} <strong>{item.value}</strong></span>)}</div></section>;
+  return <section aria-label={translate("申请状态分布")}><div ref={ref} style={{ width: '100%', height: 210 }} /><div className="chart-legend chart-legend-static">{data.map(item=><span key={item.name}><i style={{background:item.itemStyle.color}}/>{item.name} <strong>{item.value}</strong></span>)}</div></section>;
 }

@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Modal, Result, List, Typography } from 'antd';
 import type { ImportResult } from '../types';
 
@@ -8,6 +9,8 @@ interface Props {
 }
 
 export default function ImportResultModal({ result, onClose, title = '导入结果' }: Props) {
+  useLanguage();
+
   return (
     <Modal open={Boolean(result)} onCancel={onClose} footer={null} title={title}>
       {result && (
@@ -19,7 +22,7 @@ export default function ImportResultModal({ result, onClose, title = '导入结�
           />
           {result.errors.length > 0 && (
             <>
-              <Typography.Text strong>失败明细：</Typography.Text>
+              <Typography.Text strong>{translate("失败明细：")}</Typography.Text>
               <List
                 size="small"
                 dataSource={result.errors}

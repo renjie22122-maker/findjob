@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Alert, Badge, Button, Card, Space, Tag, Typography, message } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +19,8 @@ function ReminderCard({
   disabled: boolean;
   loading: boolean;
 }) {
+  useLanguage();
+
   const navigate = useNavigate();
   return (
     <Card className="reminder-card" size="small">
@@ -36,9 +39,7 @@ function ReminderCard({
             loading={loading}
             disabled={disabled}
             onClick={() => onDone(reminder)}
-          >
-            标记完成
-          </Button>
+          >{translate("标记完成")}</Button>
         </Space>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {reminder.companyName} · {reminder.positionTitle}
@@ -49,15 +50,15 @@ function ReminderCard({
           type="link"
           style={{ padding: 0 }}
           onClick={() => navigate(`/applications/${reminder.applicationId}`)}
-        >
-          查看投递详情 →
-        </Button>
+        >{translate("查看投递详情 →")}</Button>
       </Space>
     </Card>
   );
 }
 
 export default function Today() {
+  useLanguage();
+
   const { data, error, isError, isFetching, isLoading, refetch } = useToday();
   const queryClient = useQueryClient();
 
@@ -74,7 +75,7 @@ export default function Today() {
   const total = todayItems.length;
 
   if (isLoading) {
-    return <Card loading><span role="status">正在加载今日待办…</span></Card>;
+    return <Card loading><span role="status">{translate("正在加载今日待办…")}</span></Card>;
   }
 
   if (isError) {
@@ -82,9 +83,9 @@ export default function Today() {
       <Alert
         showIcon
         type="error"
-        message="无法加载今日待办"
+        message={translate("无法加载今日待办")}
         description={error instanceof Error ? error.message : '请求失败，请稍后重试。'}
-        action={<Button loading={isFetching} onClick={() => void refetch()}>重新加载</Button>}
+        action={<Button loading={isFetching} onClick={() => void refetch()}>{translate("重新加载")}</Button>}
       />
     );
   }
@@ -93,9 +94,9 @@ export default function Today() {
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Card className="workspace-hero">
         <Typography.Title level={3}>
-          {data?.date} 今日待办 {total > 0 ? `（剩余 ${total} 项）` : ''}
+          {data?.date} {translate("今日待办")} {total > 0 ? `（剩余 ${total} 项）` : ''}
         </Typography.Title>
-        <Space wrap size={12}><Tag color="blue">今天 {total} 项</Tag><Tag color="orange">未来 3 天 {data?.upcoming.length??0} 项</Tag><Tag color="red">逾期 {data?.overdue.length??0} 项</Tag><Button onClick={()=>void refetch()} loading={isFetching}>刷新待办</Button></Space>
+        <Space wrap size={12}><Tag color="blue">{translate("今天")} {total}   {translate("项")}</Tag><Tag color="orange">{translate("未来 3 天")} {data?.upcoming.length??0}{translate("项")}</Tag><Tag color="red">{translate("逾期")} {data?.overdue.length??0}{translate("项")}</Tag><Button onClick={()=>void refetch()} loading={isFetching}>{translate("刷新待办")}</Button></Space>
       </Card>
 
       {data && data.overdue.length > 0 && (
@@ -114,9 +115,9 @@ export default function Today() {
         </Card>
       )}
 
-      <Card title="今天" size="small">
+      <Card title={translate("今天")} size="small">
         {total === 0 ? (
-          <Typography.Text type="secondary">今天没有待办，继续保持！</Typography.Text>
+          <Typography.Text type="secondary">{translate("今天没有待办，继续保持！")}</Typography.Text>
         ) : (
           <Space direction="vertical" style={{ width: '100%' }}>
             {todayItems.map((r) => (
@@ -132,9 +133,9 @@ export default function Today() {
         )}
       </Card>
 
-      <Card title="未来 3 天" size="small">
+      <Card title={translate("未来 3 天")} size="small">
         {(data?.upcoming ?? []).length === 0 ? (
-          <Typography.Text type="secondary">未来 3 天暂无提醒</Typography.Text>
+          <Typography.Text type="secondary">{translate("未来 3 天暂无提醒")}</Typography.Text>
         ) : (
           <Space direction="vertical" style={{ width: '100%' }}>
             {data!.upcoming.map((r) => (

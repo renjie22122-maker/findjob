@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Button, Card, Input, Popconfirm, Space, Table, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useState } from 'react';
@@ -8,6 +9,8 @@ import type { Company } from '../types';
 import { formatDateTime } from '../utils/constants';
 
 export default function Companies() {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [keyword, setKeyword] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -31,10 +34,10 @@ export default function Companies() {
 
   return (
     <Card
-      title="公司管理"
+      title={translate("公司管理")}
       extra={
         <Space>
-          <Input.Search placeholder="搜索公司" allowClear style={{ width: 220 }} onSearch={setKeyword} />
+          <Input.Search placeholder={translate("搜索公司")} allowClear style={{ width: 220 }} onSearch={setKeyword} />
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -42,9 +45,7 @@ export default function Companies() {
               setEditing(null);
               setModalOpen(true);
             }}
-          >
-            新建公司
-          </Button>
+          >{translate("新建公司")}</Button>
         </Space>
       }
     >
@@ -54,19 +55,19 @@ export default function Companies() {
         dataSource={data?.items ?? []}
         pagination={false}
         columns={[
-          { title: '公司', dataIndex: 'name', width: 220 },
-          { title: '行业', dataIndex: 'industry', width: 120, render: (v) => v || '-' },
-          { title: '城市', dataIndex: 'city', width: 100, render: (v) => v || '-' },
+          { title: translate("公司"), dataIndex: 'name', width: 220 },
+          { title: translate("行业"), dataIndex: 'industry', width: 120, render: (v) => v || '-' },
+          { title: translate("城市"), dataIndex: 'city', width: 100, render: (v) => v || '-' },
           {
-            title: '官网',
+            title: translate("官网"),
             dataIndex: 'website',
             ellipsis: true,
             render: (v) => (v ? <a href={v.startsWith('http') ? v : `https://${v}`} target="_blank" rel="noreferrer">{v}</a> : '-'),
           },
-          { title: '投递数', dataIndex: 'applicationCount', width: 90 },
-          { title: '更新时间', dataIndex: 'updatedAt', width: 150, render: (v) => formatDateTime(v) },
+          { title: translate("投递数"), dataIndex: 'applicationCount', width: 90 },
+          { title: translate("更新时间"), dataIndex: 'updatedAt', width: 150, render: (v) => formatDateTime(v) },
           {
-            title: '操作',
+            title: translate("操作"),
             key: 'actions',
             width: 150,
             render: (_, row) => (
@@ -77,13 +78,9 @@ export default function Companies() {
                     setEditing(row);
                     setModalOpen(true);
                   }}
-                >
-                  编辑
-                </Button>
+                >{translate("编辑")}</Button>
                 <Popconfirm title={`删除「${row.name}」及其全部投递记录？`} onConfirm={() => deleteMutation.mutate(row.id)}>
-                  <Button size="small" danger>
-                    删除
-                  </Button>
+                  <Button size="small" danger>{translate("删除")}</Button>
                 </Popconfirm>
               </Space>
             ),

@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Modal, Form, Input, message } from 'antd';
 import { useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +12,8 @@ interface Props {
 }
 
 export default function CompanyFormModal({ open, onClose, editing }: Props) {
+  useLanguage();
+
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
@@ -39,23 +42,23 @@ export default function CompanyFormModal({ open, onClose, editing }: Props) {
       onCancel={onClose}
       onOk={() => form.submit()}
       confirmLoading={mutation.isPending}
-      okText="保存"
+      okText={translate("保存")}
       destroyOnClose
     >
       <Form form={form} layout="vertical" onFinish={(v) => mutation.mutate(v)}>
-        <Form.Item name="name" label="公司名称" rules={[{ required: true, message: '请输入公司名称' }]}>
-          <Input placeholder="如：字节跳动" />
+        <Form.Item name="name" label={translate("公司名称")} rules={[{ required: true, message: translate("请输入公司名称") }]}>
+          <Input placeholder={translate("如：字节跳动")} />
         </Form.Item>
-        <Form.Item name="industry" label="行业">
-          <Input placeholder="如：互联网" />
+        <Form.Item name="industry" label={translate("行业")}>
+          <Input placeholder={translate("如：互联网")} />
         </Form.Item>
-        <Form.Item name="city" label="城市">
-          <Input placeholder="如：北京" />
+        <Form.Item name="city" label={translate("城市")}>
+          <Input placeholder={translate("如：北京")} />
         </Form.Item>
-        <Form.Item name="website" label="官网">
+        <Form.Item name="website" label={translate("官网")}>
           <Input placeholder="https://..." />
         </Form.Item>
-        <Form.Item name="note" label="备注">
+        <Form.Item name="note" label={translate("备注")}>
           <Input.TextArea rows={2} />
         </Form.Item>
       </Form>

@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Badge, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { ClockCircleOutlined, PlusOutlined, PlayCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useState } from 'react';
@@ -8,12 +9,14 @@ import { formatDateTime } from '../utils/constants';
 
 const FREQUENCY_LABELS = { daily: '每日', weekly: '每周' } as const;
 const RUN_STATUS: Record<CrawlRun['status'], { color: string; label: string }> = {
-  running: { color: 'processing', label: '执行中' },
-  success: { color: 'success', label: '成功' },
-  failed: { color: 'error', label: '失败' },
+  running: { color: 'processing', label: translate("执行中") },
+  success: { color: 'success', label: translate("成功") },
+  failed: { color: 'error', label: translate("失败") },
 };
 
 export default function CrawlJobsPanel() {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<CrawlJob | null>(null);
@@ -76,8 +79,7 @@ export default function CrawlJobsPanel() {
       <Card
         title={
           <Space>
-            <ClockCircleOutlined /> 定时自动抓取
-          </Space>
+            <ClockCircleOutlined />{translate("定时自动抓取")}</Space>
         }
         size="small"
         extra={
@@ -94,29 +96,25 @@ export default function CrawlJobsPanel() {
                 form.resetFields();
                 setModalOpen(true);
               }}
-            >
-              新建任务
-            </Button>
+            >{translate("新建任务")}</Button>
           </Space>
         }
       >
-        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-          应用运行期间每分钟检查一次：到期任务自动抓取牛客网职位并导入（重复自动去重）。上次运行失败会等到下一周期重试。
-        </Typography.Paragraph>
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>{translate("应用运行期间每分钟检查一次：到期任务自动抓取牛客网职位并导入（重复自动去重）。上次运行失败会等到下一周期重试。")}</Typography.Paragraph>
         <Table
           rowKey="id"
           size="small"
           loading={isLoading}
           dataSource={jobs}
           pagination={false}
-          locale={{ emptyText: '暂无定时任务，点击「新建任务」添加' }}
+          locale={{ emptyText: translate("暂无定时任务，点击「新建任务」添加") }}
           columns={[
-            { title: '关键词', dataIndex: 'keyword', width: 120 },
-            { title: '类型', dataIndex: 'recruitType', width: 70, render: (v) => (v === 'intern' ? '实习' : '校招') },
-            { title: '页数', dataIndex: 'maxPages', width: 60 },
-            { title: '频率', dataIndex: 'frequency', width: 70, render: (v) => FREQUENCY_LABELS[v as CrawlJob['frequency']] },
+            { title: translate("关键词"), dataIndex: 'keyword', width: 120 },
+            { title: translate("类型"), dataIndex: 'recruitType', width: 70, render: (v) => (v === 'intern' ? '实习' : '校招') },
+            { title: translate("页数"), dataIndex: 'maxPages', width: 60 },
+            { title: translate("频率"), dataIndex: 'frequency', width: 70, render: (v) => FREQUENCY_LABELS[v as CrawlJob['frequency']] },
             {
-              title: '启用',
+              title: translate("启用"),
               dataIndex: 'enabled',
               width: 70,
               render: (_, job) => (
@@ -128,9 +126,9 @@ export default function CrawlJobsPanel() {
                 />
               ),
             },
-            { title: '上次运行', dataIndex: 'lastRunAt', width: 150, render: (v) => (v ? formatDateTime(v) : '从未') },
+            { title: translate("上次运行"), dataIndex: 'lastRunAt', width: 150, render: (v) => (v ? formatDateTime(v) : '从未') },
             {
-              title: '操作',
+              title: translate("操作"),
               key: 'actions',
               width: 200,
               render: (_, job) => (
@@ -140,9 +138,7 @@ export default function CrawlJobsPanel() {
                     icon={<PlayCircleOutlined />}
                     loading={runNowMutation.isPending}
                     onClick={() => runNowMutation.mutate(job.id)}
-                  >
-                    立即运行
-                  </Button>
+                  >{translate("立即运行")}</Button>
                   <Button
                     size="small"
                     onClick={() => {
@@ -150,13 +146,9 @@ export default function CrawlJobsPanel() {
                       form.setFieldsValue(job);
                       setModalOpen(true);
                     }}
-                  >
-                    编辑
-                  </Button>
-                  <Popconfirm title="删除该任务及其运行历史？" onConfirm={() => deleteMutation.mutate(job.id)}>
-                    <Button size="small" danger>
-                      删除
-                    </Button>
+                  >{translate("编辑")}</Button>
+                  <Popconfirm title={translate("删除该任务及其运行历史？")} onConfirm={() => deleteMutation.mutate(job.id)}>
+                    <Button size="small" danger>{translate("删除")}</Button>
                   </Popconfirm>
                 </Space>
               ),
@@ -166,28 +158,26 @@ export default function CrawlJobsPanel() {
 
         {showRuns && (
           <div style={{ marginTop: 12 }}>
-            <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-              最近运行历史
-            </Typography.Text>
+            <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>{translate("最近运行历史")}</Typography.Text>
             <Table
               rowKey="id"
               size="small"
               dataSource={runsData?.items ?? []}
               pagination={false}
-              locale={{ emptyText: '暂无运行记录' }}
+              locale={{ emptyText: translate("暂无运行记录") }}
               columns={[
-                { title: '时间', dataIndex: 'startedAt', width: 150, render: (v) => formatDateTime(v) },
-                { title: '关键词', dataIndex: 'keyword', width: 120 },
+                { title: translate("时间"), dataIndex: 'startedAt', width: 150, render: (v) => formatDateTime(v) },
+                { title: translate("关键词"), dataIndex: 'keyword', width: 120 },
                 {
-                  title: '状态',
+                  title: translate("状态"),
                   dataIndex: 'status',
                   width: 90,
                   render: (s: CrawlRun['status']) => <Badge status={RUN_STATUS[s].color as never} text={RUN_STATUS[s].label} />,
                 },
-                { title: '抓取', dataIndex: 'fetched', width: 60 },
-                { title: '导入', dataIndex: 'imported', width: 60, render: (v, r) => <Tag color="green">{v} 新</Tag> },
-                { title: '去重跳过', dataIndex: 'skipped', width: 80, render: (v, r) => (r.status === 'success' ? `${v} 条` : '-') },
-                { title: '错误', dataIndex: 'error', ellipsis: true, render: (v) => (v ? <Typography.Text type="danger">{v}</Typography.Text> : '-') },
+                { title: translate("抓取"), dataIndex: 'fetched', width: 60 },
+                { title: translate("导入"), dataIndex: 'imported', width: 60, render: (v, r) => <Tag color="green">{v} {translate("新")}</Tag> },
+                { title: translate("去重跳过"), dataIndex: 'skipped', width: 80, render: (v, r) => (r.status === 'success' ? `${v} 条` : '-') },
+                { title: translate("错误"), dataIndex: 'error', ellipsis: true, render: (v) => (v ? <Typography.Text type="danger">{v}</Typography.Text> : '-') },
               ]}
             />
           </div>
@@ -203,7 +193,7 @@ export default function CrawlJobsPanel() {
         }}
         onOk={() => form.submit()}
         confirmLoading={saveMutation.isPending}
-        okText="保存"
+        okText={translate("保存")}
         destroyOnClose
       >
         <Form
@@ -212,35 +202,33 @@ export default function CrawlJobsPanel() {
           initialValues={{ recruitType: 'school', maxPages: 3, frequency: 'daily' }}
           onFinish={(v) => saveMutation.mutate(v)}
         >
-          <Form.Item name="keyword" label="关键词" rules={[{ required: true, message: '请输入关键词' }]}>
-            <Input prefix={<ThunderboltOutlined />} placeholder="如：后端 / 前端 / 算法" />
+          <Form.Item name="keyword" label={translate("关键词")} rules={[{ required: true, message: translate("请输入关键词") }]}>
+            <Input prefix={<ThunderboltOutlined />} placeholder={translate("如：后端 / 前端 / 算法")} />
           </Form.Item>
           <Space size="large">
-            <Form.Item name="recruitType" label="类型">
+            <Form.Item name="recruitType" label={translate("类型")}>
               <Select
                 style={{ width: 110 }}
                 options={[
-                  { value: 'school', label: '校招' },
-                  { value: 'intern', label: '实习' },
+                  { value: 'school', label: translate("校招") },
+                  { value: 'intern', label: translate("实习") },
                 ]}
               />
             </Form.Item>
-            <Form.Item name="maxPages" label="页数">
+            <Form.Item name="maxPages" label={translate("页数")}>
               <InputNumber min={1} max={10} />
             </Form.Item>
-            <Form.Item name="frequency" label="频率">
+            <Form.Item name="frequency" label={translate("频率")}>
               <Select
                 style={{ width: 110 }}
                 options={[
-                  { value: 'daily', label: '每日' },
-                  { value: 'weekly', label: '每周' },
+                  { value: 'daily', label: translate("每日") },
+                  { value: 'weekly', label: translate("每周") },
                 ]}
               />
             </Form.Item>
           </Space>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            到点自动抓取并导入；同一公司+岗位的职位不会重复入库。
-          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{translate("到点自动抓取并导入；同一公司+岗位的职位不会重复入库。")}</Typography.Text>
         </Form>
       </Modal>
     </>

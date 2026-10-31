@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Button, Dropdown, message } from 'antd';
 import { DownOutlined, UndoOutlined } from '@ant-design/icons';
 import { useState } from 'react';
@@ -29,6 +30,8 @@ interface Props {
 }
 
 export default function TransitionButton({ applicationId, status, size = 'small' }: Props) {
+  useLanguage();
+
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
 
@@ -54,9 +57,7 @@ export default function TransitionButton({ applicationId, status, size = 'small'
 
   if (TERMINAL_STATUSES.includes(status)) {
     return (
-      <Button size={size} icon={<UndoOutlined />} loading={loading} onClick={() => doTransition('APPLIED', true)}>
-        重新打开
-      </Button>
+      <Button size={size} icon={<UndoOutlined />} loading={loading} onClick={() => doTransition('APPLIED', true)}>{translate("重新打开")}</Button>
     );
   }
 
@@ -71,8 +72,7 @@ export default function TransitionButton({ applicationId, status, size = 'small'
         onClick: ({ key }) => doTransition(key as AppStatus),
       }}
     >
-      <Button size={size} loading={loading}>
-        推进状态 <DownOutlined />
+      <Button size={size} loading={loading}>{translate("推进状态")}<DownOutlined />
       </Button>
     </Dropdown>
   );

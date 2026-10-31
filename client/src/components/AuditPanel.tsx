@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Badge, Button, Card, Popconfirm, Select, Space, Table, Typography, message } from 'antd';
 import { AuditOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useState } from 'react';
@@ -7,18 +8,20 @@ import type { AuditKind } from '../types';
 import { formatDateTime } from '../utils/constants';
 
 const KIND_META: Record<AuditKind, { label: string; color: string }> = {
-  crawl: { label: '爬虫抓取', color: 'blue' },
-  imap: { label: '邮件拉取', color: 'cyan' },
-  llm: { label: 'AI 分析', color: 'purple' },
-  oauth2: { label: '微软授权', color: 'geekblue' },
-  'jd-parse': { label: '链接解析', color: 'gold' },
-  github: { label: 'GitHub 导入', color: 'magenta' },
-  ai: { label: 'AI 简历能力', color: 'purple' },
-  publish: { label: '快照发布', color: 'green' },
-  autofill: { label: '自动填表', color: 'volcano' },
+  crawl: { label: translate("爬虫抓取"), color: 'blue' },
+  imap: { label: translate("邮件拉取"), color: 'cyan' },
+  llm: { label: translate("AI 分析"), color: 'purple' },
+  oauth2: { label: translate("微软授权"), color: 'geekblue' },
+  'jd-parse': { label: translate("链接解析"), color: 'gold' },
+  github: { label: translate("GitHub 导入"), color: 'magenta' },
+  ai: { label: translate("AI 简历能力"), color: 'purple' },
+  publish: { label: translate("快照发布"), color: 'green' },
+  autofill: { label: translate("自动填表"), color: 'volcano' },
 };
 
 export default function AuditPanel() {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [kind, setKind] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
@@ -40,15 +43,14 @@ export default function AuditPanel() {
     <Card
       title={
         <Space>
-          <AuditOutlined /> 出站调用审计
-        </Space>
+          <AuditOutlined />{translate("出站调用审计")}</Space>
       }
       size="small"
       extra={
         <Space>
           <Select
             allowClear
-            placeholder="全部类型"
+            placeholder={translate("全部类型")}
             style={{ width: 140 }}
             value={kind}
             onChange={(v) => {
@@ -61,26 +63,20 @@ export default function AuditPanel() {
             size="small"
             icon={<ReloadOutlined />}
             onClick={() => queryClient.invalidateQueries({ queryKey: ['audit'] })}
-          >
-            刷新
-          </Button>
-          <Popconfirm title="清空全部审计日志？" onConfirm={() => clearMutation.mutate()}>
-            <Button size="small" danger icon={<DeleteOutlined />} loading={clearMutation.isPending}>
-              清空
-            </Button>
+          >{translate("刷新")}</Button>
+          <Popconfirm title={translate("清空全部审计日志？")} onConfirm={() => clearMutation.mutate()}>
+            <Button size="small" danger icon={<DeleteOutlined />} loading={clearMutation.isPending}>{translate("清空")}</Button>
           </Popconfirm>
         </Space>
       }
     >
-      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-        记录每一次爬虫/邮件/AI/微软授权的出站调用：时间、目标地址、发送内容摘要（凭据永不记录）、结果与耗时。仅存本地，最多保留 2000 条。
-      </Typography.Paragraph>
+      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>{translate("记录每一次爬虫/邮件/AI/微软授权的出站调用：时间、目标地址、发送内容摘要（凭据永不记录）、结果与耗时。仅存本地，最多保留 2000 条。")}</Typography.Paragraph>
       <Table
         rowKey="id"
         size="small"
         loading={isLoading}
         dataSource={data?.items ?? []}
-        locale={{ emptyText: '暂无出站调用记录（使用爬虫/邮件分析后会自动出现）' }}
+        locale={{ emptyText: translate("暂无出站调用记录（使用爬虫/邮件分析后会自动出现）") }}
         pagination={{
           current: data?.page ?? 1,
           pageSize: data?.pageSize ?? 20,
@@ -89,17 +85,17 @@ export default function AuditPanel() {
           onChange: setPage,
         }}
         columns={[
-          { title: '时间', dataIndex: 'startedAt', width: 150, render: (v) => formatDateTime(v) },
+          { title: translate("时间"), dataIndex: 'startedAt', width: 150, render: (v) => formatDateTime(v) },
           {
-            title: '类型',
+            title: translate("类型"),
             dataIndex: 'kind',
             width: 100,
             render: (k: AuditKind) => <Badge color={KIND_META[k].color} text={KIND_META[k].label} />,
           },
-          { title: '目标', dataIndex: 'target', ellipsis: true, render: (v) => <Typography.Text code>{v}</Typography.Text> },
-          { title: '发送内容', dataIndex: 'detail', ellipsis: true },
+          { title: translate("目标"), dataIndex: 'target', ellipsis: true, render: (v) => <Typography.Text code>{v}</Typography.Text> },
+          { title: translate("发送内容"), dataIndex: 'detail', ellipsis: true },
           {
-            title: '结果',
+            title: translate("结果"),
             dataIndex: 'status',
             width: 220,
             render: (s: string, row) =>
@@ -109,7 +105,7 @@ export default function AuditPanel() {
                 <Typography.Text type="danger">{row.error ?? '失败'}</Typography.Text>
               ),
           },
-          { title: '耗时', dataIndex: 'durationMs', width: 80, render: (v) => (v === null ? '-' : `${v}ms`) },
+          { title: translate("耗时"), dataIndex: 'durationMs', width: 80, render: (v) => (v === null ? '-' : `${v}ms`) },
         ]}
       />
     </Card>

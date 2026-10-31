@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import {
   Alert,
   Button,
@@ -38,6 +39,8 @@ const SEVERITY_COLORS = { high: 'red', medium: 'orange', low: 'default' } as con
 const SEVERITY_LABELS = { high: '高', medium: '中', low: '低' } as const;
 
 export default function Resumes() {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Resume | null>(null);
@@ -56,7 +59,7 @@ export default function Resumes() {
 
   return (
     <Card
-      title="简历管理"
+      title={translate("简历管理")}
       extra={
         <Button
           type="primary"
@@ -65,42 +68,40 @@ export default function Resumes() {
             setEditing(null);
             setEditorOpen(true);
           }}
-        >
-          新建简历
-        </Button>
+        >{translate("新建简历")}</Button>
       }
     >
       <Alert
         type="info"
         showIcon
         style={{ marginBottom: 12 }}
-        message="支持三种素材导入：粘贴文本 AI 解析、GitHub 主页导入项目、学位证/毕业证图片识别（需视觉模型）；AI 可生成简历、按岗位微调、审查打分，并与投递记录关联做岗位匹配。"
+        message={translate("支持三种素材导入：粘贴文本 AI 解析、GitHub 主页导入项目、学位证/毕业证图片识别（需视觉模型）；AI 可生成简历、按岗位微调、审查打分，并与投递记录关联做岗位匹配。")}
       />
       <Table
         rowKey="id"
         loading={isLoading}
         dataSource={data?.items ?? []}
         pagination={false}
-        locale={{ emptyText: '暂无简历，点击右上角新建' }}
+        locale={{ emptyText: translate("暂无简历，点击右上角新建") }}
         columns={[
-          { title: '简历名称', dataIndex: 'name', width: 200 },
-          { title: '目标岗位', dataIndex: 'targetRole', width: 150, render: (v) => v || '-' },
+          { title: translate("简历名称"), dataIndex: 'name', width: 200 },
+          { title: translate("目标岗位"), dataIndex: 'targetRole', width: 150, render: (v) => v || '-' },
           {
-            title: '内容',
+            title: translate("内容"),
             key: 'content',
             render: (_, r) => (
               <Space size={4} wrap>
-                <Tag>{r.education.length} 教育</Tag>
-                <Tag>{r.experience.length} 实习</Tag>
-                <Tag>{r.projects.length} 项目</Tag>
-                <Tag>{r.skills.length} 技能</Tag>
-                {r.content && <Tag color="green">已生成全文</Tag>}
+                <Tag>{r.education.length} {translate("教育")}</Tag>
+                <Tag>{r.experience.length} {translate("实习")}</Tag>
+                <Tag>{r.projects.length} {translate("项目")}</Tag>
+                <Tag>{r.skills.length} {translate("技能")}</Tag>
+                {r.content && <Tag color="green">{translate("已生成全文")}</Tag>}
               </Space>
             ),
           },
-          { title: '更新时间', dataIndex: 'updatedAt', width: 150, render: (v) => formatDateTime(v) },
+          { title: translate("更新时间"), dataIndex: 'updatedAt', width: 150, render: (v) => formatDateTime(v) },
           {
-            title: '操作',
+            title: translate("操作"),
             key: 'actions',
             width: 300,
             render: (_, r) => (
@@ -111,18 +112,12 @@ export default function Resumes() {
                     setEditing(r);
                     setEditorOpen(true);
                   }}
-                >
-                  编辑
-                </Button>
-                <Button size="small" icon={<FileSearchOutlined />} onClick={() => setPreviewing(r)}>
-                  预览
-                </Button>
+                >{translate("编辑")}</Button>
+                <Button size="small" icon={<FileSearchOutlined />} onClick={() => setPreviewing(r)}>{translate("预览")}</Button>
                 <a href={resumesApi.exportHtmlUrl(r.id)} target="_blank" rel="noreferrer">
-                  <Button size="small" icon={<ExportOutlined />}>
-                    导出
-                  </Button>
+                  <Button size="small" icon={<ExportOutlined />}>{translate("导出")}</Button>
                 </a>
-                <Popconfirm title="删除该简历？关联的投递记录将解除关联" onConfirm={() => deleteMutation.mutate(r.id)}>
+                <Popconfirm title={translate("删除该简历？关联的投递记录将解除关联")} onConfirm={() => deleteMutation.mutate(r.id)}>
                   <Button size="small" danger icon={<DeleteOutlined />} />
                 </Popconfirm>
               </Space>
@@ -139,6 +134,8 @@ export default function Resumes() {
 // ================= 编辑弹窗 =================
 
 function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing: Resume | null; onClose: () => void }) {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [parseLoading, setParseLoading] = useState(false);
@@ -334,17 +331,17 @@ function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing:
       onCancel={onClose}
       onOk={() => form.submit()}
       confirmLoading={saveMutation.isPending}
-      okText="保存"
+      okText={translate("保存")}
       width={860}
       destroyOnClose
     >
       <Form form={form} layout="vertical" onFinish={(v) => saveMutation.mutate(v)} initialValues={{ basic: {}, education: [], experience: [], projects: [], skills: [] }}>
         <Space size="large" wrap style={{ width: '100%' }}>
-          <Form.Item name="name" label="简历名称" rules={[{ required: true, message: '请输入简历名称' }]}>
-            <Input placeholder="如：后端开发-2026秋招" style={{ width: 260 }} />
+          <Form.Item name="name" label={translate("简历名称")} rules={[{ required: true, message: translate("请输入简历名称") }]}>
+            <Input placeholder={translate("如：后端开发-2026秋招")} style={{ width: 260 }} />
           </Form.Item>
-          <Form.Item name="targetRole" label="目标岗位">
-            <Input placeholder="如：后端开发工程师" style={{ width: 220 }} />
+          <Form.Item name="targetRole" label={translate("目标岗位")}>
+            <Input placeholder={translate("如：后端开发工程师")} style={{ width: 220 }} />
           </Form.Item>
         </Space>
 
@@ -354,42 +351,42 @@ function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing:
           items={[
             {
               key: 'basic',
-              label: '基本信息',
+              label: translate("基本信息"),
               children: (
                 <Space size="middle" wrap>
-                  <Form.Item name={['basic', 'name']} label="姓名"><Input style={{ width: 140 }} /></Form.Item>
-                  <Form.Item name={['basic', 'email']} label="邮箱"><Input style={{ width: 200 }} /></Form.Item>
-                  <Form.Item name={['basic', 'phone']} label="电话"><Input style={{ width: 150 }} /></Form.Item>
-                  <Form.Item name={['basic', 'city']} label="城市"><Input style={{ width: 110 }} /></Form.Item>
+                  <Form.Item name={['basic', 'name']} label={translate("姓名")}><Input style={{ width: 140 }} /></Form.Item>
+                  <Form.Item name={['basic', 'email']} label={translate("邮箱")}><Input style={{ width: 200 }} /></Form.Item>
+                  <Form.Item name={['basic', 'phone']} label={translate("电话")}><Input style={{ width: 150 }} /></Form.Item>
+                  <Form.Item name={['basic', 'city']} label={translate("城市")}><Input style={{ width: 110 }} /></Form.Item>
                   <Form.Item name={['basic', 'github']} label="GitHub"><Input style={{ width: 220 }} /></Form.Item>
-                  <Form.Item name={['basic', 'blog']} label="个人主页"><Input style={{ width: 200 }} /></Form.Item>
-                  <Form.Item name={['basic', 'summary']} label="个人简介" style={{ width: '100%' }}>
-                    <Input.TextArea rows={2} placeholder="一句话概括你的优势" />
+                  <Form.Item name={['basic', 'blog']} label={translate("个人主页")}><Input style={{ width: 200 }} /></Form.Item>
+                  <Form.Item name={['basic', 'summary']} label={translate("个人简介")} style={{ width: '100%' }}>
+                    <Input.TextArea rows={2} placeholder={translate("一句话概括你的优势")} />
                   </Form.Item>
                 </Space>
               ),
             },
             {
               key: 'edu',
-              label: '教育经历',
+              label: translate("教育经历"),
               children: (
                 <Form.List name="education">
                   {(fields, { add, remove }) => (
                     <>
                       {fields.map((f) => (
                         <Space key={f.key} align="baseline" wrap>
-                          <Form.Item name={[f.name, 'school']} label="学校" rules={[{ required: true }]}>
+                          <Form.Item name={[f.name, 'school']} label={translate("学校")} rules={[{ required: true }]}>
                             <Input style={{ width: 160 }} />
                           </Form.Item>
-                          <Form.Item name={[f.name, 'degree']} label="学位"><Input style={{ width: 90 }} /></Form.Item>
-                          <Form.Item name={[f.name, 'major']} label="专业"><Input style={{ width: 120 }} /></Form.Item>
-                          <Form.Item name={[f.name, 'start']} label="开始"><Input placeholder="2022-09" style={{ width: 100 }} /></Form.Item>
-                          <Form.Item name={[f.name, 'end']} label="结束"><Input placeholder="2026-06" style={{ width: 100 }} /></Form.Item>
+                          <Form.Item name={[f.name, 'degree']} label={translate("学位")}><Input style={{ width: 90 }} /></Form.Item>
+                          <Form.Item name={[f.name, 'major']} label={translate("专业")}><Input style={{ width: 120 }} /></Form.Item>
+                          <Form.Item name={[f.name, 'start']} label={translate("开始")}><Input placeholder="2022-09" style={{ width: 100 }} /></Form.Item>
+                          <Form.Item name={[f.name, 'end']} label={translate("结束")}><Input placeholder="2026-06" style={{ width: 100 }} /></Form.Item>
                           <Form.Item name={[f.name, 'gpa']} label="GPA"><Input style={{ width: 80 }} /></Form.Item>
-                          <Button size="small" danger type="text" onClick={() => remove(f.name)}>删除</Button>
+                          <Button size="small" danger type="text" onClick={() => remove(f.name)}>{translate("删除")}</Button>
                         </Space>
                       ))}
-                      <Button size="small" icon={<PlusOutlined />} onClick={() => add({ school: '' })}>添加教育经历</Button>
+                      <Button size="small" icon={<PlusOutlined />} onClick={() => add({ school: '' })}>{translate("添加教育经历")}</Button>
                     </>
                   )}
                 </Form.List>
@@ -397,7 +394,7 @@ function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing:
             },
             {
               key: 'exp',
-              label: '实习/工作经历',
+              label: translate("实习/工作经历"),
               children: (
                 <Form.List name="experience">
                   {(fields, { add, remove }) => (
@@ -405,20 +402,20 @@ function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing:
                       {fields.map((f) => (
                         <Card key={f.key} size="small" style={{ marginBottom: 8 }}>
                           <Space align="baseline" wrap>
-                            <Form.Item name={[f.name, 'company']} label="公司" rules={[{ required: true }]}>
+                            <Form.Item name={[f.name, 'company']} label={translate("公司")} rules={[{ required: true }]}>
                               <Input style={{ width: 160 }} />
                             </Form.Item>
-                            <Form.Item name={[f.name, 'role']} label="职位"><Input style={{ width: 140 }} /></Form.Item>
-                            <Form.Item name={[f.name, 'start']} label="开始"><Input placeholder="2025-06" style={{ width: 100 }} /></Form.Item>
-                            <Form.Item name={[f.name, 'end']} label="结束"><Input placeholder="2025-09" style={{ width: 100 }} /></Form.Item>
-                            <Button size="small" danger type="text" onClick={() => remove(f.name)}>删除</Button>
+                            <Form.Item name={[f.name, 'role']} label={translate("职位")}><Input style={{ width: 140 }} /></Form.Item>
+                            <Form.Item name={[f.name, 'start']} label={translate("开始")}><Input placeholder="2025-06" style={{ width: 100 }} /></Form.Item>
+                            <Form.Item name={[f.name, 'end']} label={translate("结束")}><Input placeholder="2025-09" style={{ width: 100 }} /></Form.Item>
+                            <Button size="small" danger type="text" onClick={() => remove(f.name)}>{translate("删除")}</Button>
                           </Space>
-                          <Form.Item name={[f.name, 'description']} label="工作要点（每行一条）">
+                          <Form.Item name={[f.name, 'description']} label={translate("工作要点（每行一条）")}>
                             <Input.TextArea rows={3} placeholder={'负责 XX 系统开发，QPS 提升 30%\n主导 YY 模块重构'} />
                           </Form.Item>
                         </Card>
                       ))}
-                      <Button size="small" icon={<PlusOutlined />} onClick={() => add({ company: '', description: '' })}>添加实习经历</Button>
+                      <Button size="small" icon={<PlusOutlined />} onClick={() => add({ company: '', description: '' })}>{translate("添加实习经历")}</Button>
                     </>
                   )}
                 </Form.List>
@@ -426,7 +423,7 @@ function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing:
             },
             {
               key: 'proj',
-              label: '项目经历',
+              label: translate("项目经历"),
               children: (
                 <Form.List name="projects">
                   {(fields, { add, remove }) => (
@@ -434,20 +431,20 @@ function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing:
                       {fields.map((f) => (
                         <Card key={f.key} size="small" style={{ marginBottom: 8 }}>
                           <Space align="baseline" wrap>
-                            <Form.Item name={[f.name, 'name']} label="项目名" rules={[{ required: true }]}>
+                            <Form.Item name={[f.name, 'name']} label={translate("项目名")} rules={[{ required: true }]}>
                               <Input style={{ width: 180 }} />
                             </Form.Item>
-                            <Form.Item name={[f.name, 'role']} label="角色"><Input style={{ width: 120 }} /></Form.Item>
-                            <Form.Item name={[f.name, 'tech']} label="技术栈(逗号分隔)"><Input style={{ width: 200 }} /></Form.Item>
-                            <Form.Item name={[f.name, 'link']} label="链接"><Input style={{ width: 200 }} /></Form.Item>
-                            <Button size="small" danger type="text" onClick={() => remove(f.name)}>删除</Button>
+                            <Form.Item name={[f.name, 'role']} label={translate("角色")}><Input style={{ width: 120 }} /></Form.Item>
+                            <Form.Item name={[f.name, 'tech']} label={translate("技术栈(逗号分隔)")}><Input style={{ width: 200 }} /></Form.Item>
+                            <Form.Item name={[f.name, 'link']} label={translate("链接")}><Input style={{ width: 200 }} /></Form.Item>
+                            <Button size="small" danger type="text" onClick={() => remove(f.name)}>{translate("删除")}</Button>
                           </Space>
-                          <Form.Item name={[f.name, 'description']} label="项目要点（每行一条）">
+                          <Form.Item name={[f.name, 'description']} label={translate("项目要点（每行一条）")}>
                             <Input.TextArea rows={2} placeholder={'实现 XX 功能，日活 10w+\n使用 Go 重构，延迟降低 40%'} />
                           </Form.Item>
                         </Card>
                       ))}
-                      <Button size="small" icon={<PlusOutlined />} onClick={() => add({ name: '', description: '' })}>添加项目</Button>
+                      <Button size="small" icon={<PlusOutlined />} onClick={() => add({ name: '', description: '' })}>{translate("添加项目")}</Button>
                     </>
                   )}
                 </Form.List>
@@ -455,41 +452,36 @@ function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing:
             },
             {
               key: 'skills',
-              label: '专业技能',
+              label: translate("专业技能"),
               children: (
-                <Form.Item name="skills" label="技能（回车添加）">
-                  <Select mode="tags" style={{ width: '100%' }} placeholder="如：Java、Go、MySQL、Redis、K8s" open={false} />
+                <Form.Item name="skills" label={translate("技能（回车添加）")}>
+                  <Select mode="tags" style={{ width: '100%' }} placeholder={translate("如：Java、Go、MySQL、Redis、K8s")} open={false} />
                 </Form.Item>
               ),
             },
             {
               key: 'import',
-              label: '素材导入（AI 解析 / GitHub / 证书图片）',
+              label: translate("素材导入（AI 解析 / GitHub / 证书图片）"),
               children: (
                 <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                  <Card size="small" title="① 粘贴简历文本，AI 解析填充表单">
+                  <Card size="small" title={translate("① 粘贴简历文本，AI 解析填充表单")}>
                     <Form.Item name="_pasteText" noStyle>
-                      <Input.TextArea rows={4} placeholder="把现有简历全文粘贴到这里（Word/网页复制均可）" />
+                      <Input.TextArea rows={4} placeholder={translate("把现有简历全文粘贴到这里（Word/网页复制均可）")} />
                     </Form.Item>
-                    <Button size="small" type="primary" icon={<ScanOutlined />} loading={parseLoading} onClick={handleParseText} style={{ marginTop: 8 }}>
-                      AI 解析填充
-                    </Button>
+                    <Button size="small" type="primary" icon={<ScanOutlined />} loading={parseLoading} onClick={handleParseText} style={{ marginTop: 8 }}>{translate("AI 解析填充")}</Button>
                   </Card>
-                  <Card size="small" title="② GitHub 主页导入项目">
+                  <Card size="small" title={translate("② GitHub 主页导入项目")}>
                     <Space>
                       <Form.Item name="_githubUser" noStyle>
-                        <Input placeholder="GitHub 用户名" style={{ width: 200 }} />
+                        <Input placeholder={translate("GitHub 用户名")} style={{ width: 200 }} />
                       </Form.Item>
-                      <Button size="small" icon={<GithubOutlined />} loading={githubLoading} onClick={handleImportGithub}>
-                        导入
-                      </Button>
+                      <Button size="small" icon={<GithubOutlined />} loading={githubLoading} onClick={handleImportGithub}>{translate("导入")}</Button>
                     </Space>
                     {githubData && (
                       <>
                         <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 6 }}>
                           {githubData.profile.name ?? githubData.profile.login}
-                          {githubData.profile.bio ? ` · ${githubData.profile.bio}` : ''}，共 {githubData.repos.length} 个仓库：
-                        </Typography.Paragraph>
+                          {githubData.profile.bio ? ` · ${githubData.profile.bio}` : ''}{translate("，共")} {githubData.repos.length}{translate("个仓库：")}</Typography.Paragraph>
                         <List
                           size="small"
                           style={{ maxHeight: 180, overflow: 'auto' }}
@@ -504,31 +496,21 @@ function ResumeEditorModal({ open, editing, onClose }: { open: boolean; editing:
                             </List.Item>
                           )}
                         />
-                        <Button size="small" type="primary" onClick={() => addGithubRepos(githubData.repos)}>
-                          全部加入项目经历
-                        </Button>
+                        <Button size="small" type="primary" onClick={() => addGithubRepos(githubData.repos)}>{translate("全部加入项目经历")}</Button>
                       </>
                     )}
                   </Card>
-                  <Card size="small" title="③ 学位证/毕业证图片识别（需视觉模型）">
+                  <Card size="small" title={translate("③ 学位证/毕业证图片识别（需视觉模型）")}>
                     <Upload accept="image/*" showUploadList={false} beforeUpload={handleCertificate} disabled={certLoading}>
-                      <Button size="small" icon={<ScanOutlined />} loading={certLoading}>
-                        上传证书图片识别
-                      </Button>
+                      <Button size="small" icon={<ScanOutlined />} loading={certLoading}>{translate("上传证书图片识别")}</Button>
                     </Upload>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
-                      默认 DeepSeek 不支持图片；需在设置页把模型换为支持视觉的（如通义 qwen-vl-max / GLM-4V）。
-                    </Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>{translate("默认 DeepSeek 不支持图片；需在设置页把模型换为支持视觉的（如通义 qwen-vl-max / GLM-4V）。")}</Typography.Text>
                   </Card>
-                  <Card size="small" title="④ 上传 PDF 简历解析（借鉴 Career-Search）">
+                  <Card size="small" title={translate("④ 上传 PDF 简历解析（借鉴 Career-Search）")}>
                     <Upload accept=".pdf" showUploadList={false} beforeUpload={handlePdf} disabled={pdfLoading}>
-                      <Button size="small" icon={<ScanOutlined />} loading={pdfLoading}>
-                        上传 PDF 解析
-                      </Button>
+                      <Button size="small" icon={<ScanOutlined />} loading={pdfLoading}>{translate("上传 PDF 解析")}</Button>
                     </Upload>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
-                      提取 PDF 文本后 AI 解析为结构化字段；扫描件（图片型 PDF）请改用③证书识别。
-                    </Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>{translate("提取 PDF 文本后 AI 解析为结构化字段；扫描件（图片型 PDF）请改用③证书识别。")}</Typography.Text>
                   </Card>
                 </Space>
               ),
@@ -552,6 +534,8 @@ function fileToBase64(file: File): Promise<string> {
 // ================= 预览弹窗（含 AI 操作） =================
 
 function ResumePreviewModal({ resume, onClose }: { resume: Resume | null; onClose: () => void }) {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [generating, setGenerating] = useState(false);
   const [review, setReview] = useState<ReviewResult | null>(null);
@@ -592,9 +576,7 @@ function ResumePreviewModal({ resume, onClose }: { resume: Resume | null; onClos
               setGenerating(true);
               generateMutation.mutate();
             }}
-          >
-            AI 生成简历
-          </Button>
+          >{translate("AI 生成简历")}</Button>
           <Button
             icon={<RobotOutlined />}
             loading={generating}
@@ -605,9 +587,7 @@ function ResumePreviewModal({ resume, onClose }: { resume: Resume | null; onClos
                 generateMutation.mutate({ jobTitle });
               }
             }}
-          >
-            按岗位微调
-          </Button>
+          >{translate("按岗位微调")}</Button>
           <Button
             icon={<FileSearchOutlined />}
             loading={reviewing}
@@ -616,9 +596,7 @@ function ResumePreviewModal({ resume, onClose }: { resume: Resume | null; onClos
               setReview(null);
               reviewMutation.mutate();
             }}
-          >
-            AI 审查
-          </Button>
+          >{translate("AI 审查")}</Button>
           <Button
             icon={<RobotOutlined />}
             loading={polishing}
@@ -631,11 +609,9 @@ function ResumePreviewModal({ resume, onClose }: { resume: Resume | null; onClos
                 .catch((err) => message.error(err instanceof Error ? err.message : '润色失败（需配置 LLM）'))
                 .finally(() => setPolishing(false));
             }}
-          >
-            AI 润色建议
-          </Button>
+          >{translate("AI 润色建议")}</Button>
           <a href={resume ? resumesApi.exportHtmlUrl(resume.id) : '#'} target="_blank" rel="noreferrer">
-            <Button icon={<ExportOutlined />}>导出 HTML/打印 PDF</Button>
+            <Button icon={<ExportOutlined />}>{translate("导出 HTML/打印 PDF")}</Button>
           </a>
         </Space>
       }
@@ -645,7 +621,7 @@ function ResumePreviewModal({ resume, onClose }: { resume: Resume | null; onClos
           <Space align="center">
             <Progress type="circle" size={56} percent={review.score} format={(p) => p} />
             <div>
-              <Typography.Text strong>AI 简历审查{review.ruleBased ? '（规则降级）' : ''}</Typography.Text>
+              <Typography.Text strong>{translate("AI 简历审查")}{review.ruleBased ? '（规则降级）' : ''}</Typography.Text>
               <div style={{ fontSize: 12, color: 'var(--app-muted)' }}>{review.summary}</div>
             </div>
           </Space>
@@ -674,15 +650,15 @@ function ResumePreviewModal({ resume, onClose }: { resume: Resume | null; onClos
         <Alert
           type="info"
           showIcon
-          message="尚未生成简历全文"
-          description="先点击下方「AI 生成简历」（可按岗位微调），生成后在此预览并可导出 HTML / 打印为 PDF。"
+          message={translate("尚未生成简历全文")}
+          description={translate("先点击下方「AI 生成简历」（可按岗位微调），生成后在此预览并可导出 HTML / 打印为 PDF。")}
         />
       )}
 
       {polishResult && (
         <div style={{ marginTop: 12 }}>
           <Space align="center">
-            <Typography.Text strong>AI 润色建议（当前评分 {polishResult.score}/100）</Typography.Text>
+            <Typography.Text strong>{translate("AI 润色建议（当前评分")} {polishResult.score}/100）</Typography.Text>
             {polishResult.keywords.length > 0 && (
               <Space size={2} wrap>
                 {polishResult.keywords.map((k) => (

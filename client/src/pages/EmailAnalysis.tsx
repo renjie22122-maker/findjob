@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Alert, Button, Card, Descriptions, Modal, Spin, Pagination, Segmented, Space, Switch, Tag, Typography, message, Form, Input, DatePicker, Select } from 'antd';
 import { CheckOutlined, CloseOutlined, MailOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useState } from 'react';
@@ -11,6 +12,8 @@ import EmailCheckPanel from '../components/EmailCheckPanel';
 import SmsImportPanel from '../components/SmsImportPanel';
 
 export default function EmailAnalysis() {
+  useLanguage();
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState('pending');
@@ -107,12 +110,10 @@ export default function EmailAnalysis() {
         <Alert
           type="warning"
           showIcon
-          message="尚未配置邮箱"
-          description="请先在设置页配置 IMAP 邮箱（QQ 邮箱/163 等需使用授权码）。未配置 LLM Key 时会自动降级本地规则提取。"
+          message={translate("尚未配置邮箱")}
+          description={translate("请先在设置页配置 IMAP 邮箱（QQ 邮箱/163 等需使用授权码）。未配置 LLM Key 时会自动降级本地规则提取。")}
           action={
-            <Button size="small" icon={<SettingOutlined />} onClick={() => navigate('/settings')}>
-              去配置
-            </Button>
+            <Button size="small" icon={<SettingOutlined />} onClick={() => navigate('/settings')}>{translate("去配置")}</Button>
           }
         />
       )}
@@ -122,28 +123,25 @@ export default function EmailAnalysis() {
         size="small"
         title={
           <Space>
-            <MailOutlined /> 招聘通知中心
-          </Space>
+            <MailOutlined />{translate("招聘通知中心")}</Space>
         }
         extra={
           <Space wrap>
             <Segmented options={[7, 14, 30]} value={days} onChange={(v) => setDays(v as number)} />
-            <Space size={4}><Switch size="small" checked={rescan} onChange={setRescan} /><Typography.Text type="secondary" style={{ fontSize: 12 }}>补扫并重分析待处理</Typography.Text></Space>
+            <Space size={4}><Switch size="small" checked={rescan} onChange={setRescan} /><Typography.Text type="secondary" style={{ fontSize: 12 }}>{translate("补扫并重分析待处理")}</Typography.Text></Space>
             <Space size={4}>
               <Switch size="small" checked={markApplied} onChange={setMarkApplied} />
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>按事件推进状态</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{translate("按事件推进状态")}</Typography.Text>
             </Space>
             <Space size={4}>
               <Switch size="small" checked={createIfMissing} onChange={setCreateIfMissing} />
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>缺记录则创建</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{translate("缺记录则创建")}</Typography.Text>
             </Space>
             <Button
               icon={<ThunderboltOutlined />}
               loading={batchApplyMutation.isPending}
               onClick={() => batchApplyMutation.mutate()}
-            >
-              批量应用高置信度（≥0.8）
-            </Button>
+            >{translate("批量应用高置信度（≥0.8）")}</Button>
             <Button type="primary" loading={analyzeMutation.isPending} disabled={!configured || auto?.running || autoMutation.isPending} onClick={() => analyzeMutation.mutate()}>
               {rescan ? `补扫最近 ${days} 天` : '增量分析新邮件'}
             </Button>
@@ -153,10 +151,10 @@ export default function EmailAnalysis() {
         <Alert
           type="info"
           showIcon
-          message="投递按收件时间；笔试、面试和测评按正文或附件；Offer 优先正文中的录用日期，否则按收件时间。"
-          description="默认按文件夹 UID 游标增量读取，首次从所选天数开始；历史补扫会重分析待处理邮件，保留已应用结果。只读邮箱，不打开链接、不执行身份验证。缺少时间、附件未读或匹配有歧义时请人工复核。"
+          message={translate("投递按收件时间；笔试、面试和测评按正文或附件；Offer 优先正文中的录用日期，否则按收件时间。")}
+          description={translate("默认按文件夹 UID 游标增量读取，首次从所选天数开始；历史补扫会重分析待处理邮件，保留已应用结果。只读邮箱，不打开链接、不执行身份验证。缺少时间、附件未读或匹配有歧义时请人工复核。")}
         />
-        {auto && <Card size="small" style={{ marginTop: 12 }} title="自动分析与时间线" extra={<Button loading={autoMutation.isPending} disabled={!configured || auto.running || analyzeMutation.isPending} onClick={() => autoMutation.mutate()}>立即运行自动流程</Button>}>
+        {auto && <Card size="small" style={{ marginTop: 12 }} title={translate("自动分析与时间线")} extra={<Button loading={autoMutation.isPending} disabled={!configured || auto.running || analyzeMutation.isPending} onClick={() => autoMutation.mutate()}>{translate("立即运行自动流程")}</Button>}>
           <Space wrap><Tag color={auto.enabled ? 'green' : 'default'}>{auto.enabled ? '自动分析已开启' : '自动分析已关闭'}</Tag><Tag>{auto.autoApply ? '符合条件自动生成时间线' : '分析后人工应用'}</Tag><Typography.Text type="secondary">{auto.nextRunAt ? `下次 ${formatDateTime(auto.nextRunAt)}（服务需运行）` : '无自动计划'}</Typography.Text></Space>
           {auto.lastResult && <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>{auto.lastResult}</Typography.Paragraph>}
         </Card>}
@@ -164,21 +162,21 @@ export default function EmailAnalysis() {
           <Segmented
             options={[
               { value: 'pending', label: `待处理（${tab === 'pending' ? data?.total ?? 0 : '?'}）` },
-              { value: 'confirmed', label: '已应用' },
-              { value: 'dismissed', label: '已忽略' },
+              { value: 'confirmed', label: translate("已应用") },
+              { value: 'dismissed', label: translate("已忽略") },
             ]}
             value={tab}
             onChange={(v) => { setTab(v as string); setPage(1); }}
           />
         </div>
 
-        {(analyzeMutation.isPending || autoMutation.isPending || auto?.running) && <Space role="status" style={{ marginTop: 12 }}><Spin size="small" /><Typography.Text>正在读取并分析邮件，可以稍后刷新查看结果…</Typography.Text></Space>}
+        {(analyzeMutation.isPending || autoMutation.isPending || auto?.running) && <Space role="status" style={{ marginTop: 12 }}><Spin size="small" /><Typography.Text>{translate("正在读取并分析邮件，可以稍后刷新查看结果…")}</Typography.Text></Space>}
         {error && <Alert type="error" showIcon message={error.message} />}
         {isLoading && <Spin style={{ margin: 16 }} />}
 
         <Space direction="vertical" style={{ width: '100%', marginTop: 12 }}>
           {(data?.items ?? []).length === 0 && !isLoading && (
-            <Typography.Text type="secondary">暂无{tab === 'pending' ? '待处理' : tab === 'confirmed' ? '已应用' : '已忽略'}通知</Typography.Text>
+            <Typography.Text type="secondary">{translate("暂无")}{tab === 'pending' ? '待处理' : tab === 'confirmed' ? '已应用' : '已忽略'}{translate("通知")}</Typography.Text>
           )}
           {(data?.items ?? []).map((item) => (
             <Card className={`notification-card ${item.status==='pending'?'needs-review':''}`} key={item.id} size="small" loading={isLoading}>
@@ -190,16 +188,13 @@ export default function EmailAnalysis() {
                   </Typography.Text>
                 </Space>
                 <Space wrap size={8}>
-                  {item.extracted?.company && <Tag color="blue">公司：{item.extracted.company}</Tag>}
+                  {item.extracted?.company && <Tag color="blue">{translate("公司：")}{item.extracted.company}</Tag>}
                   {item.extracted?.eventType && (
-                    <Tag color={EMAIL_EVENT_COLORS[item.extracted.eventType]}>
-                      事件：{EMAIL_EVENT_LABELS[item.extracted.eventType]}
+                    <Tag color={EMAIL_EVENT_COLORS[item.extracted.eventType]}>{translate("事件：")}{EMAIL_EVENT_LABELS[item.extracted.eventType]}
                     </Tag>
                   )}
                   {(item.extracted?.eventTime || item.extracted?.eventTimeEnd) && (
-                    <Tag color="orange">
-                      时间：
-                      {item.extracted?.eventTime
+                    <Tag color="orange">{translate("时间：")}{item.extracted?.eventTime
                         ? formatDateTime(item.extracted.eventTime)
                         : formatDateTime(item.extracted?.eventTimeEnd ?? '')}
                       {item.extracted?.eventTime && item.extracted?.eventTimeEnd
@@ -207,18 +202,17 @@ export default function EmailAnalysis() {
                         : ''}
                     </Tag>
                   )}
-                  {item.extracted?.schedule && <Tag color="blue">日程：{{create:'安排',update:'补充',reschedule:'改期',cancel:'取消',restore:'恢复'}[item.extracted.schedule.action]} · {[item.extracted.schedule.venue,item.extracted.schedule.address,item.extracted.schedule.room].filter(Boolean).join(' · ')}</Tag>}
-                  {item.extracted?.recruitmentId && <Tag>职位编号：{item.extracted.recruitmentId}</Tag>}
+                  {item.extracted?.schedule && <Tag color="blue">{translate("日程：")}{{create:'安排',update:'补充',reschedule:'改期',cancel:'取消',restore:'恢复'}[item.extracted.schedule.action]} · {[item.extracted.schedule.venue,item.extracted.schedule.address,item.extracted.schedule.room].filter(Boolean).join(' · ')}</Tag>}
+                  {item.extracted?.recruitmentId && <Tag>{translate("职位编号：")}{item.extracted.recruitmentId}</Tag>}
                   {item.extracted?.preparationTasks?.map((task, i) => <Tag key={i} color="orange">{task.title} · {formatDateTime(task.scheduledAt)}</Tag>)}
-                  {item.extracted?.positionTitle && <Tag>岗位：{item.extracted.positionTitle}</Tag>}
-                  <Tag color={item.extracted && item.extracted.confidence >= 0.7 ? 'green' : item.extracted && item.extracted.confidence >= 0.4 ? 'gold' : 'red'}>
-                    置信度 {Math.round((item.extracted?.confidence ?? 0) * 100)}%
+                  {item.extracted?.positionTitle && <Tag>{translate("岗位：")}{item.extracted.positionTitle}</Tag>}
+                  <Tag color={item.extracted && item.extracted.confidence >= 0.7 ? 'green' : item.extracted && item.extracted.confidence >= 0.4 ? 'gold' : 'red'}>{translate("置信度")}{Math.round((item.extracted?.confidence ?? 0) * 100)}%
                   </Tag>
-                  <Tag>时间来源：{{ received: '收件时间', body: '正文', attachment: '附件', manual: '人工确认', unknown: '待确认' }[item.extracted?.timeSource ?? 'unknown']}</Tag>
-                  {item.applicationId && <Button size="small" type="link" onClick={() => navigate(`/applications/${item.applicationId}`)}>查看申请 #{item.applicationId} →</Button>}
+                  <Tag>{translate("时间来源：")}{{ received: '收件时间', body: '正文', attachment: '附件', manual: '人工确认', unknown: '待确认' }[item.extracted?.timeSource ?? 'unknown']}</Tag>
+                  {item.applicationId && <Button size="small" type="link" onClick={() => navigate(`/applications/${item.applicationId}`)}>{translate("查看申请 #")}{item.applicationId} →</Button>}
                 </Space>
-                {!!item.extracted?.reviewReasons?.length && <Alert type="warning" showIcon message="需要复核" description={item.extracted.reviewReasons.join('；')} />}
-                {item.extracted?.timeEvidence && <Typography.Paragraph style={{ margin: 0 }}>时间原文：{item.extracted.timeEvidence}</Typography.Paragraph>}
+                {!!item.extracted?.reviewReasons?.length && <Alert type="warning" showIcon message={translate("需要复核")} description={item.extracted.reviewReasons.join('；')} />}
+                {item.extracted?.timeEvidence && <Typography.Paragraph style={{ margin: 0 }}>{translate("时间原文：")}{item.extracted.timeEvidence}</Typography.Paragraph>}
                 {!!item.extracted?.attachments?.length && <Space wrap>{item.extracted.attachments.map((a, i) => <Tag key={i} color={a.status === 'parsed' ? 'cyan' : 'orange'}>{a.name} · {a.detail}</Tag>)}</Space>}
                 {item.extracted?.summary && (
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -226,8 +220,7 @@ export default function EmailAnalysis() {
                   </Typography.Text>
                 )}
                 {item.snippet && (
-                  <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }} ellipsis={{ rows: 1, expandable: true, symbol: '展开' }}>
-                    正文：{item.snippet}
+                  <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }} ellipsis={{ rows: 1, expandable: true, symbol: '展开' }}>{translate("正文：")}{item.snippet}
                   </Typography.Paragraph>
                 )}
                 {item.status === 'pending' && (
@@ -260,12 +253,8 @@ export default function EmailAnalysis() {
                           confidence: item.extracted?.confidence ?? 0,
                         });
                       }}
-                    >
-                      应用到追踪
-                    </Button>
-                    <Button size="small" icon={<CloseOutlined />} onClick={() => dismissMutation.mutate(item.id)}>
-                      忽略
-                    </Button>
+                    >{translate("应用到追踪")}</Button>
+                    <Button size="small" icon={<CloseOutlined />} onClick={() => dismissMutation.mutate(item.id)}>{translate("忽略")}</Button>
                   </Space>
                 )}
               </Space>
@@ -276,7 +265,7 @@ export default function EmailAnalysis() {
       </Card>
 
       <Modal
-        title="确认提取结果（可修改后应用）"
+        title={translate("确认提取结果（可修改后应用）")}
         style={{ top: 24 }}
         styles={{ body: { maxHeight: 'calc(100vh - 160px)', overflowY: 'auto', paddingRight: 4 } }}
         open={Boolean(editItem)}
@@ -308,52 +297,52 @@ export default function EmailAnalysis() {
         confirmLoading={applyMutation.isPending}
       >
         <Descriptions column={1} size="small" style={{ marginBottom: 8 }}>
-          <Descriptions.Item label="邮件主题">{editItem?.subject}</Descriptions.Item>
+          <Descriptions.Item label={translate("邮件主题")}>{editItem?.subject}</Descriptions.Item>
         </Descriptions>
-        {editItem?.extracted?.preparationTasks?.map((task, i) => <Typography.Paragraph key={i}>准备提醒：{task.title} · {formatDateTime(task.scheduledAt)}</Typography.Paragraph>)}
+        {editItem?.extracted?.preparationTasks?.map((task, i) => <Typography.Paragraph key={i}>{translate("准备提醒：")}{task.title} · {formatDateTime(task.scheduledAt)}</Typography.Paragraph>)}
         <Form form={editForm} layout="vertical">
-          <Form.Item name="company" label="公司">
-            <Input placeholder="与库中公司名称精确匹配" />
+          <Form.Item name="company" label={translate("公司")}>
+            <Input placeholder={translate("与库中公司名称精确匹配")} />
           </Form.Item>
-          <Form.Item name="targetApplicationId" label="关联申请" extra="缺岗位或编号时请明确选择；拒信只影响所选申请。搜索可查找更多记录。">
-            <Select allowClear showSearch filterOption={false} onSearch={setApplicationSearch} placeholder="按职位编号 / 唯一岗位匹配" options={[{ value: 'new', label: '新建独立申请（不与已有申请合并）' }, ...(applicationChoices?.items ?? []).map(a => ({ value: a.id, label: `#${a.id} ${a.companyName} · ${a.positionTitle}` }))]} />
+          <Form.Item name="targetApplicationId" label={translate("关联申请")} extra="缺岗位或编号时请明确选择；拒信只影响所选申请。搜索可查找更多记录。">
+            <Select allowClear showSearch filterOption={false} onSearch={setApplicationSearch} placeholder={translate("按职位编号 / 唯一岗位匹配")} options={[{ value: 'new', label: translate("新建独立申请（不与已有申请合并）") }, ...(applicationChoices?.items ?? []).map(a => ({ value: a.id, label: `#${a.id} ${a.companyName} · ${a.positionTitle}` }))]} />
           </Form.Item>
-          <Form.Item name="recruitmentId" label="职位编号（不是简历编号或验证码）"><Input /></Form.Item>
-          <Form.Item name="eventType" label="事件类型">
+          <Form.Item name="recruitmentId" label={translate("职位编号（不是简历编号或验证码）")}><Input /></Form.Item>
+          <Form.Item name="eventType" label={translate("事件类型")}>
             <Select allowClear options={Object.entries(EMAIL_EVENT_LABELS).map(([value, label]) => ({ value, label }))} />
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(previous,current)=>previous.eventType!==current.eventType}>
             {({getFieldValue})=>['interview','written_test','assessment'].includes(getFieldValue('eventType')) ? <>
           <Form.Item hidden name="expectedScheduleRevision"><Input /></Form.Item>
-          <Form.Item name="targetScheduleId" label="关联日程 / 场次" extra="改期、取消或仅补地点时，请选原日程。缺少活动编号或原时间不会自动猜测。">
+          <Form.Item name="targetScheduleId" label={translate("关联日程 / 场次")} extra="改期、取消或仅补地点时，请选原日程。缺少活动编号或原时间不会自动猜测。">
             <Select allowClear showSearch optionFilterProp="label" onChange={(id) => {
               const selected = scheduleChoices?.items.find(s => s.id === id);
               editForm.setFieldValue('expectedScheduleRevision', selected?.revision);
               if (selected) editForm.setFieldsValue({targetApplicationId:selected.applicationId,company:selected.companyName,eventType:selected.kind});
-            }} options={[{value:'new',label:'新场次（不覆盖已有日程）'},...(scheduleChoices?.items ?? []).map(s=>({value:s.id,label:`#${s.id} ${s.companyName} · ${s.positionTitle} · ${s.data.round ?? s.kind} · ${s.data.eventTime ?? '时间待定'} · ${s.status === 'cancelled' ? '已取消' : '待参加'}`}))]} />
+            }} options={[{value:'new',label:translate("新场次（不覆盖已有日程）")},...(scheduleChoices?.items ?? []).map(s=>({value:s.id,label:`#${s.id} ${s.companyName} · ${s.positionTitle} · ${s.data.round ?? s.kind} · ${s.data.eventTime ?? '时间待定'} · ${s.status === 'cancelled' ? '已取消' : '待参加'}`}))]} />
           </Form.Item>
-          <Form.Item name="scheduleAction" label="日程操作"><Select options={[{value:'create',label:'首次安排 / 新场次'},{value:'update',label:'补充地点、考场等信息'},{value:'reschedule',label:'改期（无新时间则等待通知）'},{value:'cancel',label:'取消本场活动'},{value:'restore',label:'明确恢复已取消活动'}]} /></Form.Item>
-          <Form.Item name="eventRef" label="活动编号（不是职位或个人编号）"><Input /></Form.Item>
-          <Form.Item name="round" label="轮次 / 场次"><Input /></Form.Item>
-          <Form.Item name="previousTime" label="原活动时间（改期关联依据）"><DatePicker showTime style={{width:'100%'}} /></Form.Item>
-          <Form.Item name="mode" label="参加方式"><Select options={[{value:'unknown',label:'待确认'},{value:'offline',label:'线下'},{value:'online',label:'线上（不读取会议或考试链接）'}]} /></Form.Item>
-          <Form.Item name="venue" label="考点 / 场所"><Input /></Form.Item>
-          <Form.Item name="address" label="详细地址"><Input /></Form.Item>
-          <Form.Item name="room" label="考场 / 房间"><Input /></Form.Item>
-          <Form.Item name="timeKind" label="时间含义"><Select options={[{value:'start',label:'活动开始'},{value:'deadline',label:'完成或登录截止'},{value:'window',label:'有效期内自行完成'}]} /></Form.Item>
+          <Form.Item name="scheduleAction" label={translate("日程操作")}><Select options={[{value:'create',label:translate("首次安排 / 新场次")},{value:'update',label:translate("补充地点、考场等信息")},{value:'reschedule',label:translate("改期（无新时间则等待通知）")},{value:'cancel',label:translate("取消本场活动")},{value:'restore',label:translate("明确恢复已取消活动")}]} /></Form.Item>
+          <Form.Item name="eventRef" label={translate("活动编号（不是职位或个人编号）")}><Input /></Form.Item>
+          <Form.Item name="round" label={translate("轮次 / 场次")}><Input /></Form.Item>
+          <Form.Item name="previousTime" label={translate("原活动时间（改期关联依据）")}><DatePicker showTime style={{width:'100%'}} /></Form.Item>
+          <Form.Item name="mode" label={translate("参加方式")}><Select options={[{value:'unknown',label:translate("待确认")},{value:'offline',label:translate("线下")},{value:'online',label:translate("线上（不读取会议或考试链接）")}]} /></Form.Item>
+          <Form.Item name="venue" label={translate("考点 / 场所")}><Input /></Form.Item>
+          <Form.Item name="address" label={translate("详细地址")}><Input /></Form.Item>
+          <Form.Item name="room" label={translate("考场 / 房间")}><Input /></Form.Item>
+          <Form.Item name="timeKind" label={translate("时间含义")}><Select options={[{value:'start',label:translate("活动开始")},{value:'deadline',label:translate("完成或登录截止")},{value:'window',label:translate("有效期内自行完成")}]} /></Form.Item>
             </> : null}
           </Form.Item>
-          <Form.Item name="eventTime" label="事件时间（未来时间将自动创建提醒）">
+          <Form.Item name="eventTime" label={translate("事件时间（未来时间将自动创建提醒）")}>
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="positionTitle" label="岗位">
+          <Form.Item name="positionTitle" label={translate("岗位")}>
             <Input />
           </Form.Item>
-          <Form.Item name="eventTimeEnd" label="结束时间（可选，需晚于开始时间）"><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
-          <Form.Item name="summary" label="摘要">
+          <Form.Item name="eventTimeEnd" label={translate("结束时间（可选，需晚于开始时间）")}><DatePicker showTime style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="summary" label={translate("摘要")}>
             <Input />
           </Form.Item>
-          <Form.Item name="confidence" label="置信度 (0-1)">
+          <Form.Item name="confidence" label={translate("置信度 (0-1)")}>
             <Input type="number" min={0} max={1} step={0.1} />
           </Form.Item>
         </Form>

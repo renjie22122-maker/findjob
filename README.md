@@ -1,6 +1,12 @@
-# 秋招进度实时追踪（FindJob）
+# 赴程 · CareerFlow
 
-面向求职者的**秋招进度实时追踪工具**：记录投递的公司与岗位，追踪每一轮笔试/面试的进展，通过看板、时间线与统计图表实时掌握秋招全局。
+求职进度与日程工作台：把申请、邮件、短信和下一步行动放在一起。支持中文 / English、浅色 / 暗色、桌面与手机浏览器布局。原 FindJob 的数据和配置保持兼容，无需重新录入。
+
+A personal application and schedule workspace with Chinese / English UI, light / dark themes, and responsive navigation. Existing FindJob data and configuration remain compatible. Original messages and model-generated content retain their source language.
+
+Android 独立预览版见 [手机端说明](android/README.md)：可直接接收招聘短信、调用 DeepSeek、保存本地记录与完成状态；**尚未迁移邮件同步、跨来源日程关联和定时提醒**，不能替代桌面完整版。
+
+维护入口：`server/src/app.ts` 组装 HTTP 路由，`server/src/index.ts` 管理监听与后台生命周期；`client/src/i18n.tsx` 和 `client/src/locales/en.json` 管理界面语言。保留 `FINDJOB_*` 配置名和旧启动脚本，避免升级破坏已有部署。
 
 ## 功能特性
 

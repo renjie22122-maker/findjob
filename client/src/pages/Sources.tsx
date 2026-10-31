@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Progress, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { ExperimentOutlined, RobotOutlined, SearchOutlined } from '@ant-design/icons';
 import { useMemo, useState } from 'react';
@@ -8,6 +9,8 @@ import CrawlJobsPanel from '../components/CrawlJobsPanel';
 import type { ImportResult, RawJobRecord } from '../types';
 
 export default function Sources() {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [form] = Form.useForm();
   const [records, setRecords] = useState<RawJobRecord[]>([]);
@@ -119,8 +122,8 @@ export default function Sources() {
       <Alert
         type="info"
         showIcon
-        message="🔎 网上自动化查找岗位"
-        description="输入关键词自动抓取牛客网职位（公司/薪资/城市/JD 全文/截止日期），预览勾选或一键导入；下方「定时自动抓取」可每天/每周自动找新岗位。Boss直聘/拉勾/应届生网因 JS 挑战反爬列为实验性方案（见设计文档 06 §6）。"
+        message={translate("🔎 网上自动化查找岗位")}
+        description={translate("输入关键词自动抓取牛客网职位（公司/薪资/城市/JD 全文/截止日期），预览勾选或一键导入；下方「定时自动抓取」可每天/每周自动找新岗位。Boss直聘/拉勾/应届生网因 JS 挑战反爬列为实验性方案（见设计文档 06 §6）。")}
       />
 
       {source && (
@@ -128,7 +131,7 @@ export default function Sources() {
           title={
             <Space>
               {source.name}
-              {source.experimental && <Tag icon={<ExperimentOutlined />} color="orange">实验性</Tag>}
+              {source.experimental && <Tag icon={<ExperimentOutlined />} color="orange">{translate("实验性")}</Tag>}
             </Space>
           }
           size="small"
@@ -142,25 +145,25 @@ export default function Sources() {
             <Form.Item name="sourceId" hidden>
               <Input />
             </Form.Item>
-            <Form.Item name="keyword" label="关键词" rules={[{ required: true, message: '请输入关键词' }]}>
-              <Input placeholder="如：后端" style={{ width: 180 }} />
+            <Form.Item name="keyword" label={translate("关键词")} rules={[{ required: true, message: translate("请输入关键词") }]}>
+              <Input placeholder={translate("如：后端")} style={{ width: 180 }} />
             </Form.Item>
-            <Form.Item name="recruitType" label="类型">
+            <Form.Item name="recruitType" label={translate("类型")}>
               <Select
                 style={{ width: 110 }}
                 options={[
-                  { value: 'school', label: '校招' },
-                  { value: 'intern', label: '实习' },
+                  { value: 'school', label: translate("校招") },
+                  { value: 'intern', label: translate("实习") },
                 ]}
               />
             </Form.Item>
-            <Form.Item name="maxPages" label="页数">
+            <Form.Item name="maxPages" label={translate("页数")}>
               <InputNumber min={1} max={10} style={{ width: 80 }} />
             </Form.Item>
-            <Form.Item label="聚合全部数据源">
+            <Form.Item label={translate("聚合全部数据源")}>
               <Switch checked={aggregate} onChange={setAggregate} size="small" />
             </Form.Item>
-            <Form.Item label="抓取后自动导入">
+            <Form.Item label={translate("抓取后自动导入")}>
               <Switch checked={autoImport} onChange={setAutoImport} size="small" />
             </Form.Item>
             <Form.Item>
@@ -185,7 +188,7 @@ export default function Sources() {
             <Space>
               <Select
                 size="small"
-                placeholder="选简历做匹配"
+                placeholder={translate("选简历做匹配")}
                 style={{ width: 170 }}
                 value={matchResumeId}
                 onChange={setMatchResumeId}
@@ -197,23 +200,13 @@ export default function Sources() {
                 loading={matching}
                 disabled={!matchResumeId}
                 onClick={handleMatch}
-              >
-                AI 匹配排序
-              </Button>
+              >{translate("AI 匹配排序")}</Button>
               {matchScores && (
-                <Button size="small" onClick={() => setSelected(highScoreKeys(70))}>
-                  勾选 ≥70 分
-                </Button>
+                <Button size="small" onClick={() => setSelected(highScoreKeys(70))}>{translate("勾选 ≥70 分")}</Button>
               )}
-              <Button size="small" onClick={() => setSelected(records.map((r) => r.sourceKey ?? `${r.companyName}|${r.positionTitle}`))}>
-                全选
-              </Button>
-              <Button size="small" onClick={() => setSelected([])}>
-                全不选
-              </Button>
-              <Button type="primary" size="small" loading={importing} onClick={handleImport}>
-                导入选中
-              </Button>
+              <Button size="small" onClick={() => setSelected(records.map((r) => r.sourceKey ?? `${r.companyName}|${r.positionTitle}`))}>{translate("全选")}</Button>
+              <Button size="small" onClick={() => setSelected([])}>{translate("全不选")}</Button>
+              <Button type="primary" size="small" loading={importing} onClick={handleImport}>{translate("导入选中")}</Button>
             </Space>
           }
         >
@@ -240,7 +233,7 @@ export default function Sources() {
               ...(matchScores
                 ? [
                     {
-                      title: '匹配度',
+                      title: translate("匹配度"),
                       key: 'score',
                       width: 110,
                       sorter: (a: RawJobRecord, b: RawJobRecord) =>
@@ -260,19 +253,17 @@ export default function Sources() {
                     },
                   ]
                 : []),
-              { title: '公司', dataIndex: 'companyName', width: 180, ellipsis: true },
-              { title: '岗位', dataIndex: 'positionTitle', ellipsis: true },
-              { title: '薪资', dataIndex: 'salary', width: 120, render: (v) => v || '-' },
-              { title: '城市', dataIndex: 'city', width: 80, render: (v) => v || '-' },
-              { title: '截止日期', dataIndex: 'deadline', width: 105, render: (v) => v || '-' },
+              { title: translate("公司"), dataIndex: 'companyName', width: 180, ellipsis: true },
+              { title: translate("岗位"), dataIndex: 'positionTitle', ellipsis: true },
+              { title: translate("薪资"), dataIndex: 'salary', width: 120, render: (v) => v || '-' },
+              { title: translate("城市"), dataIndex: 'city', width: 80, render: (v) => v || '-' },
+              { title: translate("截止日期"), dataIndex: 'deadline', width: 105, render: (v) => v || '-' },
               {
                 title: 'JD',
                 dataIndex: 'jdUrl',
                 width: 70,
                 render: (v) => (
-                  <a href={v} target="_blank" rel="noreferrer">
-                    查看
-                  </a>
+                  <a href={v} target="_blank" rel="noreferrer">{translate("查看")}</a>
                 ),
               },
             ]}
@@ -282,7 +273,7 @@ export default function Sources() {
 
       <CrawlJobsPanel />
 
-      <ImportResultModal result={importResult} onClose={() => setImportResult(null)} title="导入结果" />
+      <ImportResultModal result={importResult} onClose={() => setImportResult(null)} title={translate("导入结果")} />
     </Space>
   );
 }

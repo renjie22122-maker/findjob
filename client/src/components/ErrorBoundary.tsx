@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button, Result, Space, Typography } from 'antd';
 
@@ -40,15 +41,13 @@ export default class ErrorBoundary extends Component<Props, State> {
     return (
       <Result
         status="error"
-        title="页面渲染出错"
+        title={translate("页面渲染出错")}
         subTitle="已拦截异常，避免整页白屏。可先重试渲染，仍失败请刷新页面；数据保存在本地 SQLite 中不会丢失。"
         extra={
           <Space direction="vertical" align="center">
             <Space>
-              <Button type="primary" onClick={this.handleReset}>
-                重试渲染
-              </Button>
-              <Button onClick={this.handleReload}>刷新页面</Button>
+              <Button type="primary" onClick={this.handleReset}>{translate("重试渲染")}</Button>
+              <Button onClick={this.handleReload}>{translate("刷新页面")}</Button>
             </Space>
             <Typography.Text type="secondary" style={{ maxWidth: 520, wordBreak: 'break-all' }}>
               {error.message}

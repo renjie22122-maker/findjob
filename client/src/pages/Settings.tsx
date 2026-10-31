@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Alert, AutoComplete, Button, Card, Col, Form, Input, InputNumber, Radio, Row, Space, Switch, Typography, Upload, message } from 'antd';
 import { CloudDownloadOutlined, CloudUploadOutlined, InboxOutlined, RobotOutlined, WindowsOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
@@ -9,6 +10,8 @@ import AuditPanel from '../components/AuditPanel';
 import type { ImportResult } from '../types';
 
 export default function Settings() {
+  useLanguage();
+
   const queryClient = useQueryClient();
   const [emailForm] = Form.useForm();
   const [llmForm] = Form.useForm();
@@ -174,8 +177,7 @@ export default function Settings() {
           <Card
             title={
               <Space>
-                <InboxOutlined /> 邮箱配置（IMAP）
-              </Space>
+                <InboxOutlined />{translate("邮箱配置（IMAP）")}</Space>
             }
             size="small"
           >
@@ -183,15 +185,15 @@ export default function Settings() {
               type="info"
               showIcon
               style={{ marginBottom: 12 }}
-              message="QQ 邮箱/163 等需开启 IMAP 并使用「授权码」；Gmail 使用「应用专用密码」；Outlook 需通过 OAuth2 授权（微软已停用密码登录）。授权码/Token 仅保存在本地 SQLite。"
+              message={translate("QQ 邮箱/163 等需开启 IMAP 并使用「授权码」；Gmail 使用「应用专用密码」；Outlook 需通过 OAuth2 授权（微软已停用密码登录）。授权码/Token 仅保存在本地 SQLite。")}
             />
             <Radio.Group
               value={authMode}
               onChange={(e) => setAuthMode(e.target.value)}
               style={{ marginBottom: 12 }}
               options={[
-                { value: 'password', label: '授权码/应用密码（QQ/163/Gmail）' },
-                { value: 'oauth2', label: 'Outlook OAuth2 授权' },
+                { value: 'password', label: translate("授权码/应用密码（QQ/163/Gmail）") },
+                { value: 'oauth2', label: translate("Outlook OAuth2 授权") },
               ]}
             />
 
@@ -209,32 +211,28 @@ export default function Settings() {
                 onFinish={(v) => saveEmail.mutate(v)}
               >
                 <Space.Compact block>
-                  <Form.Item name="host" label="IMAP 服务器" rules={[{ required: true }]} style={{ flex: 1 }}>
+                  <Form.Item name="host" label={translate("IMAP 服务器")} rules={[{ required: true }]} style={{ flex: 1 }}>
                     <Input placeholder="imap.qq.com / imap.163.com / imap.gmail.com" />
                   </Form.Item>
-                  <Form.Item name="port" label="端口" rules={[{ required: true }]}>
+                  <Form.Item name="port" label={translate("端口")} rules={[{ required: true }]}>
                     <InputNumber min={1} max={65535} style={{ width: 90 }} />
                   </Form.Item>
                   <Form.Item name="secure" label="SSL" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Space.Compact>
-                <Form.Item name="user" label="邮箱账号" rules={[{ required: true, message: '请输入邮箱账号' }]}>
+                <Form.Item name="user" label={translate("邮箱账号")} rules={[{ required: true, message: translate("请输入邮箱账号") }]}>
                   <Input placeholder="you@qq.com" />
                 </Form.Item>
                 <Form.Item name="password" label={settings?.email?.passwordSet ? '授权码（已保存，留空保持不变）' : '授权码'}>
-                  <Input.Password placeholder="邮箱授权码 / Gmail 应用专用密码" />
+                  <Input.Password placeholder={translate("邮箱授权码 / Gmail 应用专用密码")} />
                 </Form.Item>
-                <Form.Item name="folder" label="邮件文件夹">
+                <Form.Item name="folder" label={translate("邮件文件夹")}>
                   <Input placeholder="INBOX" />
                 </Form.Item>
                 <Space>
-                  <Button type="primary" onClick={() => emailForm.submit()} loading={saveEmail.isPending}>
-                    保存邮箱配置
-                  </Button>
-                  <Button onClick={handleTestEmail} loading={testingEmail}>
-                    测试连接
-                  </Button>
+                  <Button type="primary" onClick={() => emailForm.submit()} loading={saveEmail.isPending}>{translate("保存邮箱配置")}</Button>
+                  <Button onClick={handleTestEmail} loading={testingEmail}>{translate("测试连接")}</Button>
                 </Space>
               </Form>
             ) : (
@@ -245,24 +243,22 @@ export default function Settings() {
                     showIcon
                     message={`已连接：${settings.oauth2.user}`}
                     action={
-                      <Button size="small" danger loading={disconnectOauth2.isPending} onClick={() => disconnectOauth2.mutate()}>
-                        断开
-                      </Button>
+                      <Button size="small" danger loading={disconnectOauth2.isPending} onClick={() => disconnectOauth2.mutate()}>{translate("断开")}</Button>
                     }
                   />
                 )}
                 <Form form={oauthForm} layout="vertical" initialValues={{ tenant: 'consumers', clientId: '' }}>
-                  <Form.Item name="tenant" label="账户类型">
+                  <Form.Item name="tenant" label={translate("账户类型")}>
                     <Radio.Group
                       options={[
-                        { value: 'consumers', label: '个人 Microsoft 账户（推荐）' },
-                        { value: 'organizations', label: '企业/学校账户' },
-                        { value: 'common', label: '全部（common）' },
+                        { value: 'consumers', label: translate("个人 Microsoft 账户（推荐）") },
+                        { value: 'organizations', label: translate("企业/学校账户") },
+                        { value: 'common', label: translate("全部（common）") },
                       ]}
                     />
                   </Form.Item>
-                  <Form.Item name="clientId" label="应用程序（客户端）ID" rules={[{ required: true, message: '请填写 Azure 应用 Client ID' }]}>
-                    <Input placeholder="Azure 应用注册后获取的 Client ID" />
+                  <Form.Item name="clientId" label={translate("应用程序（客户端）ID")} rules={[{ required: true, message: translate("请填写 Azure 应用 Client ID") }]}>
+                    <Input placeholder={translate("Azure 应用注册后获取的 Client ID")} />
                   </Form.Item>
                 </Form>
                 <Space>
@@ -277,15 +273,10 @@ export default function Settings() {
                     {settings?.oauth2?.configured ? '重新连接 Outlook' : '连接 Outlook'}
                   </Button>
                   {settings?.oauth2?.configured && (
-                    <Button onClick={handleTestEmail} loading={testingEmail}>
-                      测试连接
-                    </Button>
+                    <Button onClick={handleTestEmail} loading={testingEmail}>{translate("测试连接")}</Button>
                   )}
                 </Space>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  Azure 注册指引：portal.azure.com → Microsoft Entra ID → 应用注册 → 新注册；账户类型按需选择；重定向 URI 平台选「移动和桌面应用程序」，填
-                  https://login.microsoftonline.com/common/oauth2/nativeclient；「身份验证」→ 高级设置 → 允许公共客户端流 = 是；复制「应用程序(客户端) ID」填到上方。
-                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>{translate("Azure 注册指引：portal.azure.com → Microsoft Entra ID → 应用注册 → 新注册；账户类型按需选择；重定向 URI 平台选「移动和桌面应用程序」，填 https://login.microsoftonline.com/common/oauth2/nativeclient；「身份验证」→ 高级设置 → 允许公共客户端流 = 是；复制「应用程序(客户端) ID」填到上方。")}</Typography.Text>
               </Space>
             )}
           </Card>
@@ -295,8 +286,7 @@ export default function Settings() {
           <Card
             title={
               <Space>
-                <RobotOutlined /> AI 配置（DeepSeek / OpenAI 兼容）
-              </Space>
+                <RobotOutlined />{translate("AI 配置（DeepSeek / OpenAI 兼容）")}</Space>
             }
             size="small"
           >
@@ -304,7 +294,7 @@ export default function Settings() {
               type="info"
               showIcon
               style={{ marginBottom: 12 }}
-                message="手动或定时分析会将脱敏后的邮件正文和支持的附件文本发送给已配置的模型。自动计划与最近结果可在邮件分析页查看；无 Key 时使用本地规则。"
+                message={translate("手动或定时分析会将脱敏后的邮件正文和支持的附件文本发送给已配置的模型。自动计划与最近结果可在邮件分析页查看；无 Key 时使用本地规则。")}
             />
             <Form
               form={llmForm}
@@ -315,7 +305,7 @@ export default function Settings() {
               }}
               onFinish={(v) => saveLlm.mutate(v)}
             >
-              <Form.Item name="baseUrl" label="API 地址" rules={[{ required: true }]}>
+              <Form.Item name="baseUrl" label={translate("API 地址")} rules={[{ required: true }]}>
                 <Input placeholder="https://api.deepseek.com" />
               </Form.Item>
               <Form.Item name="apiKey" label={settings?.llm?.apiKeySet ? 'API Key（已保存，留空保持不变）' : 'API Key'}>
@@ -323,7 +313,7 @@ export default function Settings() {
               </Form.Item>
               <Form.Item
                 name="model"
-                label="模型"
+                label={translate("模型")}
                 rules={[{ required: true }]}
                 extra="可点「获取可用模型」从服务端 /models 拉取候选；部分兼容端点不支持该接口，也可直接手填"
               >
@@ -334,47 +324,31 @@ export default function Settings() {
                 />
               </Form.Item>
               <Space>
-                <Button type="primary" onClick={() => llmForm.submit()} loading={saveLlm.isPending}>
-                  保存 AI 配置
-                </Button>
-                <Button onClick={() => fetchModels.mutate()} loading={fetchModels.isPending}>
-                  获取可用模型
-                </Button>
-                <Button onClick={handleTestLlm} loading={testingLlm}>
-                  测试连通
-                </Button>
+                <Button type="primary" onClick={() => llmForm.submit()} loading={saveLlm.isPending}>{translate("保存 AI 配置")}</Button>
+                <Button onClick={() => fetchModels.mutate()} loading={fetchModels.isPending}>{translate("获取可用模型")}</Button>
+                <Button onClick={handleTestLlm} loading={testingLlm}>{translate("测试连通")}</Button>
               </Space>
             </Form>
           </Card>
         </Col>
       </Row>
 
-      <Card title="数据导入 / 导出" size="small">
+      <Card title={translate("数据导入 / 导出")} size="small">
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <Space wrap>
             <Upload accept=".xlsx" showUploadList={false} beforeUpload={handleImport}>
-              <Button icon={<CloudUploadOutlined />}>导入 Excel</Button>
+              <Button icon={<CloudUploadOutlined />}>{translate("导入 Excel")}</Button>
             </Upload>
-            <Button icon={<CloudDownloadOutlined />} onClick={() => sourcesApi.downloadTemplate()}>
-              下载导入模板
-            </Button>
-            <Button icon={<CloudDownloadOutlined />} onClick={() => sourcesApi.exportExcel()}>
-              导出全部数据
-            </Button>
-            <Button icon={<CloudDownloadOutlined />} onClick={() => snapshotApi.exportJson()}>
-              导出快照 JSON
-            </Button>
-            <Button icon={<CloudDownloadOutlined />} onClick={() => snapshotApi.exportHtml()}>
-              导出快照 HTML（只读公开视图）
-            </Button>
+            <Button icon={<CloudDownloadOutlined />} onClick={() => sourcesApi.downloadTemplate()}>{translate("下载导入模板")}</Button>
+            <Button icon={<CloudDownloadOutlined />} onClick={() => sourcesApi.exportExcel()}>{translate("导出全部数据")}</Button>
+            <Button icon={<CloudDownloadOutlined />} onClick={() => snapshotApi.exportJson()}>{translate("导出快照 JSON")}</Button>
+            <Button icon={<CloudDownloadOutlined />} onClick={() => snapshotApi.exportHtml()}>{translate("导出快照 HTML（只读公开视图）")}</Button>
           </Space>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            模板列：公司名称*、岗位名称*、岗位类型、投递渠道、JD链接、投递日期、截止日期、当前状态、优先级、备注（* 必填）。导出与模板列一致，可无损往返。数据备份 = 复制 server/data/findjob.db 文件。
-          </Typography.Text>
-          <Card size="small" title="发布到 GitHub Pages（公开只读视图）">
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{translate("模板列：公司名称*、岗位名称*、岗位类型、投递渠道、JD链接、投递日期、截止日期、当前状态、优先级、备注（* 必填）。导出与模板列一致，可无损往返。数据备份 = 复制 server/data/findjob.db 文件。")}</Typography.Text>
+          <Card size="small" title={translate("发布到 GitHub Pages（公开只读视图）")}>
             <Space wrap>
               <Input
-                placeholder="本地 git 仓库路径，如 D:\my-pages（需已配置好 origin/main）"
+                placeholder={translate("本地 git 仓库路径，如 D:\\my-pages（需已配置好 origin/main）")}
                 style={{ width: 'min(420px, 65vw)', maxWidth: '100%' }}
                 value={publishPath}
                 onChange={(e) => setPublishPath(e.target.value)}
@@ -383,13 +357,9 @@ export default function Settings() {
                 icon={<CloudDownloadOutlined />}
                 loading={publishing}
                 onClick={handlePublish}
-              >
-                导出并推送快照
-              </Button>
+              >{translate("导出并推送快照")}</Button>
             </Space>
-            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
-              借鉴 autumn-recruitment-tracker 方案：自动写入 snapshot.html/json 到指定仓库并 git commit + push，GitHub Pages 展示只读进度页（不含任何凭据）。
-            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>{translate("借鉴 autumn-recruitment-tracker 方案：自动写入 snapshot.html/json 到指定仓库并 git commit + push，GitHub Pages 展示只读进度页（不含任何凭据）。")}</Typography.Text>
           </Card>
         </Space>
       </Card>
@@ -406,7 +376,7 @@ export default function Settings() {
         }}
       />
 
-      <ImportResultModal result={importResult} onClose={() => setImportResult(null)} title="Excel 导入结果" />
+      <ImportResultModal result={importResult} onClose={() => setImportResult(null)} title={translate("Excel 导入结果")} />
     </Space>
   );
 }

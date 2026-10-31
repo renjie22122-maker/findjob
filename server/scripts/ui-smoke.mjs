@@ -70,6 +70,21 @@ try {
     await page.waitForFunction(()=>!document.querySelector('[role="status"][aria-live="polite"]'));
     try {await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+2,{},{timeout:10000});}catch(error){await page.screenshot({path:out+'overflow-diagnostic.png',fullPage:true});console.log('OVERFLOW',route,await page.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+2).slice(0,15).map(e=>({tag:e.tagName,cls:e.className,width:e.getBoundingClientRect().width}))));throw error;}
   }
+  await page.locator('.ant-select').filter({has:page.getByRole('combobox',{name:'Language / 语言'})}).click();
+  await page.getByText('EN',{exact:true}).click();
+  await page.waitForFunction(()=>document.documentElement.lang==='en');
+  await page.goto(base);
+  await page.getByRole('navigation',{name:'Primary navigation'}).waitFor();
+  await page.locator('.trend-chart').getByRole('button',{name:'Applications',exact:true}).waitFor();
+  assert.match(await page.title(),/CareerFlow/);
+  for(const route of ['/','/assistant','/email','/settings','/schedules']) {
+    await page.goto(base+route);
+    await page.waitForFunction(()=>!document.querySelector('[role="status"][aria-live="polite"]'));
+    await page.screenshot({path:out+'english-mobile.png',fullPage:true,animations:'disabled'});
+    if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2)) console.log('English overflow elements',await page.evaluate(()=>[...document.querySelectorAll('main *, .workspace-content *')].filter(e=>e.getBoundingClientRect().right>innerWidth+2).slice(0,12).map(e=>({tag:e.tagName,cls:e.className,text:e.textContent?.slice(0,80),width:e.getBoundingClientRect().width}))));
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2),false,`English overflow: ${route}`);
+  }
+  await page.screenshot({path:out+'english-mobile.png',fullPage:true,animations:'disabled'});
   assert.deepEqual(errors, []);
   console.log('UI smoke passed: dark/light/system, persistence, modal, charts, mobile, no runtime errors.');
 } finally { await browser.close(); await new Promise((resolve) => server.close(resolve)); closeDb(); }

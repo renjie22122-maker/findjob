@@ -1,3 +1,4 @@
+import {translate, useLanguage} from '../i18n';
 import { Timeline, Tag, Empty, Typography } from 'antd';
 import { SwapOutlined, EditOutlined, MailOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import type { TimelineEvent } from '../types';
@@ -11,7 +12,9 @@ function splitWindow(title: string): { main: string; window: string | null } {
 }
 
 export default function AppTimeline({ events }: { events: TimelineEvent[] }) {
-  if (events.length === 0) return <Empty description="暂无记录" />;
+  useLanguage();
+
+  if (events.length === 0) return <Empty description={translate("暂无记录")} />;
 
   return (
     <Timeline
