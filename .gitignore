@@ -32,3 +32,6 @@ __pycache__/
 .studio/
 .wrangler/
 .vinext/
+android/.gradle/
+android/**/build/
+android/local.properties
