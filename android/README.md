@@ -144,3 +144,21 @@ The local mobile workspace adds applications, versioned resumes and sourced job 
 - 验证包含原生慢请求/重复点击/失败后重试、200 条带原文日程读取、WebView 模型按钮响应、真实配置 API 的模型列表和合成 JSON 请求，以及原有关联/后台提醒测试。没有连接用户手机读取 ANR 堆栈或测温，不能把模拟器测试解释为实机温度已经测量或所有闪退原因均已确认。
 
 Install **CareerFlow-0.4.1.apk** over the existing version; do not uninstall. Interactive API diagnostics use an independent executor with bounded requests. Background maintenance and hidden-page rendering are reduced; existing data and completed state are preserved.
+
+## 0.5.0 可恢复重分析与大数据性能
+
+总览新增「重新分析已有通知」：按下「重新分析全部」后，创建当前本机全部通知 ID 的快照，不限最近 200 条，也不重新下载邮箱。使用当前 API/模型与已提取附件文本，会消耗 API 额度。进度显示已分析、失败、总数和百分比；支持暂停、继续未完成、重试失败项。暂停在当前通知处理结束后生效。每条结果独立持久化，重启后继续待处理项，不清空原分析、完成状态或来源。新收到的通知走原增量流程，不加入已开始批次的分母。
+
+批量和自动通知分析共用单个执行许可，每次只处理一条；批量条目之间让出后台执行机会。API 测试保持独立。无网络、电量不足时交由 WorkManager 等待；系统报告严重热状态时暂停请求并退避。三次连续失败或认证失败自动暂停，避免大量重复失败请求；可查看最近错误并重试。API 读取与总请求时间受配置超时限制，分析输出上限遵循用户设置；输出不足会明确提示调高额度，不把截断结果写成成功。
+
+旧通知重分析会纠正同一已关联场次中有原文依据的时间、类型和地点，记录修改前后内容并保留完成状态。不同轮次顺序发生变化时先按身份重新对应；岗位/轮次不一致、原场次未重新识别、人工修改或更晚来源存在时不会直接覆盖或删除原日程。复杂拆分、合并和缺少依据的旧错误仍可能需要核对，重分析不等于无条件替换数据库。
+
+性能改进：通知分页且数据库筛选，每页 50 条；页面日程数据不再附带全部来源正文，原文展开时单独读取。待办与当天日程每页最多 50 张卡片。日期格式器与排序时间戳复用，固定场次冲突计算不再重复解析时间；首页折叠分组按需生成。数据库增加日期、状态和来源关联索引，提醒投递记录一次读取，模型上下文只加载选中的日程来源。新增迁移保留现有数据。
+
+验证包含 1,200 条长通知的全量批次、分页、断点与失败恢复，错误时间修复、事件顺序改变、完成/人工记录保护，以及 1,200 条日程的有界 DOM 渲染。另以真实配置 API 对合成邮件和短信执行后台批次验证，不访问招聘链接或身份验证入口。模拟器结果不能代替三星实机测温或厂商后台策略验证。
+
+覆盖安装 **CareerFlow-0.5.0.apk**，不要卸载。推荐先完成 API 连通测试，再从总览开始重分析；可离开页面，回来查看持久化进度。Android 强制停止应用后需重新打开才能恢复后台工作。
+
+English: persistent, one-at-a-time reanalysis of all saved notices with progress, pause/resume and retry. Original records and completed state remain intact. Inbox/task pagination and lazy source loading bound rendering cost. Network, battery and thermal constraints may defer background work; no phone temperature measurements are claimed.
+
+0.5.0 输出上限默认不主动限制：设置填 0 或留空，请求不发送 `max_tokens`，实际输出仍受 API 服务商/模型默认值和上下文窗口限制。已有明确保存的正数上限保留，可改为 0；请求超时仍生效。所有业务分析请求使用统一配置，不再用各模块固定值覆盖用户选择。

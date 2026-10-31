@@ -1,8 +1,9 @@
 let english = localStorage.getItem('language') === 'en', active = 'home';
 const t = (zh, en) => english ? en : zh, $ = id => document.getElementById(id), node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; }, button = (label, fn) => { const n = node('button', label); n.onclick = fn; return n; }, feedback = text => { $('feedback').textContent = text; clearTimeout(feedback.timer); feedback.timer = setTimeout(() => $('feedback').textContent = '', 4500); };
+const timeFormatters=new Map();
 const time = v => { if (!v)
-    return t('待通知', 'Not announced'); const d = new Date(v + '+08:00'); return Number.isNaN(d.getTime()) ? v : new Intl.DateTimeFormat(english ? 'en-GB' : 'zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d); };
-let lastSnapshot = '';
+    return t('待通知', 'Not announced'); const d = new Date(v + '+08:00'); return Number.isNaN(d.getTime()) ? v : (timeFormatters.get(english)||timeFormatters.set(english,new Intl.DateTimeFormat(english ? 'en-GB' : 'zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })).get(english)).format(d); };
+let lastSnapshot = '',inboxOffset=0;
 let theme = localStorage.getItem('theme') || 'system';
 function applyTheme() { if (theme === 'system')
     delete document.documentElement.dataset.theme;
@@ -42,28 +43,31 @@ function render() {
     document.querySelector('.permission-hint').hidden = state.notifications && state.exact;
     $('apiState').textContent = state.configured ? t('密钥已加密保存', 'Key stored securely') : t('配置后自动分析招聘通知', 'Configure to analyze recruitment messages');
     renderMobile(state);
+    if(active==='home')renderReanalysis();
     if(active==='home'||active==='workspace')renderWorkspace();
     if(active==='settings')renderApiSettings();
     if(active==='inbox'){
+    const page=CareerFlow.noticePage?JSON.parse(CareerFlow.noticePage(inboxOffset,inboxFilter)):{items:state.items,total:state.noticeCount??state.items.length};const pageItems=page.items,total=page.total;
+    $('inboxPager').replaceChildren(button(t('上一页','Previous'),()=>{inboxOffset=Math.max(0,inboxOffset-50);render();}),node('span',`${total?inboxOffset+1:0}–${Math.min(inboxOffset+50,total)} / ${total}`),button(t('下一页','Next'),()=>{inboxOffset+=50;render();}));$('inboxPager').firstChild.disabled=inboxOffset===0;$('inboxPager').lastChild.disabled=inboxOffset+50>=total;
     $('inbox').replaceChildren();
-    if (!state.items.length) {
+    if (!pageItems.length) {
         const empty = node('div', t('还没有招聘通知。新的邮件和短信会显示在这里。', 'No recruitment messages yet. New email and SMS will appear here.'));
         empty.className = 'empty-state';
         $('inbox').append(empty);
     }
-    for (const item of state.items.filter(item => inboxFilter === "all" || (inboxFilter === "pending" ? ["pending","analyzing","retrying","failed"].includes(item.state) : item.state === inboxFilter))) {
+    for (const item of pageItems.filter(item => inboxFilter === "all" || (inboxFilter === "pending" ? ["pending","analyzing","retrying","failed"].includes(item.state) : item.state === inboxFilter))) {
         const card = node('article', '');
         if (item.state === 'review')
             card.className = 'review';
         card.append(node('small', item.source + ' · ' + new Date(item.received).toLocaleString()), node('p', item.analysis?.summary || ({failed:t('分析失败，可重试','Analysis failed; retry available'),analyzing:t('AI 正在自动整理','AI is organizing this message'),retrying:t('连接暂时失败，正在重试','Connection issue; retrying')}[item.state] || t('等待后台分析','Queued for analysis'))));
         const details = node('details', '');
-        details.append(node('summary', t('查看原文', 'View source')));details.ontoggle=()=>{if(details.open&&!details.querySelector('pre'))details.append(node('pre',item.body));};
+        details.append(node('summary', t('查看原文', 'View source')));details.ontoggle=()=>{if(details.open&&!details.querySelector('pre'))details.append(node('pre',CareerFlow.noticeBody?CareerFlow.noticeBody(item.id):item.body));};
         card.append(details);
         if (item.state === 'waiting')card.append(node('small',t('等待后续通知，收到后自动补齐','Waiting for a follow-up; will fill automatically')));
         if (item.state === 'informational')card.append(node('small',t('流程信息，无需操作','Information only; no action needed')));
         if (item.state === 'review') {
             const reviewPanel=node('details','');reviewPanel.append(node('summary',t('关联冲突 · 展开查看','Link conflict · details')));card.append(reviewPanel);
-            reviewPanel.append(node('p', t('存在多个可能的岗位或场次，已保留原记录；新通知到达后自动重新关联。', 'No unique evidence yet. New messages trigger another check; you can optionally add details here.')));
+            reviewPanel.append(node('p', item.analysis?.reviewReasons?.join('；') || t('存在多个可能的岗位或场次，已保留原记录；新通知到达后自动重新关联。', 'No unique evidence yet. New messages trigger another check; you can optionally add details here.')));
             for (const [index, e] of (item.analysis?.events || []).entries()) {
                 reviewPanel.append(node('pre', [e.company, e.role, e.ref, e.stage, time(e.start), time(e.end), e.location, e.action, e.evidence].filter(Boolean).join('\n')));
                 const edits = {};
@@ -109,7 +113,7 @@ function renderOAuth() {
 
 $('theme').onclick = () => { theme = theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system'; localStorage.setItem('theme', theme); applyTheme(); };
 $('setupReminders').onclick = () => { active = 'settings'; render(); window.scrollTo(0, 0); };
-$('refreshInbox').onclick = () => render();
+$('refreshInbox').onclick = () => {inboxOffset=0;render();};
 $('outlookStart').onclick = () => { feedback(CareerFlow.startOutlook($('clientId').value.trim(), $('tenant').value.trim(), $('outlookUser').value.trim()) ? t('正在请求授权代码，请稍候', 'Requesting a code; please wait') : t('请检查客户端 ID、租户和邮箱', 'Check client ID, tenant and email')); render(); };
 $('outlookCopy').onclick = () => { feedback(CareerFlow.copyOutlookCode() ? t('已复制，请在微软页面粘贴，不必手输','Copied. Paste on Microsoft’s page; no typing needed.') : t('代码已失效，请重新获取','Code expired; request a new one')); renderOAuth(); };
 $('outlookOpen').onclick = () => { if(!CareerFlow.openMicrosoft())feedback(t('请先获取有效代码','Request a valid code first')); };

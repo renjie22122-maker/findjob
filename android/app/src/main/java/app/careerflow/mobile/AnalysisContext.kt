@@ -8,10 +8,10 @@ object AnalysisContext {
  private fun terms(text:String)=Regex("[\\p{IsHan}]{2,8}|[A-Za-z0-9]{3,}").findAll(text.lowercase()).flatMap{val value=it.value;if(value.any{c->c.code in 0x4E00..0x9FFF})value.windowed(2).asSequence()else sequenceOf(value)}.toSet()
  private fun score(a:String,b:String):Int=terms(a).intersect(terms(b)).size
  fun build(store:LocalStore,id:Long):JSONObject {
-  val body=store.body(id).orEmpty();val words=terms(body);val all=store.schedules()
+  val body=store.body(id).orEmpty();val words=terms(body);val all=store.schedules(false)
   val schedules=(0 until all.length()).map{all.getJSONObject(it)}.map{it to words.intersect(terms(it.toString())).size}.sortedByDescending{it.second}.map{it.first}.take(16)
   val selected=JSONArray();var budget=24000
-  for(s in schedules){val item=JSONObject(s.toString());val sources=s.optJSONArray("sources")?:JSONArray();val compact=JSONArray()
+  for(s in schedules){val item=JSONObject(s.toString());val sources=store.sources(s.getLong("id"),3);val compact=JSONArray()
    for(i in 0 until minOf(sources.length(),3)){val src=JSONObject(sources.getJSONObject(i).toString());src.put("body",src.optString("body").take(1800));compact.put(src)}
    item.put("sources",compact);if(item.toString().length<=budget){selected.put(item);budget-=item.toString().length}}
   val notices=store.items();val related=JSONArray()
