@@ -17,7 +17,7 @@ class MainActivity:Activity(){
   web.addJavascriptInterface(Bridge(),"CareerFlow");web.loadUrl("https://appassets.androidplatform.net/assets/index.html")
  }
  inner class Bridge {
-  @JavascriptInterface fun state():String {val store=LocalStore(this@MainActivity);return try{JSONObject().put("items",store.items()).put("schedules",store.schedules()).put("history",store.history()).put("exact",Reminders.exact(this@MainActivity)).put("notifications",androidx.core.app.NotificationManagerCompat.from(this@MainActivity).areNotificationsEnabled()).put("mailConfigured",Secrets(this@MainActivity).read("mail")!=null).put("mailStatus",getSharedPreferences("mail-status",0).getString("status","idle")).put("oauthStatus",getSharedPreferences("oauth-status",0).getString("status","idle")).put("oauthCode",getSharedPreferences("oauth-status",0).getString("code","")).put("lastSync",getSharedPreferences("mail-status",0).getLong("last",0)).put("configured",!Secrets(this@MainActivity).read().isNullOrBlank()).put("auto",getSharedPreferences("preferences",0).getBoolean("auto",false)).toString()}finally{store.close()}}
+  @JavascriptInterface fun state():String {val store=LocalStore(this@MainActivity);return try{JSONObject().put("items",store.items()).put("schedules",store.schedules()).put("history",store.history()).put("exact",Reminders.exact(this@MainActivity)).put("notifications",androidx.core.app.NotificationManagerCompat.from(this@MainActivity).areNotificationsEnabled()).put("mailConfigured",Secrets(this@MainActivity).read("mail")!=null).put("mailStatus",getSharedPreferences("mail-status",0).getString("status","idle")).put("lastSync",getSharedPreferences("mail-status",0).getLong("last",0)).put("configured",!Secrets(this@MainActivity).read().isNullOrBlank()).put("auto",getSharedPreferences("preferences",0).getBoolean("auto",false)).toString()}finally{store.close()}}
   @JavascriptInterface fun saveKey(value:String){if(value.length in 10..300){Secrets(this@MainActivity).save(value);val store=LocalStore(this@MainActivity);try{store.pendingIds().forEach{AnalysisWorker.enqueue(this@MainActivity,it)}}finally{store.close()}}}
   @JavascriptInterface fun automatic(value:Boolean){getSharedPreferences("preferences",0).edit().putBoolean("auto",value).apply();if(value)runOnUiThread{requestPermissions(arrayOf(Manifest.permission.READ_SMS,Manifest.permission.RECEIVE_SMS),10)}}
   @JavascriptInterface fun importRecent():String {
@@ -26,7 +26,15 @@ class MainActivity:Activity(){
    try{contentResolver.query(Telephony.Sms.Inbox.CONTENT_URI,arrayOf("address","body","date"),null,null,"date DESC")?.use{c->var scanned=0;while(c.moveToNext()&&scanned++<200){val id=store.save(c.getString(0)?:"",c.getString(1)?:"",c.getLong(2));if(id>=0){count++;AnalysisWorker.enqueue(this@MainActivity,id)}}}}catch(_:SecurityException){return "permission"}finally{store.close()};return count.toString()
   }
   @JavascriptInterface fun startOutlook(client:String,tenant:String,user:String)=OutlookAuth.start(this@MainActivity,client,tenant,user)
-  @JavascriptInterface fun openMicrosoft(){runOnUiThread{startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://microsoft.com/devicelogin")))}}
+  @JavascriptInterface fun oauthState()=OutlookAuth.view(this@MainActivity).toString()
+  @JavascriptInterface fun copyOutlookCode():Boolean {
+   val state=OutlookAuth.view(this@MainActivity);if(!state.optBoolean("oauthCanOpen"))return false
+   runOnUiThread{val clip=android.content.ClipData.newPlainText("Microsoft authorization",state.getString("oauthCode"));if(android.os.Build.VERSION.SDK_INT>=33)clip.description.extras=android.os.PersistableBundle().apply{putBoolean("android.content.extra.IS_SENSITIVE",true)};getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(clip)};return true
+  }
+  @JavascriptInterface fun openMicrosoft():Boolean {
+   val state=OutlookAuth.view(this@MainActivity);if(!state.optBoolean("oauthCanOpen"))return false
+   runOnUiThread{startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(state.getString("oauthVerificationUri"))))};return true
+  }
   @JavascriptInterface fun cancelOutlook(){androidx.work.WorkManager.getInstance(this@MainActivity).cancelUniqueWork("outlook-authorization");getSharedPreferences("oauth-status",0).edit().clear().putString("status","idle").apply();Secrets(this@MainActivity).save("{}","oauth-pending")}
   @JavascriptInterface fun saveMail(host:String,user:String,password:String,enabled:Boolean):Boolean {
    if(!host.matches(Regex("[a-zA-Z0-9.-]+"))||user.isBlank()||password.isBlank())return false

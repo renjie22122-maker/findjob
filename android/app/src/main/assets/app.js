@@ -1,5 +1,5 @@
 let english = localStorage.getItem('language') === 'en', active = 'schedule';
-const t = (zh, en) => english ? en : zh, $ = id => document.getElementById(id), node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; }, button = (label, fn) => { const n = node('button', label); n.onclick = fn; return n; }, feedback = text => { $('feedback').textContent = text; };
+const t = (zh, en) => english ? en : zh, $ = id => document.getElementById(id), node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; }, button = (label, fn) => { const n = node('button', label); n.onclick = fn; return n; }, feedback = text => { $('feedback').textContent = text; clearTimeout(feedback.timer); feedback.timer = setTimeout(() => $('feedback').textContent = '', 4500); };
 const time = v => { if (!v)
     return t('待通知', 'Not announced'); const d = new Date(v + '+08:00'); return Number.isNaN(d.getTime()) ? v : new Intl.DateTimeFormat(english ? 'en-GB' : 'zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d); };
 let theme = localStorage.getItem('theme') || 'system';
@@ -34,8 +34,7 @@ function render() {
     $('permissions').textContent = t('提醒：', 'Reminders: ') + (state.notifications ? t('通知已开启', 'notifications enabled') : t('通知未开启', 'notifications disabled')) + ' · ' + (state.exact ? t('精确闹钟已允许', 'exact alarms allowed') : t('精确闹钟未允许，可能延迟', 'exact alarms unavailable; delivery may be delayed'));
     $('auto').checked = state.auto;
     $('mailStatus').textContent = (state.mailConfigured ? t('邮箱已配置', 'Mailbox configured') : t('尚未配置邮箱', 'No mailbox configured')) + ' · ' + ({ ok: t('同步成功', 'Sync succeeded'), authentication: t('认证失败，请检查授权码', 'Authentication failed; check app password'), connection: t('同步失败，将自动重试', 'Sync failed; will retry'), idle: t('等待同步', 'Awaiting sync') }[state.mailStatus] || state.mailStatus) + (state.lastSync ? ' · ' + new Date(state.lastSync).toLocaleString() : '');
-    $('outlookStatus').textContent = ({ idle: t('尚未授权', 'Not authorized'), requesting: t('正在申请设备代码', 'Requesting device code'), pending: t('请在微软页面完成授权', 'Complete authorization on Microsoft’s page'), connected: t('授权成功', 'Authorized'), expired: t('代码已过期，请重新申请', 'Code expired; request a new one'), failed: t('授权失败，请检查应用配置', 'Authorization failed; check app configuration'), connection: t('网络暂时不可用，正在重试', 'Network unavailable; retrying') }[state.oauthStatus] || '') + (state.oauthCode ? ' · ' + state.oauthCode : '');
-    $('outlookStart').disabled = ['requesting', 'pending'].includes(state.oauthStatus);
+    renderOAuth();
     $('settingsPermissions').textContent = $('permissions').textContent;
     document.querySelector('.permission-hint').hidden = state.notifications && state.exact;
     $('apiState').textContent = state.configured ? t('密钥已加密保存', 'Key stored securely') : t('配置后自动分析招聘通知', 'Configure to analyze recruitment messages');
@@ -125,11 +124,27 @@ function render() {
     }
     $('history').replaceChildren(...state.history.map(h => node('p', new Date(h.at).toLocaleString() + ' · ' + h.detail)));
 }
+
+function renderOAuth() {
+    const state = JSON.parse(CareerFlow.oauthState());
+    const remaining = Math.max(0, Math.ceil((state.oauthExpires - Date.now()) / 1000));
+    const usable = state.oauthCanOpen && remaining > 0;
+    $('outlookStatus').textContent = ({idle:t('尚未授权','Not authorized'),requesting:t('正在申请设备代码','Requesting device code'),pending:t('代码已就绪，请复制后到微软官方页面粘贴','Code ready. Copy it and paste on Microsoft’s page.'),connected:t('授权成功，正在同步邮箱','Authorized; syncing email'),expired:t('代码已过期，请重新获取','Code expired; request a new one'),restart_required:t('旧版授权请求无法继续，请重新获取代码','Please request a new code after upgrading'),invalid_verification_uri:t('返回的授权地址未通过校验，请检查应用配置','Verification address was not recognized; check app configuration'),failed:t('授权失败，请重新获取代码或检查应用配置','Authorization failed; request a new code or check settings'),connection:t('网络暂时不可用，正在重试','Network unavailable; retrying')}[state.oauthStatus] || '');
+    $('outlookStart').disabled = state.oauthStatus === 'requesting' || (state.oauthStatus === 'pending' && usable);
+    $('outlookCopy').textContent = t('复制授权代码','Copy code');
+    $('outlookCopy').disabled = !usable;
+    $('outlookOpen').disabled = !usable;
+    $('outlookCodeBox').hidden = !usable;
+    $('outlookCode').textContent = usable ? state.oauthCode : '';
+    $('outlookExpiry').textContent = usable ? t('剩余有效期 ','Expires in ') + Math.floor(remaining / 60) + ':' + String(remaining % 60).padStart(2, '0') : '';
+}
+
 $('theme').onclick = () => { theme = theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system'; localStorage.setItem('theme', theme); applyTheme(); };
 $('setupReminders').onclick = () => { active = 'settings'; render(); window.scrollTo(0, 0); };
 $('refreshInbox').onclick = () => render();
 $('outlookStart').onclick = () => { feedback(CareerFlow.startOutlook($('clientId').value.trim(), $('tenant').value.trim(), $('outlookUser').value.trim()) ? t('正在请求授权代码，请稍候', 'Requesting a code; please wait') : t('请检查客户端 ID、租户和邮箱', 'Check client ID, tenant and email')); render(); };
-$('outlookOpen').onclick = () => CareerFlow.openMicrosoft();
+$('outlookCopy').onclick = () => { feedback(CareerFlow.copyOutlookCode() ? t('已复制，请在微软页面粘贴，不必手输','Copied. Paste on Microsoft’s page; no typing needed.') : t('代码已失效，请重新获取','Code expired; request a new one')); renderOAuth(); };
+$('outlookOpen').onclick = () => { if(!CareerFlow.openMicrosoft())feedback(t('请先获取有效代码','Request a valid code first')); };
 $('outlookCancel').onclick = () => { CareerFlow.cancelOutlook(); render(); };
 $('lang').onclick = () => { english = !english; localStorage.setItem('language', english ? 'en' : 'zh'); render(); };
 $('saveKey').onclick = () => { if ($('key').value.length < 10)
@@ -150,3 +165,6 @@ $('alarms').onclick = () => CareerFlow.alarmPermission();
 render();
 setInterval(() => { if (!document.hidden && (active === 'schedule' || active === 'settings' && !['INPUT', 'SELECT'].includes(document.activeElement?.tagName)))
     render(); }, 15000);
+
+setInterval(() => { if (!document.hidden && active === "settings") renderOAuth(); }, 1000);
+document.addEventListener("visibilitychange", () => { if(!document.hidden)renderOAuth(); });

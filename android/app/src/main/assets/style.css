@@ -98,3 +98,5 @@ article[data-kind=start]{border-top:3px solid #5e8cf1}
 #feedback:empty{display:none}
 @media(prefers-reduced-motion:reduce){button:active{transform:none}
 }
+
+.authorization-code{background:var(--soft);border:1px solid var(--line);padding:18px;border-radius:14px;margin:14px 0;display:flex;flex-direction:column;gap:8px}.authorization-code code{font:700 27px monospace;letter-spacing:3px;user-select:all;color:var(--text)}

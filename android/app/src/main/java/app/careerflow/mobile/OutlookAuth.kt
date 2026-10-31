@@ -25,6 +25,16 @@ object OutlookAuth {
   config.put("accessToken",response.getString("access_token")).put("refreshToken",response.optString("refresh_token",config.getString("refreshToken"))).put("expires",System.currentTimeMillis()+response.optLong("expires_in",3600)*1000)
   Secrets(c).save(config.toString(),"mail");return config.getString("accessToken")
  }
+ fun view(c:Context):JSONObject {
+  val ui=c.getSharedPreferences("oauth-status",0)
+  val status=ui.getString("status","idle")?:"idle"
+  val expires=ui.getLong("expires",0)
+  val url=DeviceAuthorization.verificationUri(ui.getString("verificationUri","")?:"")?:""
+  val code=ui.getString("code","")?:""
+  val live=DeviceAuthorization.usable(code,expires,url,System.currentTimeMillis())
+  val effective=if(code.isNotBlank()&&expires==0L)"restart_required" else if(code.isNotBlank()&&expires<=System.currentTimeMillis())"expired" else if(code.isNotBlank()&&url.isBlank())"restart_required" else status
+  return JSONObject().put("oauthStatus",effective).put("oauthCode",if(live)code else "").put("oauthExpires",expires).put("oauthVerificationUri",if(live)url else "").put("oauthCanOpen",live)
+ }
  fun start(c:Context,client:String,tenant:String,user:String):Boolean {
   if(!client.matches(Regex("[a-fA-F0-9-]{36}"))||!tenant.matches(Regex("[a-zA-Z0-9-]+"))||!user.contains('@'))return false
   Secrets(c).save(JSONObject().put("flow",java.util.UUID.randomUUID().toString()).put("clientId",client).put("tenant",tenant).put("user",user).toString(),"oauth-pending")
@@ -38,8 +48,10 @@ class OutlookWorker(c:Context,p:WorkerParameters):Worker(c,p){
    fun active()=!isStopped&&JSONObject(Secrets(c).read("oauth-pending")?:"{}").optString("flow")==config.optString("flow")
    if(!active())return Result.failure()
    if(!config.has("device_code")){val response=OutlookAuth.post(config.getString("tenant"),"devicecode",mapOf("client_id" to config.getString("clientId"),"scope" to OutlookAuth.SCOPE));if(!active())return Result.failure();if(!response.has("device_code")){ui.edit().putString("status","failed").apply();return Result.failure()}
+    val verification=DeviceAuthorization.verificationUri(response.optString("verification_uri",response.optString("verification_url")))
+    if(verification==null){ui.edit().clear().putString("status","invalid_verification_uri").apply();return Result.failure()}
     config.put("device_code",response.getString("device_code")).put("expires",System.currentTimeMillis()+response.getLong("expires_in")*1000).put("interval",maxOf(5,response.optInt("interval",5))).put("nextPoll",System.currentTimeMillis()+maxOf(5,response.optInt("interval",5))*1000)
-    Secrets(c).save(config.toString(),"oauth-pending");ui.edit().putString("status","pending").putString("code",response.getString("user_code")).apply();return Result.retry()
+    Secrets(c).save(config.toString(),"oauth-pending");ui.edit().putString("status","pending").putString("code",response.getString("user_code")).putLong("expires",config.getLong("expires")).putString("verificationUri",verification).apply();return Result.retry()
    }
    if(System.currentTimeMillis()>config.getLong("expires")){ui.edit().clear().putString("status","expired").apply();return Result.failure()}
    if(System.currentTimeMillis()<config.optLong("nextPoll"))return Result.retry()
@@ -47,7 +59,7 @@ class OutlookWorker(c:Context,p:WorkerParameters):Worker(c,p){
    if(!active())return Result.failure()
    if(response.has("access_token")){val mail=JSONObject().put("host","outlook.office365.com").put("user",config.getString("user")).put("enabled",true).put("authMode","oauth2").put("clientId",config.getString("clientId")).put("tenant",config.getString("tenant")).put("accessToken",response.getString("access_token")).put("refreshToken",response.getString("refresh_token")).put("expires",System.currentTimeMillis()+response.optLong("expires_in",3600)*1000);Secrets(c).save(mail.toString(),"mail");Secrets(c).save("{}","oauth-pending");ui.edit().clear().putString("status","connected").apply();MailWorker.sync(c);return Result.success()}
    if(response.optString("error") in listOf("authorization_pending","slow_down")){if(response.optString("error")=="slow_down")config.put("interval",config.optInt("interval",5)+5);config.put("nextPoll",System.currentTimeMillis()+config.optInt("interval",5)*1000);Secrets(c).save(config.toString(),"oauth-pending");return Result.retry()}
-   ui.edit().clear().putString("status","failed").apply();return Result.failure()
+   ui.edit().clear().putString("status",if(response.optString("error")=="expired_token")"expired" else "failed").apply();return Result.failure()
   }catch(_:Exception){ui.edit().putString("status","connection").apply();return if(runAttemptCount<20)Result.retry() else Result.failure()}
  }
 }
