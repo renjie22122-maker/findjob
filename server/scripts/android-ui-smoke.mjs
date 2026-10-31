@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 const assets = new URL('../../android/app/src/main/assets/', import.meta.url);
-const server = createServer((req, res) => { const file = req.url === '/' ? 'index.html' : req.url.slice(1); if (!['index.html', 'app.js', 'style.css','mobile-model.js','mobile-views.js','workspace.js','reanalysis.js'].includes(file)) {
+const server = createServer((req, res) => { const file = req.url === '/' ? 'index.html' : req.url.slice(1); if (!['index.html', 'app.js', 'style.css','mobile-model.js','mobile-views.js','workspace.js','reanalysis.js','relationships.js'].includes(file)) {
     res.writeHead(404).end();
     return;
 } res.setHeader('Content-Type', file.endsWith('js') ? 'text/javascript' : file.endsWith('css') ? 'text/css' : 'text/html'); res.end(readFileSync(new URL(file, assets))); }).listen(0, '127.0.0.1');
@@ -80,6 +80,24 @@ try {
     assert.ok((await page.locator('#reanalysisStatus').textContent()).includes('Offline'));
     await page.getByRole('button',{name:'Ask about or repair progress',exact:true}).click();
     assert.ok((await page.locator('#chatInput').inputValue()).includes('recover unfinished'));
+    await page.locator('#assistantClose').click();
+    await page.evaluate(()=>{CareerFlow.relationshipMap=()=>JSON.stringify({total:2,schedules:window.perfState.schedules.map(s=>({...s,links:[{id:101,source:'email',received:Date.now()},{id:102,source:'sms',received:Date.now()}]})),applications:[{company:'Example',role:'Engineer',status:'APPLIED'}],unlinked:[{id:103,source:'sms',received:Date.now()}]});CareerFlow.noticeBody=()=>'<script>alert(1)</script> original evidence';CareerFlow.changeHistory=()=>JSON.stringify([{at:Date.now(),detail:JSON.stringify({kind:'assistant_schedule',operation:'merge',before:{company:'Example',role:'Engineer',start:'2026-11-05T14:00:00',done:false},after:{id:1,company:'Example',role:'Engineer',start:'2026-11-05T14:00:00',done:true}})}]);});
+    await page.getByRole('button',{name:'Connections',exact:true}).click();
+    assert.equal(await page.locator('.relation-company').count(),2);
+    assert.equal(await page.locator('#relationsTree pre').count(),0);
+    await page.locator('.relation-event summary').first().click();
+    await page.locator('.relation-event .relation-source summary').first().click();
+    await page.locator('.relation-source pre').getByText('<script>alert(1)</script> original evidence',{exact:true}).waitFor();
+    assert.equal(await page.locator('#relationsTree script').count(),0);
+    await page.getByText('Recent changes (50)',{exact:true}).click();
+    await page.getByText('Merged schedules · Example #1',{exact:true}).click();
+    assert.ok((await page.locator('#relationsTree').textContent()).includes('Completed'));
+    await page.evaluate(()=>document.querySelector('#relationsDialog').scrollTop=0);
+    await page.screenshot({path:'server/data/ui-review/android-connections.png'});
+    await page.locator('.relation-event').first().getByRole('button',{name:'Cross-check this event',exact:true}).click();
+    assert.ok((await page.locator('#chatInput').inputValue()).includes('schedule #1'));
+    await page.getByRole('button',{name:'Check time & place',exact:true}).click();
+    assert.ok((await page.locator('#chatInput').inputValue()).includes('Cross-check recent schedules'));
     await page.locator('#assistantClose').click();
     await page.getByRole('button',{name:'Ask AI',exact:true}).click();
     await page.locator('#chatInput').fill('What should I do next?');

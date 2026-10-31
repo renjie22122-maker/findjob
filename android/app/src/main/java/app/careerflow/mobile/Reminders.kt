@@ -14,7 +14,7 @@ object Reminders {
  @Synchronized fun refresh(c:Context){
   val manager=c.getSystemService(NotificationManager::class.java);manager.createNotificationChannel(NotificationChannel(CHANNEL,"CareerFlow · 日程提醒",NotificationManager.IMPORTANCE_HIGH))
   val store=LocalStore(c);var next:Long?=null;val now=System.currentTimeMillis()
-  try{val delivered=store.deliveredTokens();val schedules=store.schedules(false);for(i in 0 until schedules.length()){val s=schedules.getJSONObject(i);if(s.getBoolean("done")||s.getBoolean("cancelled"))continue;val due=ScheduleRules.due(EventJson.read(s))?:continue;var notified=false
+  try{val delivered=store.deliveredTokens();val schedules=store.schedules(false);val active=(0 until schedules.length()).map{schedules.getJSONObject(it)}.filter{!it.optBoolean("done")&&!it.optBoolean("cancelled")}.map{it.getLong("id").toInt()}.toSet();manager.activeNotifications.filter{it.id>0&&it.notification.channelId==CHANNEL&&it.id !in active}.forEach{manager.cancel(it.id)};for(i in 0 until schedules.length()){val s=schedules.getJSONObject(i);if(s.getBoolean("done")||s.getBoolean("cancelled"))continue;val due=ScheduleRules.due(EventJson.read(s))?:continue;var notified=false
    for(offset in listOf(0L,3600000L,86400000L)){val at=due-offset;val token="${s.getLong("id")}:$at";if(token in delivered)continue
     if(at<=now){if(!notified&&ReminderPolicy.deliver(at,due,now)&&NotificationManagerCompat.from(c).areNotificationsEnabled()){
      val intent=PendingIntent.getActivity(c,0,Intent(c,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
