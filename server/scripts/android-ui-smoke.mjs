@@ -76,6 +76,11 @@ try {
     await page.getByRole('button',{name:'Pause',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#reanalysisButtons').textContent.includes('Resume remaining'));
     await page.getByRole('button',{name:'Resume remaining',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#reanalysisButtons').textContent.includes('Pause'));
     await page.screenshot({path:'server/data/ui-review/android-reanalysis.png',fullPage:true});
+    await page.evaluate(()=>{window.batch.reason='offline';window.batch.updated=Date.now()-300000;window.batch.elapsedSeconds=300;renderReanalysis();});
+    assert.ok((await page.locator('#reanalysisStatus').textContent()).includes('Offline'));
+    await page.getByRole('button',{name:'Ask about or repair progress',exact:true}).click();
+    assert.ok((await page.locator('#chatInput').inputValue()).includes('recover unfinished'));
+    await page.locator('#assistantClose').click();
     await page.getByRole('button',{name:'Ask AI',exact:true}).click();
     await page.locator('#chatInput').fill('What should I do next?');
     assert.equal(await page.locator('#assistantDialog').isVisible(),true);
