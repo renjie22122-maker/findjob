@@ -4,7 +4,7 @@ import org.junit.Assert.*
 class ScheduleRulesTest {
  private val event=Event(company="示例公司",role="工程师",ref="JOB-1",stage="written_test",start="2026-11-05T14:00:00",end="2026-11-05T16:00:00",evidence="JOB-1 2026年11月5日14:00至2026年11月5日16:00")
  @Test fun crossSourceIdentity(){assertTrue(ScheduleRules.match(event,event.copy(location="Room A")));assertFalse(ScheduleRules.match(event,event.copy(ref="JOB-2")));assertFalse(ScheduleRules.match(event,event.copy(stage="interview")))}
- @Test fun companyOnlyIsAmbiguous(){assertFalse(ScheduleRules.match(event.copy(role="",ref=""),event.copy(role="",ref="")))}
+ @Test fun companyOnlyIsAmbiguous(){assertFalse(ScheduleRules.match(event.copy(role="",ref="",start=""),event.copy(role="",ref="",start="")))}
  @Test fun separateRounds(){assertFalse(ScheduleRules.match(event.copy(round="统一笔试"),event.copy(round="技术笔试")))}
  @Test fun changedTimeNeedsReschedule(){val later=event.copy(start="2026-11-06T14:00:00");assertFalse(ScheduleRules.match(later,event));assertTrue(ScheduleRules.match(later.copy(action="reschedule"),event))}
  @Test fun missingTimeCanEnrichKnownEvent(){assertTrue(ScheduleRules.match(event.copy(start="",end="",action="update"),event))}

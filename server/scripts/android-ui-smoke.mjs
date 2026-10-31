@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 const assets = new URL('../../android/app/src/main/assets/', import.meta.url);
-const server = createServer((req, res) => { const file = req.url === '/' ? 'index.html' : req.url.slice(1); if (!['index.html', 'app.js', 'style.css'].includes(file)) {
+const server = createServer((req, res) => { const file = req.url === '/' ? 'index.html' : req.url.slice(1); if (!['index.html', 'app.js', 'style.css','mobile-model.js','mobile-views.js'].includes(file)) {
     res.writeHead(404).end();
     return;
 } res.setHeader('Content-Type', file.endsWith('js') ? 'text/javascript' : file.endsWith('css') ? 'text/css' : 'text/html'); res.end(readFileSync(new URL(file, assets))); }).listen(0, '127.0.0.1');
@@ -15,12 +15,14 @@ try {
     page.on('pageerror', e => errors.push(e.message));
     await page.addInitScript(() => { const schedule = { id: 1, company: 'Example', role: 'Engineer', ref: 'JOB-1', stage: 'interview', round: 'Technical interview', kind: 'start', start: '2026-11-05T14:00:00', end: '2026-11-05T16:00:00', location: 'Room A', done: false, cancelled: false, sources: [{ source: 'email', body: '<script>alert(1)</script> original evidence', received: 1 }, { source: 'sms', body: 'Same event', received: 2 }] }; const state = { configured: true, auto: true, exact: false, notifications: false, mailConfigured: true, mailStatus: 'ok', lastSync: 1, history: [], items: [], schedules: [schedule, { ...schedule, id: 2, company: 'Window', kind: 'window' }] }; window.oauth = {oauthStatus:"idle",oauthExpires:0,oauthCanOpen:false}; window.CareerFlow = { oauthState: () => JSON.stringify(window.oauth), copyOutlookCode: () => { window.copied=window.oauth.oauthCode; return true; }, state: () => JSON.stringify(state), complete: (id, value) => { state.schedules.find(x => x.id === id).done = value; }, notificationPermission: () => { }, alarmPermission: () => { }, syncMail: () => { }, saveMail: () => true, disableMail: () => { }, automatic: () => { }, importRecent: () => '0', saveKey: () => { }, analyze: () => { } }; });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
-    await page.getByText('Example · Engineer', { exact: true }).waitFor();
+    await page.locator('#nextSteps').getByText('Example · Engineer', { exact: true }).waitFor();
     assert.equal(await page.locator('.conflict').count(), 0, 'Flexible windows must not conflict');
+    await page.getByRole('button', { name: '待办', exact: true }).click();
     await page.getByRole('button', { name: '标记完成', exact: true }).first().click();
-    assert.equal(await page.locator('.complete').count(), 1);
-    await page.getByText('关联依据 · 2', { exact: true }).first().click();
-    await page.getByText('<script>alert(1)</script> original evidence', { exact: true }).first().waitFor();
+    await page.getByRole('button', { name: '已完成', exact: true }).click();
+    assert.equal(await page.locator('#schedules .complete').count(), 1);
+    await page.locator('#schedules').getByText('关联依据 · 2', { exact: true }).first().click();
+    await page.locator('#schedules').getByText('<script>alert(1)</script> original evidence', { exact: true }).first().waitFor();
     await page.getByRole('button', { name: 'EN', exact: true }).click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByText('Other mailboxes · IMAP', { exact: true }).click();
@@ -39,11 +41,27 @@ try {
     await page.waitForFunction(() => document.querySelector('#outlookOpen').disabled);
     assert.equal(await page.locator('#outlookStart').isEnabled(),true);
     assert.equal(await page.locator('#outlookCode').textContent(),'');
+    await page.getByRole('button',{name:'Calendar',exact:true}).click();
+    assert.equal(await page.locator('.calendar-day').count(),42);
+    await page.getByRole('button',{name:'Next month',exact:true}).count();
+    await page.locator('#monthNext').click();
+    await page.evaluate(()=>document.querySelector('#feedback').textContent='');
+    await page.screenshot({path:'server/data/ui-review/android-calendar.png',fullPage:true});
+    await page.locator('#calendarToday').click();
+    await page.getByRole('button',{name:'Tasks',exact:true}).click();
+    await page.locator('#addEvent').click();
+    assert.equal(await page.locator('#eventEditor').isVisible(),true);
+    await page.locator('#editClose').click();
     assert.deepEqual(errors, []);
     mkdirSync('server/data/ui-review', { recursive: true });
     await page.screenshot({ path: 'server/data/ui-review/android-settings.png', fullPage: true });
-    await page.getByRole('button', { name: 'Schedule', exact: true }).click();
+    await page.getByRole('button', { name: 'Overview', exact: true }).click();
+    await page.evaluate(()=>document.querySelector('#feedback').textContent='');
     await page.screenshot({ path: 'server/data/ui-review/android-home-dark.png', fullPage: true });
+    await page.getByRole('button',{name:'Ask AI',exact:true}).click();
+    await page.locator('#chatInput').fill('What should I do next?');
+    assert.equal(await page.locator('#assistantDialog').isVisible(),true);
+    await page.locator('#assistantClose').click();
     console.log('Android UI passed: bilingual, completion, evidence escaping, window conflicts, mobile width.');
 }
 finally {

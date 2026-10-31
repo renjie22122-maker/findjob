@@ -23,7 +23,10 @@ object OutlookAuth {
   val response=post(config.getString("tenant"),"token",mapOf("client_id" to config.getString("clientId"),"grant_type" to "refresh_token","refresh_token" to config.getString("refreshToken"),"scope" to SCOPE))
   if(!response.has("access_token"))throw javax.mail.AuthenticationFailedException("OAuth renewal failed")
   config.put("accessToken",response.getString("access_token")).put("refreshToken",response.optString("refresh_token",config.getString("refreshToken"))).put("expires",System.currentTimeMillis()+response.optLong("expires_in",3600)*1000)
-  Secrets(c).save(config.toString(),"mail");return config.getString("accessToken")
+  val current=JSONObject(Secrets(c).read("mail")?:throw javax.mail.AuthenticationFailedException("Mailbox removed"))
+  if(current.optString("user")!=config.optString("user")||current.optString("clientId")!=config.optString("clientId"))throw javax.mail.AuthenticationFailedException("Mailbox changed")
+  current.put("accessToken",config.getString("accessToken")).put("refreshToken",config.getString("refreshToken")).put("expires",config.getLong("expires"))
+  Secrets(c).save(current.toString(),"mail");return config.getString("accessToken")
  }
  fun view(c:Context):JSONObject {
   val ui=c.getSharedPreferences("oauth-status",0)
@@ -57,7 +60,7 @@ class OutlookWorker(c:Context,p:WorkerParameters):Worker(c,p){
    if(System.currentTimeMillis()<config.optLong("nextPoll"))return Result.retry()
    val response=OutlookAuth.post(config.getString("tenant"),"token",mapOf("client_id" to config.getString("clientId"),"grant_type" to "urn:ietf:params:oauth:grant-type:device_code","device_code" to config.getString("device_code")))
    if(!active())return Result.failure()
-   if(response.has("access_token")){val mail=JSONObject().put("host","outlook.office365.com").put("user",config.getString("user")).put("enabled",true).put("authMode","oauth2").put("clientId",config.getString("clientId")).put("tenant",config.getString("tenant")).put("accessToken",response.getString("access_token")).put("refreshToken",response.getString("refresh_token")).put("expires",System.currentTimeMillis()+response.optLong("expires_in",3600)*1000);Secrets(c).save(mail.toString(),"mail");Secrets(c).save("{}","oauth-pending");ui.edit().clear().putString("status","connected").apply();MailWorker.sync(c);return Result.success()}
+   if(response.has("access_token")){val mail=JSONObject().put("host","outlook.office365.com").put("user",config.getString("user")).put("enabled",true).put("authMode","oauth2").put("clientId",config.getString("clientId")).put("tenant",config.getString("tenant")).put("accessToken",response.getString("access_token")).put("refreshToken",response.getString("refresh_token")).put("expires",System.currentTimeMillis()+response.optLong("expires_in",3600)*1000);Secrets(c).save(mail.toString(),"mail");Secrets(c).save("{}","oauth-pending");ui.edit().clear().putString("status","connected").apply();MailWorker.configure(c);MailWorker.sync(c);return Result.success()}
    if(response.optString("error") in listOf("authorization_pending","slow_down")){if(response.optString("error")=="slow_down")config.put("interval",config.optInt("interval",5)+5);config.put("nextPoll",System.currentTimeMillis()+config.optInt("interval",5)*1000);Secrets(c).save(config.toString(),"oauth-pending");return Result.retry()}
    ui.edit().clear().putString("status",if(response.optString("error")=="expired_token")"expired" else "failed").apply();return Result.failure()
   }catch(_:Exception){ui.edit().putString("status","connection").apply();return if(runAttemptCount<20)Result.retry() else Result.failure()}

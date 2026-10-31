@@ -28,10 +28,20 @@ class WorkflowTest {
   val cancel="示例公司 JOB-1 招聘笔试取消，地点东楼A301";val cid=db.save("HR",cancel,40);db.analyzed(cid,extraction("cancel","","",cancel))
   val reminder=db.save("sender",change,50);db.analyzed(reminder,extraction("create","2026-11-06T14:00:00","2026-11-06T16:00:00",change));assertTrue(db.schedules().getJSONObject(0).getBoolean("cancelled"))
  }
- @Test fun manualResolutionPreservesCompletedState(){
+ @Test fun terseSmsAutomaticallyPreservesCompletedState(){
   val first=db.save("HR",body,1);db.analyzed(first,extraction());val sid=db.schedules().getJSONObject(0).getLong("id");db.complete(sid,true)
-  val unknown=db.save("unknown",body,2);val parsed=extraction();parsed.getJSONArray("events").getJSONObject(0).put("role","").put("ref","");db.analyzed(unknown,parsed);assertEquals("review",db.items().getJSONObject(0).getString("state"))
-  db.resolve(unknown,0,sid);assertEquals(1,db.schedules().length());assertTrue(db.schedules().getJSONObject(0).getBoolean("done"));assertEquals("linked",db.items().getJSONObject(0).getString("state"))
+  val unknown=db.save("unknown",body,2);val parsed=extraction();parsed.getJSONArray("events").getJSONObject(0).put("role","").put("ref","");db.analyzed(unknown,parsed);assertEquals("linked",db.items().getJSONObject(0).getString("state"))
+  db.recheck();assertEquals(1,db.schedules().length());assertTrue(db.schedules().getJSONObject(0).getBoolean("done"));assertEquals("linked",db.items().getJSONObject(0).getString("state"))
+ }
+ @Test fun ambiguousSameTimeJobsStaySeparate(){
+  val event=Event("示例公司","工程师","JOB-1","written_test","start","2026-11-05T14:00:00","2026-11-05T16:00:00","东楼A301","create",body)
+  db.manual(EventJson.write(event));db.manual(EventJson.write(event.copy(role="设计师",ref="JOB-2")))
+  val id=db.save("sender",body,2);val parsed=extraction();parsed.getJSONArray("events").getJSONObject(0).put("role","").put("ref","");db.analyzed(id,parsed)
+  assertEquals(2,db.schedules().length());assertEquals("review",db.items().getJSONObject(0).getString("state"))
+ }
+ @Test fun manualEditsSurviveLaterAutomatedEnrichment(){
+  val id=db.save("HR",body,1);db.analyzed(id,extraction());val s=db.schedules().getJSONObject(0);s.put("location","用户确认地点");db.manual(s);db.complete(s.getLong("id"),true)
+  val sms=db.save("sender",body,3);db.analyzed(sms,extraction());assertEquals("用户确认地点",db.schedules().getJSONObject(0).getString("location"));assertTrue(db.schedules().getJSONObject(0).getBoolean("done"))
  }
  @Test fun migratesPreviewCompletion(){
   db.close();val raw=context.openOrCreateDatabase("workflow-test.db",0,null);raw.execSQL("CREATE TABLE notices(id INTEGER PRIMARY KEY, fingerprint TEXT UNIQUE, body TEXT, received INTEGER, analysis TEXT, state TEXT DEFAULT 'pending', done INTEGER DEFAULT 0)");raw.execSQL("INSERT INTO notices(id,fingerprint,body,received,done) VALUES (1,'old',?,1,1)",arrayOf(body));raw.version=1;raw.close();db=LocalStore(context,"workflow-test.db")

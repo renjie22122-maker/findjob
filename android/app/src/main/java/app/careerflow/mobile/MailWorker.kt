@@ -13,11 +13,13 @@ import java.util.zip.ZipInputStream
 import org.json.JSONObject
 
 class MailWorker(c:Context,p:WorkerParameters):Worker(c,p){
- override fun doWork():Result {
+ override fun doWork():Result = synchronized(syncLock) { runSync() }
+ private fun runSync():Result {
   val preferences=applicationContext.getSharedPreferences("mail-status",0);var store:Store?=null;var folder:IMAPFolder?=null
   try{
    val config=JSONObject(Secrets(applicationContext).read("mail")?:return Result.success())
    if(!config.optBoolean("enabled"))return Result.success()
+   preferences.edit().putString("status","syncing").putLong("attempt",System.currentTimeMillis()).apply()
    val host=config.getString("host").trim();require(host.matches(Regex("[a-zA-Z0-9.-]+")))
    val props=Properties().apply{put("mail.imaps.ssl.checkserveridentity","true");put("mail.imaps.connectiontimeout","15000");put("mail.imaps.timeout","30000");put("mail.imaps.peek","true");put("mail.imaps.partialfetch","true");put("mail.imaps.fetchsize","16384")}
    val password=if(config.optString("authMode")=="oauth2"){props.put("mail.imaps.auth.mechanisms","XOAUTH2");props.put("mail.imaps.auth.login.disable","true");props.put("mail.imaps.auth.plain.disable","true");OutlookAuth.token(applicationContext,config)}else config.getString("password")
@@ -28,18 +30,20 @@ class MailWorker(c:Context,p:WorkerParameters):Worker(c,p){
    val messages=if(uid>0)folder.getMessagesByUID(uid+1,UIDFolder.MAXUID).take(100) else if(count>0)folder.getMessages(maxOf(1,count-199),count).toList() else emptyList()
    PDFBoxResourceLoader.init(applicationContext)
    val db=LocalStore(applicationContext)
-   try{for(m in messages){val current=folder.getUID(m);if(current<=uid)continue
+   try{for(m in messages){if(isStopped)return Result.retry();val currentConfig=JSONObject(Secrets(applicationContext).read("mail")?:"{}");if(!currentConfig.optBoolean("enabled")||currentConfig.optString("user")!=config.optString("user")||currentConfig.optString("host")!=host)return Result.success();val current=folder.getUID(m);if(current<=uid)continue
     if(m.size<=2*1024*1024){val body=(m.subject.orEmpty()+"\n"+MailText.extract(m)).take(24000);val id=db.save(m.from?.firstOrNull()?.toString().orEmpty(),body,m.receivedDate?.time?:System.currentTimeMillis(),"email","$account/$validity/$current");AnalysisWorker.enqueue(applicationContext,id)}
     uid=current
     // Advance only after durable insertion (non-recruitment messages intentionally skipped).
-    preferences.edit().putString("account",account).putLong("validity",validity).putLong("uid",uid).apply()
+    preferences.edit().putString("account",account).putLong("validity",validity).putLong("uid",uid).commit()
    }}finally{db.close()}
-   preferences.edit().putString("status","ok").putLong("last",System.currentTimeMillis()).apply();return Result.success()
+   val more=messages.size>=100&&uid>0&&folder.uidNext>uid+1
+   preferences.edit().putString("status",if(more)"catchup" else "ok").putLong("last",System.currentTimeMillis()).putInt("batch",messages.size).apply();return if(more)Result.retry() else Result.success()
   }catch(_:AuthenticationFailedException){preferences.edit().putString("status","authentication").apply();return Result.failure()}
    catch(_:Exception){preferences.edit().putString("status","connection").apply();return if(runAttemptCount<3)Result.retry() else Result.failure()}
   finally{try{folder?.close(false)}catch(_:Exception){};try{store?.close()}catch(_:Exception){}}
  }
  companion object{
+  private val syncLock=Any()
   fun configure(c:Context){val work=WorkManager.getInstance(c);work.enqueueUniquePeriodicWork("mail-sync-periodic",ExistingPeriodicWorkPolicy.KEEP,PeriodicWorkRequestBuilder<MailWorker>(30,TimeUnit.MINUTES).setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())}
   fun sync(c:Context){WorkManager.getInstance(c).enqueueUniqueWork("mail-sync-now",ExistingWorkPolicy.KEEP,OneTimeWorkRequestBuilder<MailWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())}
  }

@@ -1,7 +1,8 @@
-let english = localStorage.getItem('language') === 'en', active = 'schedule';
+let english = localStorage.getItem('language') === 'en', active = 'home';
 const t = (zh, en) => english ? en : zh, $ = id => document.getElementById(id), node = (tag, text) => { const n = document.createElement(tag); n.textContent = text; return n; }, button = (label, fn) => { const n = node('button', label); n.onclick = fn; return n; }, feedback = text => { $('feedback').textContent = text; clearTimeout(feedback.timer); feedback.timer = setTimeout(() => $('feedback').textContent = '', 4500); };
 const time = v => { if (!v)
     return t('待通知', 'Not announced'); const d = new Date(v + '+08:00'); return Number.isNaN(d.getTime()) ? v : new Intl.DateTimeFormat(english ? 'en-GB' : 'zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d); };
+let lastSnapshot = '';
 let theme = localStorage.getItem('theme') || 'system';
 function applyTheme() { if (theme === 'system')
     delete document.documentElement.dataset.theme;
@@ -12,17 +13,18 @@ function overlaps(a, b) { if (a.kind !== 'start' || b.kind !== 'start' || a.done
     return false; const stamp = v => Date.parse(v + '+08:00'), x = stamp(a.start), y = stamp(b.start); if (!a.end || !b.end)
     return x === y; return x < stamp(b.end) && y < stamp(a.end); }
 function render() {
-    const state = JSON.parse(CareerFlow.state());
+    lastSnapshot = CareerFlow.state();
+    const state = JSON.parse(lastSnapshot);
     document.documentElement.lang = english ? 'en' : 'zh-CN';
     $('brand').textContent = t('赴程', 'CareerFlow');
     $('lang').textContent = english ? '中文' : 'EN';
     $('intro').textContent = t('专注下一场，其他交给赴程。', 'Focus on your next step.');
     applyTheme();
     $('tabs').replaceChildren();
-    for (const [key, zh, en] of [['schedule', '日程', 'Schedule'], ['inbox', '通知', 'Inbox'], ['settings', '设置', 'Settings']]) {
-        const b = button(t(zh, en), () => { active = key; render(); });
+    for (const [key, zh, en] of [['home','总览','Overview'],['schedule', '待办', 'Tasks'],['calendar','日历','Calendar'], ['inbox', '通知', 'Inbox'], ['settings', '设置', 'Settings']]) {
+        const b = button(t(zh, en), () => { active = key; render(); window.scrollTo(0,0); });
         b.setAttribute('aria-label', t(zh, en));
-        b.replaceChildren(node('span', ({ schedule: '◷', inbox: '✉', settings: '⚙' })[key]), node('span', t(zh, en)));
+        b.replaceChildren(node('span', ({home:'⌂',schedule:'✓',calendar:'▦',inbox:'✉',settings:'⚙'})[key]), node('span', t(zh, en)));
         b.firstChild.className = 'nav-icon';
         b.setAttribute('aria-selected', active === key);
         $('tabs').append(b);
@@ -33,79 +35,38 @@ function render() {
         $(id).textContent = t(...pair);
     $('permissions').textContent = t('提醒：', 'Reminders: ') + (state.notifications ? t('通知已开启', 'notifications enabled') : t('通知未开启', 'notifications disabled')) + ' · ' + (state.exact ? t('精确闹钟已允许', 'exact alarms allowed') : t('精确闹钟未允许，可能延迟', 'exact alarms unavailable; delivery may be delayed'));
     $('auto').checked = state.auto;
-    $('mailStatus').textContent = (state.mailConfigured ? t('邮箱已配置', 'Mailbox configured') : t('尚未配置邮箱', 'No mailbox configured')) + ' · ' + ({ ok: t('同步成功', 'Sync succeeded'), authentication: t('认证失败，请检查授权码', 'Authentication failed; check app password'), connection: t('同步失败，将自动重试', 'Sync failed; will retry'), idle: t('等待同步', 'Awaiting sync') }[state.mailStatus] || state.mailStatus) + (state.lastSync ? ' · ' + new Date(state.lastSync).toLocaleString() : '');
+    $('mailStatus').textContent = (state.mailConfigured ? t('邮箱已配置', 'Mailbox configured') : t('尚未配置邮箱', 'No mailbox configured')) + ' · ' + ({ syncing:t('正在同步','Syncing'),catchup:t('正在补齐历史邮件','Catching up'),ok: t('同步成功', 'Sync succeeded'), authentication: t('邮箱授权失效，请重新连接', 'Mailbox authorization expired; reconnect'), connection: t('同步失败，将自动重试', 'Sync failed; will retry'), idle: t('等待同步', 'Awaiting sync') }[state.mailStatus] || state.mailStatus) + (state.lastSync ? ' · ' + new Date(state.lastSync).toLocaleString() : '');
     renderOAuth();
     $('settingsPermissions').textContent = $('permissions').textContent;
     document.querySelector('.permission-hint').hidden = state.notifications && state.exact;
     $('apiState').textContent = state.configured ? t('密钥已加密保存', 'Key stored securely') : t('配置后自动分析招聘通知', 'Configure to analyze recruitment messages');
-    const upcoming = state.schedules.filter(s => !s.done && !s.cancelled && Date.parse((s.end || s.start) + '+08:00') >= Date.now());
-    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
-    const today = upcoming.filter(s => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date((s.start || s.end) + '+08:00')) === day).length;
-    $('metrics').replaceChildren();
-    for (const [value, label] of [[today, t('今日安排', 'Today')], [upcoming.length, t('进行中的日程', 'Upcoming')], [state.items.filter(i => i.state === 'review').length, t('待你确认', 'To review')]]) {
-        const metric = node('div', '');
-        metric.className = 'metric';
-        metric.append(node('strong', String(value)), node('span', label));
-        $('metrics').append(metric);
-    }
-    $('schedules').replaceChildren();
-    if (!state.schedules.length) {
-        const empty = node('div', '');
-        empty.className = 'empty-state';
-        const symbol = node('span', '↗');
-        symbol.className = 'empty-symbol';
-        empty.append(symbol, node('h2', t('下一程，从一条通知开始', 'Your next chapter starts here')), node('p', t('连接邮箱或导入短信，自动整理时间、地点与下一步。所有日程按北京时间显示。', 'Connect email or import SMS to organize dates, places and next steps. Times are shown in UTC+8.')), button(t('连接邮箱与短信', 'Connect your inbox'), () => { active = 'settings'; render(); window.scrollTo(0, 0); }));
-        $('schedules').append(empty);
-    }
-    for (const s of state.schedules) {
-        const card = node('article', ''), conflicts = state.schedules.filter(b => b.id !== s.id && overlaps(s, b));
-        card.dataset.kind = s.kind;
-        if (s.cancelled)
-            card.classList.add('cancelled');
-        if (conflicts.length)
-            card.classList.add('conflict');
-        if (s.done)
-            card.classList.add('complete');
-        card.append(node('small', (s.round || stage(s.stage)) + ' · ' + (s.kind === 'window' ? t('期限内完成', 'Flexible window') : s.kind === 'deadline' ? t('截止事项', 'Deadline') : t('固定场次', 'Fixed appointment'))), node('h2', s.company + ' · ' + (s.role || '')), node('p', time(s.start) + (s.end ? '\n— ' + time(s.end) : '')));
-        card.lastChild.className = 'time';
-        card.append(node('p', s.location || t('地点待通知', 'Location pending')));
-        if (conflicts.length)
-            card.append(node('strong', t('时间冲突：', 'Time conflict: ') + conflicts.map(x => x.company).join(' / ')));
-        if (s.cancelled)
-            card.append(node('p', t('已取消，提醒已停止', 'Canceled; reminders stopped')));
-        card.append(button(s.done ? t('已完成 · 撤销', 'Completed · undo') : t('标记完成', 'Mark complete'), () => { CareerFlow.complete(s.id, !s.done); render(); }));
-        const details = node('details', '');
-        details.append(node('summary', t('关联依据', 'Linked evidence') + ' · ' + s.sources.length));
-        for (const source of s.sources)
-            details.append(node('small', source.source + ' · ' + new Date(source.received).toLocaleString()), node('pre', source.body));
-        card.append(details);
-        $('schedules').append(card);
-    }
+    renderMobile(state);
     $('inbox').replaceChildren();
     if (!state.items.length) {
         const empty = node('div', t('还没有招聘通知。新的邮件和短信会显示在这里。', 'No recruitment messages yet. New email and SMS will appear here.'));
         empty.className = 'empty-state';
         $('inbox').append(empty);
     }
-    for (const item of state.items) {
+    for (const item of state.items.filter(item => inboxFilter === "all" || (inboxFilter === "pending" ? ["pending","analyzing","retrying","failed"].includes(item.state) : item.state === inboxFilter))) {
         const card = node('article', '');
         if (item.state === 'review')
             card.className = 'review';
-        card.append(node('small', item.source + ' · ' + new Date(item.received).toLocaleString()), node('p', item.analysis?.summary || t('等待分析，可重试', 'Awaiting analysis; retry available')));
+        card.append(node('small', item.source + ' · ' + new Date(item.received).toLocaleString()), node('p', item.analysis?.summary || ({failed:t('分析失败，可重试','Analysis failed; retry available'),analyzing:t('AI 正在自动整理','AI is organizing this message'),retrying:t('连接暂时失败，正在重试','Connection issue; retrying')}[item.state] || t('等待后台分析','Queued for analysis'))));
         const details = node('details', '');
         details.append(node('summary', t('查看原文', 'View source')), node('pre', item.body));
         card.append(details);
         if (item.state === 'review') {
-            card.append(node('p', t('证据或场次有歧义，请核对后关联；不会自动覆盖已有日程。', 'Evidence or identity is ambiguous. Check before linking; existing schedules are preserved.')));
+            const reviewPanel=node('details','');reviewPanel.append(node('summary',t('证据不足 · 展开可选修正','Insufficient evidence · optional correction')));card.append(reviewPanel);
+            reviewPanel.append(node('p', t('自动核查尚未找到唯一依据；新通知到达后会再次检查，也可在此补充。', 'No unique evidence yet. New messages trigger another check; you can optionally add details here.')));
             for (const [index, e] of (item.analysis?.events || []).entries()) {
-                card.append(node('pre', [e.company, e.role, e.ref, e.stage, time(e.start), time(e.end), e.location, e.action, e.evidence].filter(Boolean).join('\n')));
+                reviewPanel.append(node('pre', [e.company, e.role, e.ref, e.stage, time(e.start), time(e.end), e.location, e.action, e.evidence].filter(Boolean).join('\n')));
                 const edits = {};
                 for (const [field, label] of [['start', t('开始时间（北京时间）', 'Start (UTC+8)')], ['end', t('结束／截止时间', 'End / deadline')], ['location', t('地点／考场', 'Location / room')]]) {
                     const wrap = node('label', label), input = document.createElement('input');
                     input.type = field === 'location' ? 'text' : 'datetime-local';
                     input.value = e[field] || '';
                     wrap.append(input);
-                    card.append(wrap);
+                    reviewPanel.append(wrap);
                     edits[field] = input;
                 }
                 const select = document.createElement('select');
@@ -113,7 +74,7 @@ function render() {
                 select.append(new Option(t('新建独立日程', 'Create separate schedule'), '0'));
                 for (const s of state.schedules)
                     select.append(new Option('#' + s.id + ' ' + s.company + ' ' + s.role + ' ' + s.stage + ' ' + time(s.start), s.id));
-                card.append(select, button(t('确认此场安排', 'Confirm this event'), () => { if (confirm(t('已核对时间、地点与场次，确认应用？', 'Have you verified the time, location and event? Apply changes?'))) {
+                reviewPanel.append(select, button(t('确认此场安排', 'Confirm this event'), () => { if (confirm(t('已核对时间、地点与场次，确认应用？', 'Have you verified the time, location and event? Apply changes?'))) {
                     feedback(CareerFlow.resolve(item.id, index, Number(select.value), JSON.stringify(Object.fromEntries(Object.entries(edits).map(([key, input]) => [key, input.value])))) ? t('已应用并记录', 'Applied and recorded') : t('未应用：请检查是否已关联或时间缺失', 'Not applied: check existing link and missing dates'));
                     render();
                 } }));
@@ -162,9 +123,8 @@ $('disableMail').onclick = () => { CareerFlow.disableMail(); feedback(t('已暂�
 $('testReminder').onclick = () => { CareerFlow.testReminder(); feedback(t('请锁屏等待测试通知；未允许精确闹钟时可能延迟', 'Lock the screen and wait for the test notification; exact alarm access avoids scheduling delay')); };
 $('notifications').onclick = () => CareerFlow.notificationPermission();
 $('alarms').onclick = () => CareerFlow.alarmPermission();
-render();
-setInterval(() => { if (!document.hidden && (active === 'schedule' || active === 'settings' && !['INPUT', 'SELECT'].includes(document.activeElement?.tagName)))
+setInterval(() => { if (!document.hidden && (!document.querySelector('dialog[open]') && !document.querySelector('.page-panel:not([hidden]) article details[open]') && !['INPUT', 'SELECT','TEXTAREA'].includes(document.activeElement?.tagName)) && CareerFlow.state() !== lastSnapshot)
     render(); }, 15000);
 
 setInterval(() => { if (!document.hidden && active === "settings") renderOAuth(); }, 1000);
-document.addEventListener("visibilitychange", () => { if(!document.hidden)renderOAuth(); });
+document.addEventListener("visibilitychange", () => { if(!document.hidden){renderOAuth();if(!document.querySelector('dialog[open]')&&!['INPUT','SELECT'].includes(document.activeElement?.tagName))render();} });

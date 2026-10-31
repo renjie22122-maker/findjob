@@ -2,7 +2,7 @@ name: Android build
 on:
   workflow_dispatch:
   push:
-    paths: ['android/**', '.github/workflows/android.yml']
+    paths: ['android/**', 'server/scripts/android-model-test.mjs', '.github/workflows/android.yml']
 permissions:
   contents: read
 jobs:
@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node server/scripts/android-model-test.mjs
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
