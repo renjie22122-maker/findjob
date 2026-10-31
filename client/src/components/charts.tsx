@@ -60,32 +60,23 @@ export function TrendChart({ trends }: { trends: TrendPoint[] }) {
 }
 
 export function FunnelChart({ stats }: { stats: OverviewStats }) {
-  useLanguage();
-
-  const ref = useChart({
-    tooltip: { confine: true },
-    series: [
-      {
-        type: 'funnel',
-        left: '5%',
-        top: 18,
-        bottom: 18,
-        width: '60%',
-        minSize: '0%',
-        gap: 5,
-        sort: 'none',
-        label: { position: 'right', formatter: '{b}\n{c}', fontSize: 12, lineHeight: 20 },
-        labelLine: { length: 10, lineStyle: { opacity: .5 } },
-        itemStyle: { borderWidth: 0, opacity: .95 },
-        data: [
-          { value: stats.funnel.applied, name: translate('已投递'), itemStyle: { color: '#5470c6' } },
-          { value: stats.funnel.interviewed, name: translate('笔试/面试'), itemStyle: { color: '#73c0de' } },
-          { value: stats.funnel.offer, name: 'Offer', itemStyle: { color: '#91cc75' } },
-        ],
-      },
-    ],
-  });
-  return <div ref={ref} style={{ width: '100%', height: 260 }} />;
+  const {t}=useLanguage();
+  const steps=[{label:t('已投递','Applied'),value:stats.funnel.applied,color:'#5b7cfa'},
+    {label:t('笔试 / 面试','Assessment / interview'),value:stats.funnel.interviewed,color:'#35b8c8'},
+    {label:'Offer',value:stats.funnel.offer,color:'#a27aee'}];
+  const rate=(n:number,d:number)=>d>0?`${Math.round(n/d*100)}%`:'—';
+  const ref=useChart({tooltip:{trigger:'item',confine:true},series:[{
+    type:'funnel',left:'5%',width:'90%',top:8,bottom:8,gap:8,sort:'none',
+    min:0,max:Math.max(...steps.map(s=>s.value),1),minSize:'0%',maxSize:'100%',
+    label:{show:false},labelLine:{show:false},emphasis:{label:{show:false}},
+    itemStyle:{borderWidth:0,shadowBlur:12,shadowColor:'rgba(57,95,232,.10)'},
+    data:steps.map(step=>({name:step.label,value:step.value,itemStyle:{color:new echarts.graphic.LinearGradient(0,0,1,1,[{offset:0,color:step.color},{offset:1,color:step.color+'aa'}])}})),
+  }]});
+  return <section className="conversion-funnel" aria-label={t('招聘转化漏斗','Recruitment conversion funnel')}>
+    <div className="funnel-summary"><span>{t('投递至 Offer','Application to offer')}</span><strong>{rate(stats.funnel.offer,stats.funnel.applied)}</strong></div>
+    <div className="funnel-body"><div className="funnel-visual" ref={ref} aria-hidden="true"/><ol className="funnel-stages">{steps.map((step,i)=><li key={step.label}><span className="funnel-stage-label"><i style={{background:step.color}}/>{step.label}</span><strong>{step.value.toLocaleString()}</strong><small>{i===0?t('统计起点','Starting point'):t('较上一阶段 ','From previous stage ')+rate(step.value,steps[i-1].value)}</small></li>)}</ol></div>
+    <p className="funnel-note">{t('按申请统计阶段进展，重复通知不增加数量。','Stages are counted per application; repeat notifications do not increase totals.')}</p>
+  </section>;
 }
 
 const PIE_COLORS: Record<string, string> = {
