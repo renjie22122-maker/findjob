@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 /** Pure matching rules; a company name alone is never a sufficient identity. */
-data class Event(val company:String="",val role:String="",val ref:String="",val stage:String="",val kind:String="start",val start:String="",val end:String="",val location:String="",val action:String="create",val evidence:String="",val round:String="")
+data class Event(val company:String="",val role:String="",val ref:String="",val stage:String="",val kind:String="start",val start:String="",val end:String="",val location:String="",val action:String="create",val evidence:String="",val round:String="",val applicationStatus:String="")
 object ScheduleRules {
  fun company(value:String)=value.lowercase().replace(Regex("[\\s（）()]"),"").removeSuffix("有限公司")
  fun time(value:String):Long?=try { LocalDateTime.parse(value).atZone(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli() } catch(_:Exception){null}
@@ -20,6 +20,12 @@ object ScheduleRules {
   if(a.round.isNotBlank()&&b.round.isNotBlank()&&a.round!=b.round)return false
   if(a.ref.isNotBlank()&&b.ref.isNotBlank()&&a.ref!=b.ref)return false
   if(a.role.isNotBlank()&&b.role.isNotBlank()&&a.role!=b.role)return false
+  if(sameIdentity(a,b)&&a.kind=="window"&&b.kind=="start"&&a.start.isNotBlank()&&a.start==b.start)return true
+  val flexible=Regex("任选|自行|随时|有效期|截止|完成作答|完成测评|内完成|complete.*by|deadline|at any time|within",RegexOption.IGNORE_CASE).containsMatchIn(a.evidence)
+  if(sameIdentity(a,b)&&a.kind in listOf("window","deadline")&&flexible){
+   if(a.start==b.start&&(b.kind=="start"||b.end.isBlank()||b.end==b.start))return true
+   if(a.kind=="deadline"&&a.end.isNotBlank()&&a.end==b.end)return true
+  }
   val exactTime=a.start.isNotBlank()&&a.start==b.start&&a.kind==b.kind&&(a.end.isBlank()||b.end.isBlank()||a.end==b.end)
   // Unique exact occurrence may link a terse SMS without inventing a job identity.
   if(exactTime)return true

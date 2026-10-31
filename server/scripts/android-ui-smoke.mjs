@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 const assets = new URL('../../android/app/src/main/assets/', import.meta.url);
-const server = createServer((req, res) => { const file = req.url === '/' ? 'index.html' : req.url.slice(1); if (!['index.html', 'app.js', 'style.css','mobile-model.js','mobile-views.js'].includes(file)) {
+const server = createServer((req, res) => { const file = req.url === '/' ? 'index.html' : req.url.slice(1); if (!['index.html', 'app.js', 'style.css','mobile-model.js','mobile-views.js','workspace.js'].includes(file)) {
     res.writeHead(404).end();
     return;
 } res.setHeader('Content-Type', file.endsWith('js') ? 'text/javascript' : file.endsWith('css') ? 'text/css' : 'text/html'); res.end(readFileSync(new URL(file, assets))); }).listen(0, '127.0.0.1');
@@ -13,7 +13,7 @@ try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
-    await page.addInitScript(() => { const schedule = { id: 1, company: 'Example', role: 'Engineer', ref: 'JOB-1', stage: 'interview', round: 'Technical interview', kind: 'start', start: '2026-11-05T14:00:00', end: '2026-11-05T16:00:00', location: 'Room A', done: false, cancelled: false, sources: [{ source: 'email', body: '<script>alert(1)</script> original evidence', received: 1 }, { source: 'sms', body: 'Same event', received: 2 }] }; const state = { configured: true, auto: true, exact: false, notifications: false, mailConfigured: true, mailStatus: 'ok', lastSync: 1, history: [], items: [], schedules: [schedule, { ...schedule, id: 2, company: 'Window', kind: 'window' }] }; window.oauth = {oauthStatus:"idle",oauthExpires:0,oauthCanOpen:false}; window.CareerFlow = { oauthState: () => JSON.stringify(window.oauth), copyOutlookCode: () => { window.copied=window.oauth.oauthCode; return true; }, state: () => JSON.stringify(state), complete: (id, value) => { state.schedules.find(x => x.id === id).done = value; }, notificationPermission: () => { }, alarmPermission: () => { }, syncMail: () => { }, saveMail: () => true, disableMail: () => { }, automatic: () => { }, importRecent: () => '0', saveKey: () => { }, analyze: () => { } }; });
+    await page.addInitScript(() => { const schedule = { id: 1, company: 'Example', role: 'Engineer', ref: 'JOB-1', stage: 'interview', round: 'Technical interview', kind: 'start', start: '2026-11-05T14:00:00', end: '2026-11-05T16:00:00', location: 'Room A', done: false, cancelled: false, sources: [{ source: 'email', body: '<script>alert(1)</script> original evidence', received: 1 }, { source: 'sms', body: 'Same event', received: 2 }] }; const state = { configured: true, auto: true, exact: false, notifications: false, mailConfigured: true, mailStatus: 'ok', lastSync: 1, history: [], items: [], schedules: [schedule, { ...schedule, id: 2, company: 'Window', kind: 'window' }] }; window.oauth = {oauthStatus:"idle",oauthExpires:0,oauthCanOpen:false}; window.workspaceRecords=[{id:'resume:1',kind:'resume',data:{name:'Test CV',targetRole:'Engineer',skills:['Kotlin'],content:'Original resume'},dirty:false,conflict:null},{id:'application:1',kind:'application',data:{companyName:'Example',positionTitle:'Engineer',status:'APPLIED'},dirty:false,conflict:null},{id:'job:1',kind:'job',data:{companyName:'Example',positionTitle:'Developer',resumeKey:'resume:1',status:'new',score:80,reasons:['Kotlin'],jdDescription:'<script>alert(1)</script>'},dirty:false,conflict:null}];window.llm={baseUrl:'https://api.example/v1',model:'my-model',auth:'bearer',jsonMode:true,temperature:true,timeout:90,maxTokens:4096,status:'idle',models:[]};window.CareerFlow = {llmSettings:()=>JSON.stringify(window.llm),saveLlm:raw=>{window.llm={...window.llm,...JSON.parse(raw)};return true;},probeLlm:models=>{window.llm.status=models?'models_ok':'ok';if(models)window.llm.models=['custom-model'];},workspace:()=>JSON.stringify({records:window.workspaceRecords,syncStatus:'idle',lastSync:0}),workspaceHistory:()=> '[]',saveWorkspace:(kind,id,raw)=>{const data=JSON.parse(raw);const old=window.workspaceRecords.find(r=>r.id===id);if(old)old.data=data;else window.workspaceRecords.push({id:kind+':local-test',kind,data,dirty:true,conflict:null});return true;}, oauthState: () => JSON.stringify(window.oauth), copyOutlookCode: () => { window.copied=window.oauth.oauthCode; return true; }, state: () => JSON.stringify(state), complete: (id, value) => { state.schedules.find(x => x.id === id).done = value; }, notificationPermission: () => { }, alarmPermission: () => { }, syncMail: () => { }, saveMail: () => true, disableMail: () => { }, automatic: () => { }, importRecent: () => '0', saveKey: () => { }, analyze: () => { } }; });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.locator('#nextSteps').getByText('Example · Engineer', { exact: true }).waitFor();
     assert.equal(await page.locator('.conflict').count(), 0, 'Flexible windows must not conflict');
@@ -25,6 +25,16 @@ try {
     await page.locator('#schedules').getByText('<script>alert(1)</script> original evidence', { exact: true }).first().waitFor();
     await page.getByRole('button', { name: 'EN', exact: true }).click();
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.locator('#llmBase').fill('https://compatible.example/v1');
+    await page.locator('#llmModel').fill('custom-model');
+    await page.waitForTimeout(2100);
+    assert.equal(await page.locator('#llmModel').inputValue(),'custom-model','Status polling must not overwrite edits');
+    await page.locator('#key').fill('synthetic-key');await page.locator('#saveKey').click();
+    assert.equal(await page.locator('#key').inputValue(),'');
+    assert.equal(await page.evaluate(()=>window.llm.model),'custom-model');
+    await page.locator('#llmTest').click();await page.waitForFunction(()=>document.querySelector('#llmStatus').textContent.includes('verified'));
+    await page.locator('#llmLoad').click();await page.waitForFunction(()=>document.querySelector('#llmModels').children.length===1);
+    await page.screenshot({path:'server/data/ui-review/android-api.png',fullPage:true});
     await page.getByText('Other mailboxes · IMAP', { exact: true }).click();
     await page.getByText('Incremental email sync', { exact: true }).waitFor();
     await page.getByRole('button', { name: '主题 / Theme', exact: true }).click();
@@ -62,6 +72,19 @@ try {
     await page.locator('#chatInput').fill('What should I do next?');
     assert.equal(await page.locator('#assistantDialog').isVisible(),true);
     await page.locator('#assistantClose').click();
+    await page.locator('#workspaceShortcuts button').nth(0).click();
+    await page.locator('#workspaceTools').getByRole('button',{name:'＋ Application',exact:true}).click();
+    await page.locator('#workspaceFields input[name="companyName"]').fill('New Company');
+    await page.locator('#workspaceFields input[name="positionTitle"]').fill('New Role');
+    await page.locator('#workspaceSave').click();
+    await page.locator('#workspaceList').getByText('New Company · New Role',{exact:true}).waitFor();
+    await page.locator('#workspaceTabs').getByRole('button',{name:'Resumes',exact:true}).click();
+    await page.locator('#workspaceList').getByText('Test CV',{exact:true}).waitFor();
+    await page.locator('#workspaceTabs').getByRole('button',{name:'Matches',exact:true}).click();
+    await page.getByText('Job description & source',{exact:true}).click();
+    await page.locator('#workspaceList').getByText('<script>alert(1)</script>',{exact:true}).waitFor();
+    assert.deepEqual(errors,[]);
+    await page.screenshot({path:'server/data/ui-review/android-workspace-jobs.png',fullPage:true});
     console.log('Android UI passed: bilingual, completion, evidence escaping, window conflicts, mobile width.');
 }
 finally {

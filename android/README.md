@@ -102,3 +102,35 @@ node server/scripts/android-ai-live-smoke.mjs --live
 adb shell am instrument -w -e class app.careerflow.mobile.SmsBackgroundTest -e smsSmoke true app.careerflow.mobile.test/androidx.test.runner.AndroidJUnitRunner
 adb emu sms send 15551234567 "CareerFlow background interview smoke 2026-11-05 14:00 to 2026-11-05 16:00 Room A"
 ```
+
+## 0.4.0 本机求职工作台与可配置 AI
+
+本版按用户要求暂缓跨设备同步。桌面和手机数据仍独立，不启动同步网关，不新增外部端口。
+
+### 手机工作流
+
+总览新增「申请、简历、推荐」入口，保留底部总览、待办、日历、通知、设置。申请可建立、编辑、筛选、关联简历；通知可自动建立申请并推进阶段，投递回执使用收到时间。明确的不同岗位分开跟踪。已签约、已放弃及用户主动修改的状态受保护；普通备注编辑不会停止后续自动推进。历史通知不能覆盖更新的状态。
+
+简历支持本机 PDF / DOCX / TXT 导入、原文编辑、AI 提取、版本记录和恢复，系统打印入口可保存 PDF。仅处理可提取文本的文件，最大 2 MB；扫描件 OCR 不在本版范围。原文和简历内容会发往用户配置的 AI 服务，提取结果须有原文依据，不生成虚构经历。
+
+推荐以用户粘贴或录入的真实职位描述为来源，结合所选简历自动分析匹配依据；分数不是录用概率。加入申请只建立待投递记录，不会提交简历。当前没有手机自动职位爬虫，也不自动复制电脑上的职位库。失败的职位提取草稿加密保留，可通过「重试自动整理」重新执行。
+
+### API 与跨通知分析
+
+设置支持 OpenAI Chat Completions 兼容服务：HTTPS 基础地址或完整端点、任意模型 ID、模型列表、Bearer / api-key 请求头、JSON mode / temperature 开关、超时和输出上限。DeepSeek 仅为迁移默认值，不再写死在每个业务请求里。已有密钥自动沿用；更改地址需要重新填写密钥。密钥由 Android Keystore 加密，不回传到页面；连接不跟随重定向。不同供应商专有协议不等同于 OpenAI 兼容格式。
+
+分析包含相关已保存邮件、短信、附件提取文本及日程来源。为限制上下文与费用，最多选 16 个日程、10 条通知，总上下文约 24,000 字符；单条文本也有截断。模型判断自选时间窗口、截止时间、轮次及跨通知关联，可为只有地点的后续通知关联原日程，或依据明确改期更新原场次。关联目标必须存在，引用须来自已保存原文，不接受相互冲突的岗位或编号。关联理由写入修复记录，来源累积，完成状态不重置。
+
+新通知分析后会触发最多 8 条相关待处理通知的重新分析，不递归触发重分析。升级后已分析的最近 200 条本地通知会按新逻辑重新检查一次；不会为此重复读取邮箱。完全没有时间的预通知进入「等待后续通知」，纯说明不生成待办。模型依然不能凭空补日期、访问链接、身份验证或替用户考试。只有真实关联冲突需要进一步确认。
+
+数据层分离：`WorkspaceStore` 管理申请/简历/职位和版本；`LocalStore` 管理通知/日程与修复记录；`AnalysisContext` 构建有限上下文及验证关联目标；`LlmApi` 统一传输和配置；各 WorkManager Worker 负责可恢复的后台操作。定时联网任务仍受 Android 调度和省电限制，跨通知分析不保证锁屏期间实时联网。
+
+### 0.4.0 验证
+
+执行 JVM 单元测试、Android lint、Android 14 原生回归、手机浏览器双语/窄屏/编辑与 API 设置检查。原生测试覆盖跨通知补地点与改期、不重复建场次、保留完成状态、旧拒信保护、手动状态保护、简历版本恢复及密钥迁移。配置的真实 API 仅收到合成测试文本，验证固定场次、自选窗口、单截止时间和跨邮件补地点；没有访问真实招聘链接或代做授权。
+
+安装使用同签名 **CareerFlow-0.4.0.apk** 覆盖旧版，不要卸载。用户手机上的真实邮箱授权、厂商省电和锁屏联网情况仍需实机确认，模拟器结果不代表已验证三星设备。
+
+### English — 0.4.0
+
+The local mobile workspace adds applications, versioned resumes and sourced job matching. AI settings support configurable HTTPS OpenAI-compatible endpoints, models and compatibility options. Related email/SMS/attachment text is supplied as bounded context for source-backed linking; completed events and newer decisions are preserved. Sync remains deferred, and job discovery/crawling is not included. Install over the previous release using the same signing identity. Device-specific background restrictions still apply.
