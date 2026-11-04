@@ -70,6 +70,7 @@ export interface RecruitmentScheduleChange {
 }
 
 export interface EmailExtraction {
+  intent?: 'invitation' | 'progress' | 'task' | 'receipt';
   schedule?: RecruitmentScheduleChange;
   recruitmentId?: string | null;
   preparationTasks?: Array<{ title: string; scheduledAt: string; timeEvidence: string }>;

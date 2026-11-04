@@ -361,6 +361,36 @@ const migrations: Migration[] = [
     id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL, content TEXT NOT NULL,
     plan TEXT, fingerprint TEXT, status TEXT NOT NULL DEFAULT 'message', created_at TEXT NOT NULL
   );`);}},
+  {version:12,up(db){db.exec(`
+    CREATE TABLE IF NOT EXISTS work_nodes (
+      id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'active', data TEXT NOT NULL DEFAULT '{}',
+      revision INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS work_edges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, target TEXT NOT NULL,
+      relation TEXT NOT NULL, evidence TEXT NOT NULL, created_at TEXT NOT NULL,
+      UNIQUE(source,target,relation)
+    );
+    CREATE INDEX IF NOT EXISTS work_edges_target ON work_edges(target);
+    CREATE TABLE IF NOT EXISTS work_decisions (
+      id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, input TEXT NOT NULL,
+      plan TEXT NOT NULL, result TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS work_scan (notice_id INTEGER PRIMARY KEY REFERENCES email_items(id) ON DELETE CASCADE, signature TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, next_attempt TEXT NOT NULL, error TEXT);
+  `);}},
+  {version:13,up(db){db.exec(`
+    CREATE TABLE IF NOT EXISTS company_aliases (
+      alias_id INTEGER PRIMARY KEY REFERENCES companies(id), canonical_id INTEGER NOT NULL REFERENCES companies(id),
+      reason TEXT NOT NULL, created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS company_terms (
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE, term TEXT NOT NULL,
+      kind TEXT NOT NULL, reason TEXT NOT NULL, PRIMARY KEY(company_id,term)
+    );
+    CREATE TABLE IF NOT EXISTS company_search_cache (query TEXT PRIMARY KEY,result TEXT NOT NULL,created_at TEXT NOT NULL);
+  `);}},
 ];
 
 /** 按 PRAGMA user_version 顺序执行迁移 */

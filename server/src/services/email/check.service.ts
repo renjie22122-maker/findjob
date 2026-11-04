@@ -1,3 +1,4 @@
+import {findCanonicalCompany} from '../work/organizations.js';
 import { createHash } from 'node:crypto';
 import { getDb } from '../../db/connection.js';
 import { AppError } from '../../middleware/error.js';
@@ -94,7 +95,7 @@ export function checkExistingEmails(trigger:'manual'|'incremental'|'apply'|'conf
       const decorative=(old.reviewReasons??[]).length>0 && old.reviewReasons!.every(w=>decorativeReceiptWarning(old,raw.snippet,w));
       if(old.attachments?.length && !decorative)continue;
       const rule=extractWithRules(raw.subject,raw.sender,raw.snippet,raw.receivedAt);
-      const recoverable=decorative || (old.reviewReasons??[]).every(r=>/公司或事件信息不完整|未确定活动时间|准备事项缺少有效时间或原文依据|提取日期与原文日期不一致/.test(r));
+      const recoverable=decorative || (old.reviewReasons??[]).every(r=>/公司或事件信息不完整|未确定活动时间|准备事项缺少有效时间或原文依据|提取日期与原文日期不一致|邮件含身份验证或一次性操作信息/.test(r));
       const recoveredTask=reservationMidnight(raw.snippet,raw.receivedAt);
       if(!recoverable || old.reviewReasons?.some(r=>r.includes('准备事项')) && !old.preparationTasks?.length && !recoveredTask)continue;
       const candidate=rule.confidence>=0.9 && (!old.eventType || old.eventType===rule.eventType)?rule:{...old,company:old.company==='重要'?rule.company:old.company};
@@ -162,7 +163,7 @@ export function checkExistingEmails(trigger:'manual'|'incremental'|'apply'|'conf
       }
       if(mail.status==='pending' && (e.reviewReasons?.length || e.confidence<0.8))addFinding(seen,`mail-review:${id}`,'mail-review',`邮件 #${id} 需要复核`,e.reviewReasons?.join('；') || '提取置信度不足，请在邮件确认窗口核对。',plan);
       if(mail.status==='pending' && !e.reviewReasons?.length && e.confidence>=0.8 && e.company){
-        const company=companies.find(c=>c.name===e.company);
+        const company=e.company?findCanonicalCompany(e.company):undefined;
         if(company)try{
           const target=applicationFromEventRef(Number(company.id),e.schedule?.eventRef)??applicationFromRepeatedWindow(Number(company.id),e,String(mail.subject),String(mail.sender));
           matchEmailApplication(Number(company.id),e,target);

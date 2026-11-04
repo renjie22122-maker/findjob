@@ -25,8 +25,9 @@ function detectEventType(text: string): EmailEventType | null {
 
 /** 从【公司】/「公司」形式或发件人名称提取公司 */
 function detectCompany(subject: string, sender: string, body: string): string | null {
-  const employer = `${subject} ${body}`.match(/中国银行(?:股份有限公司)?/);
-  if (employer) return '中国银行股份有限公司';
+  // Preserve the actual recruiting unit; a branch is not interchangeable with its parent.
+  const employer = `${subject} ${body}`.match(/中国银行(?:股份有限公司)?(?:[\u4e00-\u9fff]{2,12}分行)?/);
+  if (employer) return /分行$/.test(employer[0]) ? employer[0] : '中国银行股份有限公司';
   if (/Microsoft/i.test(subject) || /Microsoft Recruiting|^\s*Microsoft Software Engineer[^\n]*powered by HackerRank/im.test(body)) return 'Microsoft';
   const bracket = subject.match(/[【\[「]([^】\]」]{2,30})[】\]」]/);
   if (bracket && !/^(?:重要|通知|提醒|紧急)$/.test(bracket[1].trim())) return bracket[1].trim().replace(/20\d{2}届?(?:校园|秋季|秋招|春招|校招|招聘).*$/,'');

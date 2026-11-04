@@ -1,0 +1,15 @@
+import {Router} from 'express';
+import {z} from 'zod';
+import {asyncHandler} from '../middleware/error.js';
+import {parse} from '../middleware/validate.js';
+import {workGraph,workSources} from '../services/work/graph.js';
+import {runWorkAnalysis,workHistory,confirmWorkPlan} from '../services/work/engine.js';
+import {expandOrganizationSearch} from '../services/work/organizations.js';
+const router=Router();
+router.post('/search',asyncHandler(async(req,res)=>{const {query}=parse(z.object({query:z.string().trim().min(1).max(100)}),req.body);await expandOrganizationSearch(query);res.json({ok:true});}));
+router.get('/graph',asyncHandler(async(req,res)=>{const q=parse(z.object({query:z.string().max(200).default(''),offset:z.coerce.number().int().min(0).default(0),limit:z.coerce.number().int().min(1).max(100).default(50)}),req.query);res.json(workGraph(q.query,q.offset,q.limit));}));
+router.get('/history',(_req,res)=>res.json(workHistory()));
+router.get('/sources/:id',asyncHandler(async(req,res)=>{const id=parse(z.coerce.number().int().positive(),req.params.id);res.json(workSources([id]));}));
+router.post('/analyze',asyncHandler(async(req,res)=>{const q=parse(z.object({message:z.string().min(1).max(4000),noticeIds:z.array(z.number().int().positive()).max(40).optional()}),req.body);res.json(await runWorkAnalysis(q.message,q.noticeIds));}));
+router.post('/decisions/:id/confirm',asyncHandler(async(req,res)=>res.json(confirmWorkPlan(parse(z.string().uuid(),req.params.id)))));
+export default router;

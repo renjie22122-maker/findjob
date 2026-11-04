@@ -14,7 +14,8 @@ export function decorativeReceiptWarning(e:EmailExtraction,body:string,warning:s
 export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): EmailExtraction {
   const result = { ...extraction, schedule: extraction.schedule ? {...extraction.schedule} : undefined, attachments: raw.content?.attachments ?? [], reviewReasons: [...(raw.content?.warnings ?? [])] };
   const sourceText = `${raw.subject}\n${raw.content?.body ?? raw.snippet}\n${raw.content?.attachmentText ?? ''}`;
-  result.reviewReasons=result.reviewReasons.filter(w=>!decorativeReceiptWarning(result,raw.content?.body ?? raw.snippet,w));
+  // A warning about actions the user must perform is not uncertainty about a date.
+  result.reviewReasons=result.reviewReasons.filter(w=>!w.startsWith('邮件含身份验证或一次性操作信息：') && !decorativeReceiptWarning(result,raw.content?.body ?? raw.snippet,w));
   const recovered = ['interview','assessment','written_test'].includes(result.eventType ?? '') && (!result.schedule || ['create','update'].includes(result.schedule.action)) ? explicitActivityWindow(sourceText) : null;
   if (recovered) {
     if ((result.eventTime && validEventTime(result.eventTime) !== recovered.start) || (result.eventTimeEnd && validEventTime(result.eventTimeEnd) !== recovered.end)) result.reviewReasons.push('模型时间与明确活动时间段冲突，请复核');
@@ -117,7 +118,7 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
   if (result.eventTimeEnd && (!result.eventTime || result.eventTimeEnd <= result.eventTime)) {
     result.eventTimeEnd = null; result.reviewReasons.push('结束时间不晚于开始时间，需复核');
   }
-  if(result.eventType==='other' && result.company && result.positionTitle && qualificationNotice(sourceText)){
+  if(result.eventType==='other' && result.company && (result.intent==='progress' || result.intent==='task' && result.preparationTasks?.length || result.positionTitle && qualificationNotice(sourceText))){
     result.eventTime=mailTimeToLocal(raw.receivedAt);result.timeSource='received';result.timeEvidence=null;
   } else if (!result.company || !result.eventType || result.eventType === 'other') result.reviewReasons.push('公司或事件信息不完整，需人工确认');
   result.reviewReasons = [...new Set(result.reviewReasons)];

@@ -19,7 +19,7 @@ const server=createApp().listen(0,'127.0.0.1');await new Promise(r=>server.once(
 const browser=await chromium.launch({channel:'msedge',headless:true});const out=fileURLToPath(new URL('../data/ui-review/',import.meta.url));mkdirSync(out,{recursive:true});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto(url+'/email');await page.getByLabel('短信正文',{exact:true}).fill('您的快递已经到达驿站');await page.getByRole('button',{name:'导入并分析短信'}).click();await page.getByText('已过滤非招聘短信，未存储或发送给模型',{exact:true}).first().waitFor();
+ await page.goto(url+'/email');await page.getByRole('button',{name:'接入与维护'}).click();await page.getByRole('tab',{name:'短信接入'}).click();await page.getByLabel('短信正文',{exact:true}).fill('您的快递已经到达驿站');await page.getByRole('button',{name:'导入并分析短信'}).click();await page.getByText('已过滤非招聘短信，未存储或发送给模型',{exact:true}).first().waitFor();
  assert.equal(db.prepare('SELECT COUNT(*) n FROM email_items').get().n,3);
  await page.goto(url+'/schedules');await page.getByText('AI初面：2099-10-30 至 2099-10-31，等待正式时间',{exact:true}).waitFor();
  assert.equal(await page.locator('.ant-alert-error').count(),3);

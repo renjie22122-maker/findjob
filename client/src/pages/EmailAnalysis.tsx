@@ -1,5 +1,5 @@
 import {translate, useLanguage} from '../i18n';
-import { Alert, Button, Card, Descriptions, Modal, Spin, Pagination, Segmented, Space, Switch, Tag, Typography, message, Form, Input, DatePicker, Select } from 'antd';
+import { Alert, Button, Card, Descriptions, Modal, Spin, Pagination, Segmented, Space, Switch, Tag, Typography, message, Form, Input, DatePicker, Select,Drawer,Tabs } from 'antd';
 import { CheckOutlined, CloseOutlined, MailOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -12,11 +12,12 @@ import EmailCheckPanel from '../components/EmailCheckPanel';
 import SmsImportPanel from '../components/SmsImportPanel';
 
 export default function EmailAnalysis() {
-  useLanguage();
+  const {t}=useLanguage();
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState('pending');
+  const [toolsOpen,setToolsOpen]=useState(false),[advanced,setAdvanced]=useState(false);
   const [page, setPage] = useState(1);
   const [rescan, setRescan] = useState(false);
   const [days, setDays] = useState(14);
@@ -104,8 +105,8 @@ export default function EmailAnalysis() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <EmailCheckPanel />
-      <SmsImportPanel />
+      <div className="inbox-intro"><div><Typography.Title level={3} style={{margin:'0 0 6px'}}>{t('通知归档，进度自动更新','Messages in, progress organized')}</Typography.Title><Typography.Text type="secondary">{t('在这里查原文；需要调整，直接告诉助手。','Find source messages here. Tell the assistant when something needs changing.')}</Typography.Text></div><Space wrap><Button onClick={()=>setToolsOpen(true)}>{t('接入与维护','Connections & maintenance')}</Button><Button type="primary" onClick={()=>navigate('/assistant')}>{t('找助手处理','Ask the assistant')}</Button></Space></div>
+      <Drawer title={t('接入与维护','Connections & maintenance')} width="min(860px, 100vw)" open={toolsOpen} onClose={()=>setToolsOpen(false)} destroyOnClose><Tabs items={[{key:'checks',label:t('本地核查','Local checks'),children:<EmailCheckPanel/>},{key:'sms',label:t('短信接入','SMS connection'),children:<SmsImportPanel/>}]}/></Drawer>
       {!configured && (
         <Alert
           type="warning"
@@ -127,6 +128,8 @@ export default function EmailAnalysis() {
         }
         extra={
           <Space wrap>
+            <Button type="text" onClick={()=>setAdvanced(!advanced)}>{t('高级选项','Advanced')}</Button>
+            {advanced&&<>
             <Segmented options={[7, 14, 30]} value={days} onChange={(v) => setDays(v as number)} />
             <Space size={4}><Switch size="small" checked={rescan} onChange={setRescan} /><Typography.Text type="secondary" style={{ fontSize: 12 }}>{translate("补扫并重分析待处理")}</Typography.Text></Space>
             <Space size={4}>
@@ -142,19 +145,21 @@ export default function EmailAnalysis() {
               loading={batchApplyMutation.isPending}
               onClick={() => batchApplyMutation.mutate()}
             >{translate("批量应用高置信度（≥0.8）")}</Button>
+            </>}
             <Button type="primary" loading={analyzeMutation.isPending} disabled={!configured || auto?.running || autoMutation.isPending} onClick={() => analyzeMutation.mutate()}>
               {rescan ? `补扫最近 ${days} 天` : '增量分析新邮件'}
             </Button>
           </Space>
         }
       >
-        <Alert
+        {advanced&&<Alert
           type="info"
           showIcon
           message={translate("投递按收件时间；笔试、面试和测评按正文或附件；Offer 优先正文中的录用日期，否则按收件时间。")}
           description={translate("默认按文件夹 UID 游标增量读取，首次从所选天数开始；历史补扫会重分析待处理邮件，保留已应用结果。只读邮箱，不打开链接、不执行身份验证。缺少时间、附件未读或匹配有歧义时请人工复核。")}
-        />
-        {auto && <Card size="small" style={{ marginTop: 12 }} title={translate("自动分析与时间线")} extra={<Button loading={autoMutation.isPending} disabled={!configured || auto.running || analyzeMutation.isPending} onClick={() => autoMutation.mutate()}>{translate("立即运行自动流程")}</Button>}>
+        />}
+        {auto&&!advanced&&<Typography.Paragraph type="secondary" style={{margin:'8px 0'}}>{auto.running?t('正在同步邮件…','Syncing messages…'):auto.enabled?t('自动同步已开启','Automatic sync is on'):t('自动同步未开启','Automatic sync is off')}{auto.nextRunAt?` · ${t('下次','Next')} ${formatDateTime(auto.nextRunAt)}`:''}</Typography.Paragraph>}
+        {auto && advanced && <Card size="small" style={{ marginTop: 12 }} title={translate("自动分析与时间线")} extra={<Button loading={autoMutation.isPending} disabled={!configured || auto.running || analyzeMutation.isPending} onClick={() => autoMutation.mutate()}>{translate("立即运行自动流程")}</Button>}>
           <Space wrap><Tag color={auto.enabled ? 'green' : 'default'}>{auto.enabled ? '自动分析已开启' : '自动分析已关闭'}</Tag><Tag>{auto.autoApply ? '符合条件自动生成时间线' : '分析后人工应用'}</Tag><Typography.Text type="secondary">{auto.nextRunAt ? `下次 ${formatDateTime(auto.nextRunAt)}（服务需运行）` : '无自动计划'}</Typography.Text></Space>
           {auto.lastResult && <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>{auto.lastResult}</Typography.Paragraph>}
         </Card>}
@@ -211,14 +216,11 @@ export default function EmailAnalysis() {
                   <Tag>{translate("时间来源：")}{{ received: '收件时间', body: '正文', attachment: '附件', manual: '人工确认', unknown: '待确认' }[item.extracted?.timeSource ?? 'unknown']}</Tag>
                   {item.applicationId && <Button size="small" type="link" onClick={() => navigate(`/applications/${item.applicationId}`)}>{translate("查看申请 #")}{item.applicationId} →</Button>}
                 </Space>
-                {!!item.extracted?.reviewReasons?.length && <Alert type="warning" showIcon message={translate("需要复核")} description={item.extracted.reviewReasons.join('；')} />}
+                {item.extracted?.summary&&<Typography.Paragraph type="secondary" style={{margin:0}} ellipsis={{rows:2}}>{item.extracted.summary}</Typography.Paragraph>}
+                <details className="notice-evidence"><summary>{t('原文与识别详情','Source & analysis details')}</summary>
+                {!!item.extracted?.reviewReasons?.length && <Alert type="info" showIcon message={t('分析记录','Analysis record')} description={item.extracted.reviewReasons.join('；')} />}
                 {item.extracted?.timeEvidence && <Typography.Paragraph style={{ margin: 0 }}>{translate("时间原文：")}{item.extracted.timeEvidence}</Typography.Paragraph>}
                 {!!item.extracted?.attachments?.length && <Space wrap>{item.extracted.attachments.map((a, i) => <Tag key={i} color={a.status === 'parsed' ? 'cyan' : 'orange'}>{a.name} · {a.detail}</Tag>)}</Space>}
-                {item.extracted?.summary && (
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {item.extracted.summary}
-                  </Typography.Text>
-                )}
                 {item.snippet && (
                   <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }} ellipsis={{ rows: 1, expandable: true, symbol: '展开' }}>{translate("正文：")}{item.snippet}
                   </Typography.Paragraph>
@@ -257,6 +259,7 @@ export default function EmailAnalysis() {
                     <Button size="small" icon={<CloseOutlined />} onClick={() => dismissMutation.mutate(item.id)}>{translate("忽略")}</Button>
                   </Space>
                 )}
+                </details>
               </Space>
             </Card>
           ))}

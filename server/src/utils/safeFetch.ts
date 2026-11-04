@@ -103,7 +103,7 @@ export interface PublicHtmlResult {
  */
 export async function fetchPublicHtml(
   input: string | URL,
-  options: { timeoutMs?: number; maxBytes?: number; maxRedirects?: number } = {},
+  options: { timeoutMs?: number; maxBytes?: number; maxRedirects?: number; allowXml?: boolean } = {},
 ): Promise<PublicHtmlResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = options.maxBytes ?? MAX_PUBLIC_HTML_BYTES;
@@ -146,7 +146,7 @@ export async function fetchPublicHtml(
       throw AppError.badGateway(`页面请求失败：HTTP ${response.status}`);
     }
     const contentType = response.headers.get('content-type')?.toLowerCase();
-    if (contentType && !contentType.startsWith('text/') && !contentType.startsWith('application/xhtml+xml')) {
+    if (contentType && !contentType.startsWith('text/') && !contentType.startsWith('application/xhtml+xml') && !(options.allowXml && /^(application\/(rss\+xml|xml|atom\+xml))(;|$)/.test(contentType))) {
       await response.body?.cancel().catch(() => undefined);
       throw AppError.badGateway('目标响应不是 HTML 文本');
     }

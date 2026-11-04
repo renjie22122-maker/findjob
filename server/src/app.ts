@@ -24,6 +24,7 @@ import emailRouter from './routes/email.js';
 import {smsRouter} from './routes/sms.js';
 import utilsRouter from './routes/utils.js';
 import recommendationsRouter from './routes/recommendations.js';
+import workRouter from './routes/work.js';
 
 export function createApp(): express.Express {
   const app = express();
@@ -53,6 +54,7 @@ export function createApp(): express.Express {
   app.use('/api/crawl', crawlRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/email', emailRouter);
+  app.use('/api/work', workRouter);
   app.use('/api/sms',smsRouter);
   app.use('/api/crawl-jobs', crawlJobsRouter);
   app.use('/api/crawl-runs', crawlRunsRouter);

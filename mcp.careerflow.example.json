@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "careerflow": {
+      "command": "node",
+      "args": ["D:/Desktop/Project/findjob/server/dist/mcp.js"],
+      "env": {
+        "FINDJOB_DB_PATH": "D:/Desktop/Project/findjob/server/data/findjob.db",
+        "CAREERFLOW_MCP_WRITE": "1"
+      }
+    }
+  }
+}

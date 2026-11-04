@@ -20,6 +20,7 @@ import { adoptUntrackedInvitations, applicationFromRepeatedWindow, applicationFr
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
 import { checkExistingEmails } from './check.service.js';
 import {qualificationNotice} from './automationEvidence.js';
+import {findCanonicalCompany} from '../work/organizations.js';
 
 interface EmailItemRow {
   id: number;
@@ -246,7 +247,7 @@ function applyEmailItemInternal(
   if (extracted?.company) {
     // 公司名称精确匹配；开启 createIfMissing 时允许自动建公司。
     // Exact names only: fuzzy company matching may merge unrelated employers.
-    let company = db.prepare('SELECT id, name FROM companies WHERE name = ?').get(extracted.company.trim()) as { id: number; name: string } | undefined;
+    let company = findCanonicalCompany(extracted.company.trim());
     if (!company && options.createIfMissing) {
       try {
         company = createCompany({ name: extracted.company });
@@ -272,7 +273,7 @@ function applyEmailItemInternal(
       if (!appRow && options.createIfMissing) {
         const title =
           extracted.positionTitle?.trim() ||
-          `${EMAIL_EVENT_LABELS[extracted.eventType ?? 'other']}邮件导入（${nowIso().slice(0, 10)}）`;
+            `${extracted.company} · 岗位待定`;
         try {
           const created = createApplication({
             companyId: company.id,
@@ -316,7 +317,7 @@ function applyEmailItemInternal(
         const at = validEventTime(task.scheduledAt);
         if (!at) throw AppError.validation('准备事项时间无效');
         const taskTitle = `准备：${task.title}`;
-        if (at > now && !db.prepare('SELECT id FROM reminders WHERE application_id=? AND title=? AND scheduled_at=? AND done=0').get(applicationId, taskTitle, at)) {
+        if (at > now && !db.prepare('SELECT id FROM reminders WHERE application_id=? AND title=? AND scheduled_at=?').get(applicationId, taskTitle, at)) {
           db.prepare("INSERT INTO reminders(application_id,type,title,scheduled_at,done,created_at) VALUES (?,'other',?,?,0,?)").run(applicationId, taskTitle, at, now);
         }
         db.prepare("INSERT INTO timeline_events(application_id,event_type,title,description,occurred_at,created_at) VALUES (?,'note',?,?,?,?)").run(applicationId, taskTitle, task.timeEvidence, at, now);
@@ -360,7 +361,7 @@ function applyEmailItemInternal(
           : extracted.eventType && extracted.eventTimeEnd && extracted.eventTimeEnd > now
             ? extracted.eventTimeEnd
             : null;
-      if (!managedSchedule && extracted.eventType && remindAt) {
+      if (!managedSchedule && extracted.eventType && remindAt && extracted.intent!=='progress' && extracted.intent!=='task') {
         const remType = EMAIL_EVENT_TO_REMINDER_TYPE[extracted.eventType] ?? 'other';
         // 提醒去重：同申请 + 同类型 + 同时间且未完成的提醒不重复创建
         const existingRem = db
@@ -508,7 +509,7 @@ export function applyEmailBatch(minConfidence = 0.8, options: ApplyOptions = {})
     } catch {
       extraction = null;
     }
-    const informational=extraction?.eventType==='other' && extraction.positionTitle && qualificationNotice(`${row.subject}\n${row.snippet}`);
+    const informational=extraction?.eventType==='other' && (extraction.intent==='progress' || extraction.intent==='task' && extraction.preparationTasks?.length || extraction.positionTitle && qualificationNotice(`${row.subject}\n${row.snippet}`));
     if (!extraction || !extraction.timeSource || extraction.timeSource === 'unknown' || extraction.confidence < minConfidence || extraction.reviewReasons?.length || !extraction.company || !extraction.eventType || (extraction.eventType === 'other' && !informational) || (['interview', 'written_test', 'assessment'].includes(extraction.eventType) && !extraction.eventTime && (!extraction.schedule || extraction.schedule.action === 'create'))) {
       skipped++;
       continue;

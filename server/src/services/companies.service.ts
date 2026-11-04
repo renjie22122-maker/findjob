@@ -1,3 +1,4 @@
+import {findCanonicalCompany} from './work/organizations.js';
 import { getDb } from '../db/connection.js';
 import { AppError } from '../middleware/error.js';
 import type { Company } from '../domain/types.js';
@@ -41,14 +42,14 @@ export function listCompanies(keyword?: string): (Company & { applicationCount: 
     ? (db
         .prepare(
           `SELECT c.*, (SELECT COUNT(*) FROM applications a WHERE a.company_id = c.id) AS application_count
-           FROM companies c WHERE c.name LIKE ? OR c.industry LIKE ? OR c.city LIKE ?
+           FROM companies c WHERE c.id NOT IN (SELECT alias_id FROM company_aliases) AND (c.name LIKE ? OR c.industry LIKE ? OR c.city LIKE ?)
            ORDER BY c.updated_at DESC`,
         )
         .all(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`) as (CompanyRow & { application_count: number })[])
     : (db
         .prepare(
           `SELECT c.*, (SELECT COUNT(*) FROM applications a WHERE a.company_id = c.id) AS application_count
-           FROM companies c ORDER BY c.updated_at DESC`,
+           FROM companies c WHERE c.id NOT IN (SELECT alias_id FROM company_aliases) ORDER BY c.updated_at DESC`,
         )
         .all() as (CompanyRow & { application_count: number })[]);
   return rows.map((r) => ({ ...toCompany(r), applicationCount: r.application_count }));
@@ -104,7 +105,8 @@ export function deleteCompany(id: number): void {
 
 /** 按名称查找（导入/邮件应用时用），不存在返回 undefined */
 export function findCompanyByName(name: string): Company | undefined {
-  const row = getDb().prepare('SELECT * FROM companies WHERE name = ?').get(name) as CompanyRow | undefined;
+  const match = findCanonicalCompany(name);
+  const row = match ? getDb().prepare('SELECT * FROM companies WHERE id = ?').get(match.id) as CompanyRow : undefined;
   return row ? toCompany(row) : undefined;
 }
 

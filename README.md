@@ -4,6 +4,8 @@
 
 A personal application and schedule workspace with Chinese / English UI, light / dark themes, and responsive navigation. Existing FindJob data and configuration remain compatible. Original messages and model-generated content retain their source language.
 
+新增 **通用进度中枢**：在「助手」中用一句话核对和修改，后台按内容增量关联通知、岗位、共用活动与进展；「关联图」与「处理记录」按需查看。普通事项自动处理，保留完成状态与来源记录。支持官方 SDK 实现的本地 MCP，供其他 agent 查询或提交受校验操作。接入配置、扩展模型及范围见 [通用进度与 MCP 文档](docs/progress-engine.md) 和 [MCP 配置示例](mcp.careerflow.example.json)。
+
 Android 独立版见 [手机端说明](android/README.md)：支持 IMAP 增量同步、短信采集、跨来源日程关联与本地提醒。无需电脑；需要在手机重新配置邮箱/API 和权限。支持 Outlook OAuth；目前不支持桌面数据同步和扫描附件 OCR，首次交付需验证实际手机后台送达。
 
 维护入口：`server/src/app.ts` 组装 HTTP 路由，`server/src/index.ts` 管理监听与后台生命周期；`client/src/i18n.tsx` 和 `client/src/locales/en.json` 管理界面语言。保留 `FINDJOB_*` 配置名和旧启动脚本，避免升级破坏已有部署。

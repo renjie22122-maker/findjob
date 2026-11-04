@@ -12,6 +12,8 @@ try{
  });
  await page.route('**/api/email/chat/2/confirm',async route=>{confirmed=true;turns[1].status='executed';await route.fulfill({json:turns});});
  await page.goto(`http://127.0.0.1:${server.address().port}/email`);
+ await page.getByRole('button',{name:'接入与维护'}).click();
+ await page.getByText('查看原核查助手',{exact:true}).click();
  await page.getByRole('textbox',{name:'给招聘助手发消息'}).fill('这场面试完成了，另一个还没完成');
  await page.getByRole('button',{name:'发送给助手'}).click();await page.getByText('两项信息需要一起核对；该面试已完成，可以完成其待办。').waitFor();
  assert.equal(confirmed,false);await page.getByRole('button',{name:'确认执行这份方案'}).click();await page.getByRole('button',{name:'已执行并记录'}).waitFor();assert.equal(confirmed,true);

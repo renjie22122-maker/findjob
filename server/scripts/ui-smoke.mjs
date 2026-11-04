@@ -29,6 +29,7 @@ try {
   await page.getByText('☾ 暗色', { exact: true }).click();
   await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await page.screenshot({ path: out + 'email-dark.png', fullPage: true, animations: 'disabled' });
+  await page.locator('details.notice-evidence summary').first().click();
   await page.getByRole('button', { name: '应用到追踪' }).first().click();
   await page.getByText('确认提取结果（可修改后应用）', { exact: true }).waitFor();
   await page.getByLabel('关联申请').click();

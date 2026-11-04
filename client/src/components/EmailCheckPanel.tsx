@@ -6,6 +6,7 @@ import {Alert,Button,Card,Collapse,Empty,Modal,Select,Space,Tag,Typography,messa
 import {useMutation,useQuery,useQueryClient} from '@tanstack/react-query';
 import {Link} from 'react-router-dom';
 import {emailApi} from '../api';
+import {http} from '../api/http';
 import type {EmailCheckFinding} from '../types';
 import {formatDateTime} from '../utils/constants';
 
@@ -16,13 +17,13 @@ export default function EmailCheckPanel(){
   const client=useQueryClient();const [selected,setSelected]=useState<EmailCheckFinding|null>(null),[target,setTarget]=useState<number>();
   const {data,error,isLoading}=useQuery({queryKey:['email','check'],queryFn:emailApi.checkState,refetchInterval:30000});
   const refresh=()=>void client.invalidateQueries();
-  const check=useMutation({mutationFn:emailApi.check,onSuccess:r=>{message.success(`已检查 ${r.checked} 封邮件，修复 ${r.repaired} 项，待确认 ${r.review} 项`);refresh();},onError:e=>message.error(e.message)});
+  const check=useMutation({mutationFn:async()=>{const ai=await http.post<{results?:unknown[];message?:string}>('/work/analyze',{message:'自动复核待处理通知，记录进展、补齐明确截止和共用活动关联，保留已完成状态。'},150000);if(ai.message)message.info(ai.message);const local=await emailApi.check();return {...local,repaired:local.repaired+(ai.results?.length??0)};},onSuccess:r=>{message.success(`已检查 ${r.checked} 封邮件，修复 ${r.repaired} 项，待确认 ${r.review} 项`);refresh();},onError:e=>message.error(e.message)});
   const resolve=useMutation({mutationFn:(args:{finding:EmailCheckFinding;decision:'confirm'|'ignore'})=>emailApi.resolveCheck({key:args.finding.key,fingerprint:args.finding.fingerprint,decision:args.decision,targetId:target}),onSuccess:()=>{setSelected(null);message.success('处理结果已记录');refresh();},onError:e=>{message.error(e.message);refresh();}});
   const open=(data?.findings??[]).filter(f=>f.status==='open');const latest=data?.runs[0];
   return <Card title={translate("已有邮件核查")} extra={<Button type="primary" loading={check.isPending} onClick={()=>check.mutate()}>{translate("一键检查已有邮件")}</Button>}>
     <Space direction="vertical" style={{width:'100%'}} size={12}>
-      <Typography.Text type="secondary">{translate("检查本地已保存的邮件和日程，自动补齐提醒、去重同场自动待办。增量分析后也会检查；不会重新读取邮箱或打开任何邮件链接。")}</Typography.Text>
-      <RecruitmentAssistant/>
+      <Typography.Text type="secondary">{translate("先用 AI 核对待处理通知，再检查提醒与重复记录。只读取本地保存的内容，不打开通知链接。")}</Typography.Text>
+      <Collapse items={[{key:'legacy',label:translate('查看原核查助手'),children:<RecruitmentAssistant/>}]}/>
       {latest && <Typography.Text>{translate("最近检查：")}{formatDateTime(latest.createdAt)} · {latest.checked} {translate("封 · 修复")} {latest.repaired} {translate("项 ·")} <Tag color={open.length?'orange':'green'}>{translate("待确认")} {open.length}  {translate("项")}</Tag></Typography.Text>}
       {error && <Alert type="error" message={error.message}/>}
       {!isLoading && !open.length && <Typography.Text type="secondary">{latest?'暂无待确认问题。已完成状态与手工提醒受到保护。':'尚未检查，可点击上方按钮。'}</Typography.Text>}

@@ -6,6 +6,7 @@ import {
   type RecommendationRun,
 } from './services/recommendations.service.js';
 import { isAutoAnalyzeDue, latestDueSlot, runAutoEmailAnalyze } from './services/email/autoAnalyze.service.js';
+import {processWorkQueue} from './services/work/queue.js';
 
 /**
  * 定时任务调度器（应用运行期间生效）：
@@ -22,6 +23,7 @@ const CATCH_UP_THRESHOLD_MS = 5 * 60_000;
 
 async function processDueJobs(): Promise<void> {
   try {
+    await processWorkQueue();
     const jobs = listCrawlJobs();
     for (const job of jobs) {
       if (isJobDue(job)) {
