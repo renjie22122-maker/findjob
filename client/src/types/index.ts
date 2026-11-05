@@ -60,7 +60,22 @@ export interface TimelineEvent {
   createdAt: string;
 }
 
+export interface ActivityTiming {
+  id: number;
+  kind: string;
+  status: string;
+  timeKind?: 'start' | 'deadline' | 'window';
+  eventTime?: string | null;
+  eventTimeEnd?: string | null;
+  timezone?: string | null;
+  venue?: string | null;
+  address?: string | null;
+  room?: string | null;
+}
+
 export interface Reminder {
+  activity?: ActivityTiming;
+
   id: number;
   applicationId: number;
   companyName?: string;

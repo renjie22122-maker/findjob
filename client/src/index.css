@@ -159,3 +159,13 @@ body,
 .funnel-stages small { grid-column:1/-1; font-size:11px; color:var(--app-muted); }
 .funnel-note { color:var(--app-muted); font-size:11px; line-height:1.6; margin:12px 0 0; }
 @media(max-width:480px){.funnel-body{grid-template-columns:minmax(0,.8fr) minmax(130px,1fr);gap:8px}.funnel-stages li{padding:6px 8px}}
+
+/* The activity time is primary; reminder delivery is supporting information. */
+.activity-time {display:flex;flex-direction:column;gap:6px;width:100%;box-sizing:border-box;padding:14px 16px;margin:10px 0;border-radius:12px;border-inline-start:4px solid #397ad9;background:color-mix(in srgb,#397ad9 9%,transparent);}
+.activity-time.is-deadline {border-inline-start-color:#d87815;background:color-mix(in srgb,#d87815 11%,transparent);}
+.activity-time-label {font-size:12px;font-weight:700;letter-spacing:.04em;}
+.activity-time-value {font-size:clamp(19px,2.2vw,27px);line-height:1.4;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+.activity-time-reminder,.activity-time-zone {font-size:12px;opacity:.72;}
+.activity-time.is-inactive {border-inline-start-color:#8b919c;background:color-mix(in srgb,#8b919c 9%,transparent);}
+
+.activity-time-value time {display:inline-block;white-space:nowrap;}

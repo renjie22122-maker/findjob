@@ -4,6 +4,10 @@ import type { Reminder } from '../domain/types.js';
 import { nowIso } from '../utils/time.js';
 
 interface ReminderRow {
+  schedule_id: number | null;
+  schedule_data: string | null;
+  schedule_kind: string | null;
+  schedule_status: string | null;
   id: number;
   application_id: number;
   company_name: string | null;
@@ -17,14 +21,21 @@ interface ReminderRow {
 }
 
 const BASE_SELECT = `
-  SELECT r.*, c.name AS company_name, a.position_title AS position_title
+  SELECT r.*, s.data AS schedule_data, s.kind AS schedule_kind, s.status AS schedule_status, c.name AS company_name, a.position_title AS position_title
   FROM reminders r
   JOIN applications a ON a.id = r.application_id
   JOIN companies c ON c.id = a.company_id
+  LEFT JOIN recruitment_schedules s ON s.id = r.schedule_id
 `;
 
 function toReminder(row: ReminderRow): Reminder {
+  let data: Record<string,unknown> = {};
+  try { data = JSON.parse(row.schedule_data || '{}') ?? {}; } catch { /* Legacy malformed metadata remains a plain reminder. */ }
+  const text = (key:string) => typeof data[key] === 'string' ? data[key] as string : null;
   return {
+    ...(row.schedule_id && row.schedule_status ? {activity:{id:row.schedule_id,kind:row.schedule_kind!,status:row.schedule_status,
+      timeKind:['start','deadline','window'].includes(String(data.timeKind)) ? data.timeKind as 'start'|'deadline'|'window' : undefined,
+      eventTime:text('eventTime'),eventTimeEnd:text('eventTimeEnd'),timezone:text('timezone'),venue:text('venue'),address:text('address'),room:text('room')}} : {}),
     id: row.id,
     applicationId: row.application_id,
     companyName: row.company_name ?? undefined,

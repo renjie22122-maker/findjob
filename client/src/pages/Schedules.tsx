@@ -1,3 +1,4 @@
+import ActivityTime from '../components/ActivityTime';
 import {translate, useLanguage} from '../i18n';
 import dayjs from 'dayjs';
 import {schedulesConflict} from '../utils/scheduleConflicts';
@@ -46,7 +47,7 @@ export default function Schedules() {
         {s.data.sharedWithScheduleId && <Alert type="info" message={`已确认共用日程 #${s.data.sharedWithScheduleId} 的活动提醒；本申请独立保留`}/>}
         {s.status==='scheduled' && !s.data.sharedWithScheduleId && <Button size="small" onClick={()=>{setSharing(s);setShareTarget(undefined);}}>{translate("与同场日程共用提醒")}</Button>}
         {s.data.preliminary && <Alert type="warning" message={`${s.data.stageLabel??'预通知'}：${s.data.dateStart} 至 ${s.data.dateEnd}，等待正式时间`} description={s.data.attendanceCondition??'不推断具体时刻，正式通知后补齐提醒'}/>}
-        <div className="schedule-time"><Typography.Text strong>{s.data.timeKind==='window'?'作答有效期':s.data.timeKind==='deadline'?'截止':'开始'}：{s.data.eventTime ? formatDateTime(s.data.eventTime) : '待通知'}{s.data.eventTimeEnd ? ` — ${formatDateTime(s.data.eventTimeEnd)}` : ''}</Typography.Text></div>
+        <ActivityTime data={s.data} status={s.status}/>
         {s.data.timezone && <Typography.Text type="secondary">{translate("原文时区：")}{s.data.timezone}</Typography.Text>}
         <Typography.Text>{s.data.mode==='online'?'线上':s.data.mode==='offline'?'线下':'参加方式待确认'} {translate("· 考点：")}{s.data.venue || '待通知'}</Typography.Text>
         <Typography.Text>{translate("地址：")}{s.data.address || '待通知'} {translate("· 考场 / 房间：")}{s.data.room || '待通知'}</Typography.Text>

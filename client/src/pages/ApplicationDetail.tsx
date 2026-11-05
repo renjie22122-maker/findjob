@@ -1,3 +1,4 @@
+import ActivityTime from '../components/ActivityTime';
 import {translate, useLanguage} from '../i18n';
 import { Button, Card, Col, Descriptions, Form, Input, List, Modal, Popconfirm, Progress, Result, Row, Select, Space, Typography, message, DatePicker } from 'antd';
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, FormOutlined, PlusOutlined, IdcardOutlined, RobotOutlined } from '@ant-design/icons';
@@ -419,8 +420,9 @@ export default function ApplicationDetail() {
                       <Tag>{REMINDER_TYPE_LABELS[r.type]}</Tag>
                       <Typography.Text delete={Boolean(r.done)}>{r.title}</Typography.Text>
                     </Space>
+                    <ActivityTime data={r.activity} status={r.activity?.status} reminderAt={r.scheduledAt} fallbackDeadline={r.type==='deadline'}/>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {formatDateTime(r.scheduledAt)} {r.done ? '· 已完成' : '· 点击标记完成'}
+                       {r.done ? '· 已完成' : '· 点击标记完成'}
                     </Typography.Text>
                   </Space>
                 </Card>

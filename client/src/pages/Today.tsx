@@ -1,3 +1,4 @@
+import ActivityTime from '../components/ActivityTime';
 import {translate, useLanguage} from '../i18n';
 import { Alert, Badge, Button, Card, Space, Tag, Typography, message } from 'antd';
 import { CheckCircleOutlined } from '@ant-design/icons';
@@ -6,7 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToday } from '../hooks';
 import { remindersApi } from '../api';
 import type { Reminder } from '../types';
-import { REMINDER_TYPE_LABELS, formatDateTime } from '../utils/constants';
+import { REMINDER_TYPE_LABELS } from '../utils/constants';
 
 function ReminderCard({
   reminder,
@@ -44,7 +45,8 @@ function ReminderCard({
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {reminder.companyName} · {reminder.positionTitle}
         </Typography.Text>
-        <Typography.Text className="reminder-time">{formatDateTime(reminder.scheduledAt)}</Typography.Text>
+        <ActivityTime data={reminder.activity} status={reminder.activity?.status} reminderAt={reminder.scheduledAt} fallbackDeadline={reminder.type==='deadline'}/>
+        {reminder.activity && <Typography.Text>{[reminder.activity.venue,reminder.activity.address,reminder.activity.room].filter(Boolean).join(' · ')}</Typography.Text>}
         <Button
           size="small"
           type="link"
@@ -100,7 +102,7 @@ export default function Today() {
       </Card>
 
       {data && data.overdue.length > 0 && (
-        <Card title={<Badge status="error" text={`已过期未完成（${data.overdue.length}）`} />} size="small">
+        <Card title={<Badge status="error" text={`提醒已到期未处理（${data.overdue.length}）`} />} size="small">
           <Space direction="vertical" style={{ width: '100%' }}>
             {data.overdue.map((r) => (
               <ReminderCard

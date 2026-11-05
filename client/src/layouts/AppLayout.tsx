@@ -1,3 +1,4 @@
+import ActivityTime from '../components/ActivityTime';
 import {useState} from 'react';
 import {Layout,Menu,Badge,Typography,Space,Select,Alert,Button,Drawer} from 'antd';
 import {DashboardOutlined,FileTextOutlined,CalendarOutlined,GlobalOutlined,MailOutlined,SettingOutlined,ApartmentOutlined,IdcardOutlined,RobotOutlined,MenuOutlined} from '@ant-design/icons';
@@ -5,7 +6,7 @@ import {Link,Outlet,useLocation,useNavigate} from 'react-router-dom';
 import {useToday,usePendingEmailCount} from '../hooks';
 import {useAppTheme} from '../theme';
 import {useLanguage} from '../i18n';
-import {formatDateTime} from '../utils/constants';
+
 const items=[
  ['/', '总览','Overview',<DashboardOutlined/>],['/today','待办','Tasks',<CalendarOutlined/>],['/schedules','日程','Schedule',<CalendarOutlined/>],['/applications','申请','Applications',<FileTextOutlined/>],['/assistant','助手','Assistant',<RobotOutlined/>],['/email','通知中心','Inbox',<MailOutlined/>],['/sources','发现岗位','Discover',<GlobalOutlined/>],['/recommendations','职位推荐','Matches',<RobotOutlined/>],['/companies','公司','Companies',<ApartmentOutlined/>],['/resumes','简历','Resumes',<IdcardOutlined/>],['/settings','设置','Settings',<SettingOutlined/>],
 ] as const;
@@ -24,7 +25,7 @@ export default function AppLayout(){
    <Layout.Header className="workspace-header"><Space><Button className="mobile-menu" aria-label={t('打开菜单','Open menu')} icon={<MenuOutlined/>} onClick={()=>setMenuOpen(true)}/><div><Typography.Text type="secondary" className="header-brand">{t('赴程 · 求职工作台','CareerFlow · Workspace')}</Typography.Text><Typography.Title level={4} style={{margin:0}}>{t(active[1],active[2])}</Typography.Title></div></Space><Space><Select aria-label="Language / 语言" value={language} onChange={setLanguage} options={[{value:'zh',label:'中文'},{value:'en',label:'EN'}]} style={{width:82}}/><Select aria-label="界面主题" value={mode} onChange={setMode} style={{width:120}} options={[{value:'system',label:t('跟随系统','System')},{value:'light',label:t('☀ 浅色','☀ Light')},{value:'dark',label:t('☾ 暗色','☾ Dark')}]}/></Space></Layout.Header>
    <Layout.Content className="workspace-content">
     {isError&&<Alert type="warning" showIcon message={t('连接暂时中断','Connection interrupted')} description={t('当前显示的内容可能不是最新。网络恢复后会重新同步。','Displayed information may be out of date. We will refresh when the connection returns.')} style={{marginBottom:16}}/>}
-    {next&&location.pathname==='/'&&<Alert className="next-task-banner" type="info" showIcon message={t('接下来','Up next')+' · '+(next.companyName??'')+' · '+formatDateTime(next.scheduledAt)} description={next.title} action={<Button onClick={()=>navigate('/today')}>{t('查看待办','View tasks')}</Button>}/>}
+    {next&&location.pathname==='/'&&<Alert className="next-task-banner" type="info" showIcon message={t('接下来','Up next')+' · '+(next.companyName??'')} description={<>{next.title}<ActivityTime data={next.activity} status={next.activity?.status} reminderAt={next.scheduledAt} fallbackDeadline={next.type==='deadline'}/></>} action={<Button onClick={()=>navigate('/today')}>{t('查看待办','View tasks')}</Button>}/>}
     <Outlet/>
    </Layout.Content>
   </Layout>
