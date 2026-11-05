@@ -1,5 +1,5 @@
 import {translate, useLanguage} from '../i18n';
-import { Alert, Button, Card, Col, Input, List, Row, Select, Table, Typography, Space, Tag, message } from 'antd';
+import { Alert, Button, Card, Drawer, Col, Input, List, Row, Select, Table, Typography, Space, Tag, message } from 'antd';
 import {
   FileTextOutlined,
   SearchOutlined,
@@ -18,11 +18,18 @@ import { aiApi, applicationsApi, resumesApi, sourcesApi } from '../api';
 import { formatDate, formatDateTime, PRIORITY_LABELS, PRIORITY_COLORS } from '../utils/constants';
 import { ALL_STATUSES } from '../utils/constants';
 import { useFiltersStore } from '../stores/filters';
-import type { ActionListItem, Priority } from '../types';
+import {http} from '../api/http';
+import {STATUS_LABELS} from '../utils/constants';
+import type { Application, Paginated, ActionListItem, Priority } from '../types';
 
 export default function Dashboard() {
   useLanguage();
 
+  const [category,setCategory]=useState<{kind:'status'|'stage';key:string}|null>(null);
+  const [detailPage,setDetailPage]=useState(1);
+  const choose=(kind:'status'|'stage',key:string)=>{setCategory({kind,key});setDetailPage(1);};
+  const details=useQuery({queryKey:['stats','members',category,detailPage],enabled:!!category,queryFn:()=>http.get<Paginated<Application>>(`/stats/applications?${category!.kind}=${encodeURIComponent(category!.key)}&page=${detailPage}&pageSize=20`)});
+  const categoryTitle=category?.kind==='status'?STATUS_LABELS[category.key as keyof typeof STATUS_LABELS]:({applied:'曾投递',interviewed:'曾进入笔试 / 面试',offer:'曾获得 Offer'}[category?.key??'']);
   const navigate = useNavigate();
   const applicationFilters = useFiltersStore();
   const { data: stats, isLoading } = useOverview();
@@ -89,16 +96,25 @@ export default function Dashboard() {
       <Row gutter={[16,16]}>
         <Col xs={24} md={12}>
           <Card title={translate("状态分布")} size="small">
-            <StatusPieChart stats={stats ?? { byStatus: {}, funnel: { applied: 0, interviewed: 0, offer: 0 } } as never} />
+            <StatusPieChart onSelect={key=>choose('status',key)} stats={stats ?? { byStatus: {}, funnel: { applied: 0, interviewed: 0, offer: 0 } } as never} />
           </Card>
         </Col>
         <Col xs={24} md={12}>
           <Card title={translate("转化漏斗（投递 → 面试 → Offer）")} size="small">
-            <FunnelChart stats={stats ?? ({ funnel: { applied: 0, interviewed: 0, offer: 0 } } as never)} />
+            <FunnelChart onSelect={key=>choose('stage',key)} stats={stats ?? ({ funnel: { applied: 0, interviewed: 0, offer: 0 } } as never)} />
           </Card>
         </Col>
       </Row>
 
+      <Drawer title={`${categoryTitle??''} · ${details.data?.total??'…'} 条申请`} open={!!category} onClose={()=>setCategory(null)} width="min(760px,100vw)">
+        <Typography.Paragraph type="secondary">{category?.kind==='stage'?'按历史阶段统计，包含后来已推进或被拒的申请；同一申请只计一次。':'按申请当前状态筛选。点击岗位查看详情。'}</Typography.Paragraph>
+        {details.error&&<Alert type="error" message={details.error.message} action={<Button onClick={()=>void details.refetch()}>重试</Button>}/>}
+        <Table rowKey="id" loading={details.isFetching} dataSource={details.data?.items??[]} scroll={{x:480}} pagination={{current:detailPage,total:details.data?.total??0,pageSize:20,showSizeChanger:false,onChange:setDetailPage}} columns={[
+          {title:'公司',dataIndex:'companyName',render:value=><Typography.Text strong>{value}</Typography.Text>},
+          {title:'岗位',render:(_,row:Application)=><Button type="link" style={{whiteSpace:'normal',height:'auto',padding:0,textAlign:'left'}} onClick={()=>navigate(`/applications/${row.id}`)}>{row.positionTitle}</Button>},
+          {title:'当前状态',dataIndex:'status',render:value=><StatusTag status={value}/>}
+        ]}/>
+      </Drawer>
       <Card title={translate("近 30 天趋势")} size="small">
         <TrendChart trends={trendsData?.items ?? []} />
       </Card>

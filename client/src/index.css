@@ -169,3 +169,17 @@ body,
 .activity-time.is-inactive {border-inline-start-color:#8b919c;background:color-mix(in srgb,#8b919c 9%,transparent);}
 
 .activity-time-value time {display:inline-block;white-space:nowrap;}
+
+.funnel-stages li {display:block;padding:0;overflow:hidden;}
+.funnel-stage-button {display:grid;grid-template-columns:1fr auto;align-content:center;gap:3px 10px;padding:9px 10px;width:100%;height:100%;background:transparent;color:inherit;border:0;text-align:left;font:inherit;cursor:pointer;border-radius:10px;}
+.funnel-stage-button:hover,.chart-legend-static button:hover {background:color-mix(in srgb,var(--app-primary,#397ad9) 12%,transparent);}
+.funnel-stage-button:focus-visible,.chart-legend-static button:focus-visible {outline:2px solid #397ad9;outline-offset:-2px;}
+.schedule-card .ant-card-head-title {white-space:normal;}
+.schedule-card .ant-card-head {padding-block:10px;}
+.schedule-card .activity-time {margin:2px 0;}
+
+.entity-title {font-size:19px;line-height:1.45;overflow-wrap:anywhere;}
+.entity-subtitle {font-size:14px;line-height:1.55;}
+.task-purpose {display:block;margin-top:6px;font-size:13px;color:var(--app-muted);}
+.reminder-card .reminder-heading .ant-tag {margin-inline-end:0;}
+.reminder-card .ant-card-body {padding:18px;}

@@ -13,7 +13,7 @@ try{
  await page.route('**/api/stats/today',route=>route.fulfill({json:{date:'2099-11-05',overdue:[],upcoming:[],today:[{...common,id:1,title:'提前一天准备：笔试',activity},{...common,id:2,title:'AI 面试',activity:{...activity,id:2,timeKind:'window',eventTimeEnd:'2099-11-08T17:00:00'}}]}}));
  await page.goto(`http://127.0.0.1:${server.address().port}/today`);
  const fixed=page.locator('.reminder-card').first(),window=page.locator('.reminder-card').nth(1);
- await fixed.locator('.activity-time-value').waitFor();
+ await fixed.locator('.activity-time-value').waitFor();assert.equal(await fixed.locator('.entity-title').innerText(),'示例公司');assert.equal(await fixed.locator('.entity-subtitle').innerText(),'工程师');assert.match(await fixed.locator('.task-purpose').innerText(),/提前一天准备/);
  assert.equal(await fixed.locator('.activity-time-value').innerText(),'2099-11-06 09:00 — 11:00');
  assert.equal(await window.locator('.activity-time-value').innerText(),'2099-11-08 17:00');
  assert.match(await window.innerText(),/期限内自选时间完成/);

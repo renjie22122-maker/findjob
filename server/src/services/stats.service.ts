@@ -1,3 +1,4 @@
+import {funnelMembership,type FunnelStage} from '../domain/funnel.js';
 import { getDb } from '../db/connection.js';
 import { STATUS, TERMINAL_STATUSES } from '../domain/status.js';
 import type { OverviewStats, TrendPoint } from '../domain/types.js';
@@ -40,21 +41,8 @@ export function getOverview(): OverviewStats {
   );
 
   // 漏斗按事件推导（事件溯源，口径一致）
-  const funnelApplied = count(
-    `SELECT COUNT(DISTINCT application_id) AS c FROM timeline_events
-     WHERE event_type = 'status_change' AND to_status IS NOT NULL AND to_status != ?`,
-    STATUS.WISHLIST,
-  );
-  const funnelInterviewed = count(
-    `SELECT COUNT(DISTINCT application_id) AS c FROM timeline_events
-     WHERE event_type = 'status_change' AND to_status IN (${placeholders(INTERVIEW_STATES)})`,
-    ...INTERVIEW_STATES,
-  );
-  const funnelOffer = count(
-    `SELECT COUNT(DISTINCT application_id) AS c FROM timeline_events
-     WHERE event_type = 'status_change' AND to_status IN (${placeholders(OFFER_STATES)})`,
-    ...OFFER_STATES,
-  );
+  const stageCount=(stage:FunnelStage)=>{const member=funnelMembership(stage);return count(`SELECT COUNT(*) AS c FROM applications WHERE id IN (${member.sql})`,...member.params);};
+  const funnelApplied=stageCount('applied'),funnelInterviewed=stageCount('interviewed'),funnelOffer=stageCount('offer');
 
   const todayStart = todayStartIso();
   const todayEnd = addDays(todayStart, 1);

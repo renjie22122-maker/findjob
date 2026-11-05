@@ -31,7 +31,7 @@ function ReminderCard({
             <Tag color={reminder.type === 'deadline' ? 'red' : reminder.type === 'interview' ? 'purple' : 'geekblue'}>
               {REMINDER_TYPE_LABELS[reminder.type]}
             </Tag>
-            <Typography.Text strong>{reminder.title}</Typography.Text>
+            <Typography.Text className="entity-title" strong>{reminder.companyName || translate("公司待补充")}</Typography.Text>
           </Space>
           <Button
             size="small"
@@ -42,9 +42,8 @@ function ReminderCard({
             onClick={() => onDone(reminder)}
           >{translate("标记完成")}</Button>
         </Space>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {reminder.companyName} · {reminder.positionTitle}
-        </Typography.Text>
+        <Typography.Text className="entity-subtitle">{reminder.positionTitle || translate("岗位待补充")}</Typography.Text>
+        <Typography.Text className="task-purpose">{reminder.title}</Typography.Text>
         <ActivityTime data={reminder.activity} status={reminder.activity?.status} reminderAt={reminder.scheduledAt} fallbackDeadline={reminder.type==='deadline'}/>
         {reminder.activity && <Typography.Text>{[reminder.activity.venue,reminder.activity.address,reminder.activity.room].filter(Boolean).join(' · ')}</Typography.Text>}
         <Button

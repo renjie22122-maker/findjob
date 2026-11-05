@@ -121,3 +121,13 @@ node server/scripts/work-live-smoke.mjs --live
 新增只读 MCP 工具 `progress_agenda`：参数为 `from`、`to`（含当天的 YYYY-MM-DD）、`done`、`offset`、`limit`（最多 100）。按活动开始日或完成截止日筛选；独立提醒以提醒日筛选。返回 `primaryTime`、`timeMeaning`、`deadline`、`reminderAt`、`occupiesWholeInterval` 和 `activity` 中的起止时间、时区、地点、状态。自选窗口不会标为全时段占用。没有时间且使用日期过滤的记录不会命中，不带日期过滤可查看它们。同一活动的提前提醒和到时提醒保留独立 ID；agent 可按 activity.id 分组展示，不能把一次准备提醒完成理解为整场考试完成。
 
 验证：`node server/scripts/time-ui-smoke.mjs`；MCP 握手测试覆盖新增工具及非法日期输入。上述展示升级适用于电脑网页版（含窄屏布局），Android 原生端需另行移植。
+
+## 日程摘要与图表明细
+
+日程列表默认只展示公司与事项、岗位、关键时间、地点和重要异常。准备事项、场次编号、版本、来源及变更记录移入「查看详情」抽屉；调整与共用提醒也从详情进入。自选窗口按完成截止排序，固定场次按开始时间排序。
+
+总览环图的扇区与类别按钮、漏斗图的图形与阶段按钮均可打开申请明细抽屉，支持分页和跳转岗位。环图按当前状态筛选；漏斗按历史阶段成员筛选，后续被拒或推进的申请仍属于曾到达的阶段。统计数量与明细查询共用 `funnelMembership` 定义，重复时间线事件不重复计数。
+
+接口：`GET /api/stats/applications?status=WRITTEN_TEST&page=1&pageSize=20` 或 `?stage=interviewed`，status 与 stage 二选一；stage 可选 applied/interviewed/offer，每页最多 100 条。不改变其他页面已有的申请筛选条件。
+
+待办卡片以公司为主标题、岗位为次标题，准备/考试等具体事项另起一行；避免提醒文案遮盖公司身份。图表弹出明细或窗口缩放时清理浮层，避免旧提示框造成小屏横向溢出。

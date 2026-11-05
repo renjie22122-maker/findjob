@@ -4,6 +4,7 @@ import { canTransition, STATUS, STATUS_LABELS, TERMINAL_STATUSES } from '../doma
 import type { AppStatus } from '../domain/status.js';
 import type { Application, Paginated, TimelineEvent } from '../domain/types.js';
 import { nowIso } from '../utils/time.js';
+import {funnelMembership,type FunnelStage} from '../domain/funnel.js';
 
 interface ApplicationRow {
   id: number;
@@ -67,6 +68,7 @@ export interface ApplicationInput {
 }
 
 export interface ApplicationFilters {
+  funnelStage?: FunnelStage;
   statuses?: AppStatus[];
   companyId?: number;
   jobType?: string;
@@ -82,6 +84,7 @@ export function listApplications(filters: ApplicationFilters = {}): Paginated<Ap
   const db = getDb();
   const conditions: string[] = [];
   const params: unknown[] = [];
+  if(filters.funnelStage){const member=funnelMembership(filters.funnelStage);conditions.push(`a.id IN (${member.sql})`);params.push(...member.params);}
 
   if (filters.statuses && filters.statuses.length > 0) {
     conditions.push(`a.status IN (${filters.statuses.map(() => '?').join(',')})`);
@@ -115,7 +118,7 @@ export function listApplications(filters: ApplicationFilters = {}): Paginated<Ap
 
   const total = (db.prepare(`SELECT COUNT(*) AS c FROM applications a JOIN companies c ON c.id = a.company_id ${where}`).get(...params) as { c: number }).c;
   const rows = db
-    .prepare(`${BASE_SELECT} ${where} ORDER BY ${sortColumn} ${sortOrder} NULLS LAST LIMIT ? OFFSET ?`)
+    .prepare(`${BASE_SELECT} ${where} ORDER BY ${sortColumn} ${sortOrder} NULLS LAST, a.id DESC LIMIT ? OFFSET ?`)
     .all(...params, pageSize, offset) as ApplicationRow[];
 
   return { items: rows.map(toApplication), total, page, pageSize };
