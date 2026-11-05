@@ -14,7 +14,11 @@ class WorkspaceStore(private val context:Context,name:String="workspace.db",priv
   db.execSQL("CREATE TABLE versions(id INTEGER PRIMARY KEY,record TEXT,data TEXT,at INTEGER,reason TEXT)")
  }
  override fun onUpgrade(db:SQLiteDatabase,old:Int,new:Int){}
- fun list(kind:String?=null):JSONArray {val result=JSONArray();readableDatabase.rawQuery("SELECT id,kind,data,updated FROM records"+(if(kind!=null)" WHERE kind=?" else "")+" ORDER BY updated DESC",if(kind!=null)arrayOf(kind)else null).use{c->while(c.moveToNext())result.put(JSONObject().put("id",c.getString(0)).put("kind",c.getString(1)).put("data",JSONObject(c.getString(2))).put("updated",c.getLong(3)))};return result}
+ fun list(kind:String?=null):JSONArray {val result=JSONArray();readableDatabase.rawQuery("SELECT id,kind,data,updated FROM records"+(if(kind!=null)" WHERE kind=?" else "")+" ORDER BY updated DESC",if(kind!=null)arrayOf(kind)else null).use{c->while(c.moveToNext())result.put(JSONObject().put("id",c.getString(0)).put("kind",c.getString(1)).put("data",JSONObject(c.getString(2))).put("updated",c.getLong(3)))};if(kind==null){
+   val stages=mutableMapOf<String,MutableSet<String>>()
+   readableDatabase.rawQuery("SELECT v.record,v.data FROM versions v JOIN records r ON r.id=v.record WHERE r.kind='application'",null).use{c->while(c.moveToNext()){val status=JSONObject(c.getString(1)).optString("status");stages.getOrPut(c.getString(0)){mutableSetOf()}.add(status)}}
+   for(i in 0 until result.length()){val row=result.getJSONObject(i);if(row.optString("kind")=="application")row.put("stageHistory",JSONArray(stages[row.getString("id")]?.toList()?:emptyList<String>()))}
+  };return result}
  fun data(id:String):JSONObject?=readableDatabase.rawQuery("SELECT data FROM records WHERE id=?",arrayOf(id)).use{if(it.moveToFirst())JSONObject(it.getString(0))else null}
  fun history(id:String):JSONArray {val a=JSONArray();readableDatabase.rawQuery("SELECT id,at,reason,data FROM versions WHERE record=? ORDER BY id DESC LIMIT 30",arrayOf(id)).use{while(it.moveToNext())a.put(JSONObject().put("id",it.getLong(0)).put("at",it.getLong(1)).put("reason",it.getString(2)).put("data",JSONObject(it.getString(3))))};return a}
  @Synchronized fun save(kind:String,input:JSONObject,id:String="",reason:String="用户编辑 / Edited"):String {

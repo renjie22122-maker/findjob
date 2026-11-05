@@ -8,6 +8,15 @@ import org.json.JSONObject
 import org.json.JSONArray
 @RunWith(AndroidJUnit4::class)
 class WorkspaceTest {
+ @Test fun dashboardRetainsRecordedStagesAfterRejection(){
+  val name="dashboard-history-test.db";context.deleteDatabase(name)
+  val store=WorkspaceStore(context,name)
+  try{val d=JSONObject().put("companyName","Example").put("positionTitle","Engineer").put("status","APPLIED")
+   val id=store.save("application",d);d.put("status","INTERVIEW_1");store.save("application",d,id);d.put("status","REJECTED");store.save("application",d,id)
+   val row=store.list().getJSONObject(0);assertEquals("REJECTED",row.getJSONObject("data").getString("status"));val stages=row.getJSONArray("stageHistory").toString();assertTrue(stages.contains("APPLIED"));assertTrue(stages.contains("INTERVIEW_1"));assertEquals(1,store.list().length())
+  }finally{store.close();context.deleteDatabase(name)}
+ }
+
  private val context=InstrumentationRegistry.getInstrumentation().targetContext
  private lateinit var store:WorkspaceStore
  @Before fun setup(){context.deleteDatabase("workspace-test.db");store=WorkspaceStore(context,"workspace-test.db","workspace-schedules-test.db")}

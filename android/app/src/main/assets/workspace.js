@@ -46,3 +46,27 @@ function renderApiSettings(){$('saveKey').textContent=t('保存 API 配置','Sav
 }
 $('saveKey').onclick=()=>{const config={baseUrl:$('llmBase').value.trim(),model:$('llmModel').value.trim(),key:$('key').value.trim(),auth:$('llmAuth').value,jsonMode:$('llmJson').checked,temperature:$('llmTemperature').checked,timeout:Number($('llmTimeout').value),maxTokens:Number($('llmMax').value)};if(CareerFlow.saveLlm(JSON.stringify(config))){$('key').value='';feedback(t('API 配置已加密保存，自动分析继续执行','API configuration stored encrypted; analysis resumes'));}else feedback(t('请检查 HTTPS 地址、模型和密钥；换地址需重新输入密钥','Check HTTPS URL, model and key; URL changes require re-entering the key'));};
 $('llmTest').onclick=()=>{CareerFlow.probeLlm(false);$('llmTest').disabled=true;$('llmLoad').disabled=true;feedback(t('正在测试已保存的配置','Testing saved configuration'));};$('llmLoad').onclick=()=>{CareerFlow.probeLlm(true);$('llmTest').disabled=true;$('llmLoad').disabled=true;feedback(t('正在读取模型列表','Loading model list'));};setInterval(()=>{if(active==='settings'&&!document.hidden)renderApiSettings();},2000);
+function renderDashboard(){
+ const records=workspaceRecords;
+ const groups=MobileModel.applicationGroups(records),root=$('pipeline');root.replaceChildren();
+ const colors=['#6588ec','#35b7ad','#b08cf4','#eead52','#ea829b','#71a8b8'];
+ const ring=node('div','');ring.className='application-ring';ring.setAttribute('aria-label',t('按当前申请状态查看','View current application status'));
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 120 120');let offset=0,index=0;
+ const legend=node('div','');legend.className='chart-legend';
+ for(const [status,items] of groups.statuses){const color=colors[index++%colors.length],fraction=items.length/Math.max(1,groups.apps.length),circle=document.createElementNS(svg.namespaceURI,'circle');
+ for(const [key,value] of Object.entries({cx:60,cy:60,r:44,fill:'none',stroke:color,'stroke-width':15,pathLength:100,'stroke-dasharray':`${fraction*100} ${100-fraction*100}`,'stroke-dashoffset':-offset,transform:'rotate(-90 60 60)',tabindex:0,role:'button','aria-label':`${appStatus(status)} ${items.length}`}))circle.setAttribute(key,value);
+ const open=()=>showApplicationCategory(appStatus(status),items);circle.onclick=open;circle.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}};svg.append(circle);offset+=fraction*100;
+ const b=button('',open);b.style.borderLeft=`4px solid ${color}`;b.append(node('span',appStatus(status)),node('strong',String(items.length)));legend.append(b);
+ }
+ ring.append(svg);const total=node('div','');total.className='ring-total';total.append(node('strong',String(groups.apps.length)),node('small',t('申请','Applications')));ring.append(total);root.append(ring,legend,node('h3',t('投递 → 面试 → Offer','Applied → Interview → Offer')));
+ for(const [key,label] of [['applied',t('投递','Applied')],['interviewed',t('面试','Interview')],['offer','Offer']]){const items=groups.stages[key],b=button('',()=>showApplicationCategory(label,items));b.className='funnel-step';b.style.width=(70+30*items.length/Math.max(1,groups.stages.applied.length))+'%';b.append(node('span',label),node('strong',String(items.length)),node('span','›'));root.append(b);}
+ root.append(node('small',t('环图按当前状态；漏斗按已记录阶段，后续拒绝不抹去面试经历。点图形或类别查看申请。','Ring: current status. Funnel: recorded stages, including later rejections. Tap a segment or stage to view applications.')));
+}
+function showApplicationCategory(title,items){
+ let dialog=$('categoryDialog');if(!dialog){dialog=node('dialog','');dialog.id='categoryDialog';document.body.append(dialog);}let offset=0;
+ function draw(){dialog.replaceChildren();const heading=node('div','');heading.className='section-heading';const close=button(t('关闭','Close'),()=>dialog.close());heading.append(node('h2',title+' · '+items.length),close);dialog.append(heading);
+ for(const r of items.slice(offset,offset+30)){const b=button('',()=>{dialog.close();editWorkspace('application',r);});b.className='category-record';b.append(node('strong',r.data.companyName),node('span',r.data.positionTitle),node('small',appStatus(r.data.status)+' ›'));dialog.append(b);}
+ if(!items.length)dialog.append(node('p',t('暂无申请','No applications')));
+ if(items.length>30){const pager=node('div','');pager.className='button-row';const prev=button(t('上一页','Previous'),()=>{offset-=30;draw();}),next=button(t('下一页','Next'),()=>{offset+=30;draw();});prev.disabled=offset===0;next.disabled=offset+30>=items.length;pager.append(prev,node('span',`${offset+1}–${Math.min(offset+30,items.length)} / ${items.length}`),next);dialog.append(pager);}}
+ draw();dialog.showModal();
+}

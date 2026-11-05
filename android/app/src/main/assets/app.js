@@ -42,9 +42,9 @@ function render() {
     $('settingsPermissions').textContent = $('permissions').textContent;
     document.querySelector('.permission-hint').hidden = state.notifications && state.exact;
     $('apiState').textContent = state.configured ? t('密钥已加密保存', 'Key stored securely') : t('配置后自动分析招聘通知', 'Configure to analyze recruitment messages');
+    if(active==='home'||active==='workspace')renderWorkspace();
     renderMobile(state);
     if(active==='home')renderReanalysis();
-    if(active==='home'||active==='workspace')renderWorkspace();
     if(active==='settings')renderApiSettings();
     if(active==='inbox'){
     const page=CareerFlow.noticePage?JSON.parse(CareerFlow.noticePage(inboxOffset,inboxFilter)):{items:state.items,total:state.noticeCount??state.items.length};const pageItems=page.items,total=page.total;

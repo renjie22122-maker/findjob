@@ -16,3 +16,9 @@ assert.equal(m.tasks([fixed],'overdue','',Date.parse('2026-11-01T17:00:00+08:00'
 console.log('Mobile model passed: Beijing dates, month boundaries, windows, sorting, completion and search.');
 
 assert.equal(m.tasks([fixed],'upcoming','',Date.parse('2026-11-01T15:00:00+08:00')).length,1);
+const apps=[{id:'a',kind:'application',data:{status:'REJECTED'},stageHistory:['APPLIED','INTERVIEW_1']},{id:'b',kind:'application',data:{status:'OFFER'}},{id:'c',kind:'application',data:{status:'WISHLIST'}},{id:'d',kind:'application',data:{status:'REJECTED'}}];
+const groups=m.applicationGroups(apps);
+assert.deepEqual(groups.stages.interviewed.map(x=>x.id),['a','b']);
+assert.deepEqual(groups.stages.applied.map(x=>x.id),['a','b']);
+assert.equal(groups.statuses.get('REJECTED').length,2);
+assert.equal(m.stamp('2026-11-01T09:00:00+08:00'),now);

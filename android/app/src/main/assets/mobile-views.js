@@ -10,26 +10,34 @@ function scheduleCard(s,state){
             card.classList.add('conflict');
         if (s.done)
             card.classList.add('complete');
-        card.append(node('small', (s.round || stage(s.stage)) + ' · ' + (s.kind === 'window' ? t('期限内完成', 'Flexible window') : s.kind === 'deadline' ? t('截止事项', 'Deadline') : t('固定场次', 'Fixed appointment'))), node('h2', s.company + ' · ' + (s.role || '')), node('p', time(s.start) + (s.end ? '\n— ' + time(s.end) : '')));
-        card.lastChild.className = 'time';
-        card.append(node('p', s.location || t('地点待通知', 'Location pending')));
+        card.classList.add('agenda-card');
+        card.append(node('h2', s.company || t('公司待补充','Company pending')));
+        const role=node('p',s.role || t('岗位待补充','Role pending'));role.className='agenda-role';card.append(role);
+        card.append(node('small',s.round || stage(s.stage)));
+        const timing=node('div','');timing.className='agenda-time';
+        timing.append(node('small',s.cancelled?t('已取消','Canceled'):s.kind==='window'?t('完成截止 · 时间自选','Complete by · flexible'):s.kind==='deadline'?t('完成截止','Complete by'):t('固定场次 · 北京时间','Appointment · UTC+8')));
+        const primary=s.kind==='window'?s.end:s.kind==='deadline'?(s.end||s.start):s.start;
+        timing.append(node('strong',time(primary)+(s.kind==='start'&&s.end?' – '+(s.start.slice(0,10)===s.end.slice(0,10)?s.end.slice(11,16):time(s.end)):'')));
+        if(s.kind==='window'&&s.start)timing.append(node('small',t('开放：','Opens: ')+time(s.start)+t(' · 北京时间',' · UTC+8')));
+        card.append(timing);
+        if(s.location)card.append(node('p',s.location));
         if (conflicts.length)
             card.append(node('strong', t('时间冲突：', 'Time conflict: ') + conflicts.map(x => x.company).join(' / ')));
         if (s.cancelled)
             card.append(node('p', t('已取消，提醒已停止', 'Canceled; reminders stopped')));
         card.append(button(s.done ? t('已完成 · 撤销', 'Completed · undo') : t('标记完成', 'Mark complete'), () => { CareerFlow.complete(s.id, !s.done); render(); }));
         const details = node('details', '');
-        details.append(node('summary', t('关联依据', 'Linked evidence') + ' · ' + (s.sourceCount??s.sources.length)));
+        details.append(node('summary', t('安排详情', 'Event details')),button(t('编辑安排','Edit event'),()=>openEditor(s)),node('h3',t('关联依据', 'Linked evidence') + ' · ' + (s.sourceCount??s.sources?.length??0)));
         details.ontoggle=()=>{if(!details.open||details.querySelector("pre"))return;for (const source of (CareerFlow.scheduleSources?JSON.parse(CareerFlow.scheduleSources(s.id)):s.sources))
             details.append(node('small', source.source + ' · ' + new Date(source.received).toLocaleString()), node('pre', source.body));};
-        card.append(button(t('编辑安排','Edit event'),()=>openEditor(s)),details);
+        card.append(details);
 return card;
 }
 let taskFilter='upcoming',inboxFilter='all',selectedDate=MobileModel.day(),calendarMonth=selectedDate.slice(0,7),editingEvent=null;
 function navigate(key){active=key;render();window.scrollTo(0,0);}
 function renderMobile(state){
  const health=JSON.parse(CareerFlow.health?.()||'{}'),now=Date.now(),upcoming=active==='home'?MobileModel.tasks(state.schedules,'upcoming'):[],today=active==='home'?MobileModel.tasks(state.schedules,'today'):[],overdue=active==='home'?MobileModel.tasks(state.schedules,'overdue'):[],reviews=state.items.filter(i=>i.state==='review');const reviewTotal=state.reviewCount??reviews.length;
- const labels={tasksTitle:['待办','Tasks'],tasksHelp:['先看下一步。时间均为北京时间，弹性测评只按截止时间提醒。','Your next actions, in UTC+8. Flexible assessments use deadline reminders.'],addEvent:['＋ 新建','＋ Add'],calendarTitle:['日历','Calendar'],calendarToday:['今天','Today'],calendarHelp:['蓝点：固定场次 · 紫点：弹性窗口 · 红点：截止事项。点日期查看详情。','Blue: appointment · purple: flexible window · red: deadline. Tap a day for details.'],pipelineTitle:['阶段分布','Stage breakdown'],applicationsTitle:['公司与岗位进展','Companies & roles'],backgroundSettings:['检查系统后台设置','Open background settings']};
+ const labels={tasksTitle:['待办','Tasks'],tasksHelp:['先看下一步。时间均为北京时间，弹性测评只按截止时间提醒。','Your next actions, in UTC+8. Flexible assessments use deadline reminders.'],addEvent:['＋ 新建','＋ Add'],calendarTitle:['日历','Calendar'],calendarToday:['今天','Today'],calendarHelp:['蓝点：固定场次 · 紫点：弹性窗口 · 红点：截止事项。点日期查看详情。','Blue: appointment · purple: flexible window · red: deadline. Tap a day for details.'],pipelineTitle:['申请总览','Application overview'],applicationsTitle:['公司与岗位进展','Companies & roles'],backgroundSettings:['检查系统后台设置','Open background settings']};
  for(const [id,pair] of Object.entries(labels))$(id).textContent=t(...pair);
  $('taskSearch').placeholder=t('搜索公司、岗位或地点','Search company, role or location');$('taskSearch').setAttribute('aria-label',$('taskSearch').placeholder);
  if(active==='home'){
@@ -41,8 +49,7 @@ function renderMobile(state){
  if(!upcoming.length)$('nextSteps').append(node('p',t('暂无待办。连接邮箱、导入短信或手动添加。','No upcoming tasks. Connect mail, import SMS or add one.')));
  for(const s of upcoming.slice(0,3))$('nextSteps').append(scheduleCard(s,state));
  if(reviewTotal)$('nextSteps').append(button(t(`${reviewTotal} 条关联冲突 · 查看`,`${reviewTotal} link conflicts`),()=>{inboxFilter='review';inboxOffset=0;navigate('inbox');}));
- const counts=new Map();for(const s of state.schedules.filter(s=>!s.cancelled))counts.set(s.stage,(counts.get(s.stage)||0)+1);
- $('pipeline').replaceChildren(node('p',t('按日程阶段统计，不代表申请转化率。','Counts by event stage, not application conversion rates.')));const max=Math.max(1,...counts.values());for(const [key,count] of counts){const row=node('div','');row.className='stage-row';const fill=node('div','');fill.className='stage-fill';fill.style.width=Math.max(5,count/max*100)+'%';row.append(node('span',stage(key)),node('strong',String(count)),fill);$('pipeline').append(row);}
+ renderDashboard();
  if($('applications').parentElement.open){
  const groups=new Map();for(const s of state.schedules){const key=[s.company,s.role,s.ref].join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(s);}
  $('applications').replaceChildren(node('p',t('按公司、岗位和编号整理；不同岗位不自动合并。','Grouped by company, role and reference; different roles stay separate.')));for(const list of groups.values()){const d=node('details','');d.append(node('summary',list[0].company+' · '+(list[0].role||t('岗位待补充','Role unknown'))));for(const s of MobileModel.sort(list))d.append(button(stage(s.stage)+' · '+time(s.start||s.end),()=>{openEditor(s);}));$('applications').append(d);}
