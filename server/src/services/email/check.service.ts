@@ -105,7 +105,7 @@ export function checkExistingEmails(trigger:'manual'|'incremental'|'apply'|'conf
       if(!next.reviewReasons?.length && (next.confidence>=0.8 || old.company==='重要' && next.company!==old.company) && hash(next)!==hash(old)){
         db.prepare('UPDATE email_items SET extracted=? WHERE id=?').run(JSON.stringify(next),mail.id);
         record(runId,null,`自动补全邮件 #${mail.id} 的可核对依据`,old,next);
-        if(decorative){
+        if(!next.reviewReasons?.length){
           try{const applied=applyEmailItem(Number(mail.id),undefined,{createIfMissing:true,markApplied:true});record(runId,null,`自动应用正文明确的投递回执 #${mail.id}`,mail,applied.item);}catch{/* Existing matching safeguards leave ambiguous applications for review. */}
         }
       }

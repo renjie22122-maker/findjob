@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
 export const scheduleChangeSchema = z.object({
+  preliminary: z.boolean().optional(),
+  dateStart: z.string().optional(),
+  dateEnd: z.string().optional(),
   action: z.enum(['create', 'update', 'reschedule', 'cancel', 'restore']),
   eventRef: z.string().max(120).nullish(),
   round: z.string().max(100).nullish(),

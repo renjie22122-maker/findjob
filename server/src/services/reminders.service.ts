@@ -33,9 +33,9 @@ function toReminder(row: ReminderRow): Reminder {
   try { data = JSON.parse(row.schedule_data || '{}') ?? {}; } catch { /* Legacy malformed metadata remains a plain reminder. */ }
   const text = (key:string) => typeof data[key] === 'string' ? data[key] as string : null;
   return {
-    ...(row.schedule_id && row.schedule_status ? {activity:{id:row.schedule_id,kind:row.schedule_kind!,status:row.schedule_status,
-      timeKind:['start','deadline','window'].includes(String(data.timeKind)) ? data.timeKind as 'start'|'deadline'|'window' : undefined,
-      eventTime:text('eventTime'),eventTimeEnd:text('eventTimeEnd'),timezone:text('timezone'),venue:text('venue'),address:text('address'),room:text('room')}} : {}),
+    ...(row.schedule_id && row.schedule_status ? {activity:{id:row.schedule_id,kind:row.schedule_kind!,status:row.type==='other'&&row.schedule_status!=='cancelled'?'scheduled':row.schedule_status,
+      timeKind:row.type==='other'?'deadline':['start','deadline','window'].includes(String(data.timeKind)) ? data.timeKind as 'start'|'deadline'|'window' : undefined,
+      eventTime:row.type==='other'?row.scheduled_at:text('eventTime'),eventTimeEnd:row.type==='other'?null:text('eventTimeEnd'),timezone:text('timezone'),venue:text('venue'),address:text('address'),room:text('room')}} : {}),
     id: row.id,
     applicationId: row.application_id,
     companyName: row.company_name ?? undefined,

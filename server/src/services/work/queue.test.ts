@@ -18,3 +18,8 @@ it('网络失败退避，busy不吞批次，新内容重新获得重试机会',a
  getDb().prepare("UPDATE work_scan SET attempts=3,next_attempt='2000-01-01'").run();await processWorkQueue();expect(run).toHaveBeenCalledTimes(2);
  getDb().prepare("UPDATE email_items SET snippet='新内容'").run();await processWorkQueue();expect(getDb().prepare('SELECT attempts FROM work_scan').get()).toEqual({attempts:1});
 });
+it('部分操作未应用时进入有限重试，不把失败当作已完成',async()=>{
+ seed();run.mockResolvedValue({status:'pending'});await processWorkQueue();
+ expect(getDb().prepare('SELECT attempts,error FROM work_scan').get()).toMatchObject({attempts:1,error:expect.any(String)});
+ await processWorkQueue();expect(run).toHaveBeenCalledTimes(1);
+});

@@ -63,6 +63,7 @@ function matchSchedule(appId: number, e: EmailExtraction, target?: number | null
     const d = JSON.parse(row.data) as ScheduleData;
     if (change?.eventRef) return d.eventRef === change.eventRef;
     if (!matchTime && change?.round && change.action !== 'create') return d.round === change.round;
+    if(change?.preliminary && d.preliminary && change.dateStart && change.dateStart===d.dateStart && change.dateEnd===d.dateEnd && (!change.mode||!d.mode||change.mode===d.mode))return true;
     const provisional=d.preliminary && row.status==='awaiting_time' && matchTime && d.dateStart && d.dateEnd && matchTime.slice(0,10)>=d.dateStart && matchTime.slice(0,10)<=d.dateEnd;
     return Boolean(matchTime && (provisional || d.eventTime === matchTime || (change?.timeKind === 'deadline' && d.timeKind === 'window' && d.eventTimeEnd === matchTime)) && (!change?.round || !d.round || d.round === change.round));
   });
@@ -152,7 +153,7 @@ function rebuildReminders(row: Row, data: ScheduleData, keepOverdue = false) {
   const db = getDb(); const now = nowIso();
   const retained = new Set<number>();
   // Reconcile in place: repeated checks must not churn reminder IDs or completion state.
-  if (row.status !== 'scheduled') { db.prepare('DELETE FROM reminders WHERE schedule_id=? AND done=0').run(row.id); return; }
+  if (row.status !== 'scheduled' && row.status !== 'awaiting_time') { db.prepare('DELETE FROM reminders WHERE schedule_id=? AND done=0').run(row.id); return; }
   const location = [data.venue, data.address, data.room].filter(Boolean).join(' · ');
   const type = row.kind === 'interview' ? 'interview' : 'written_test';
   const title = `${row.kind === 'interview' ? '面试' : '考试'}${data.round ? ` · ${data.round}` : ''}${data.timeKind === 'deadline' ? ' · 截止' : ''}${location ? ` · ${location}` : ''}`;
@@ -222,7 +223,7 @@ export function applySchedule(appId: number, emailId: number | null, receivedAt:
   if (change.action === 'restore' && !e.eventTime) throw AppError.validation('恢复日程必须确认活动时间');
   const data: ScheduleData = { ...old };
   if(e.eventTime && old.preliminary){data.preliminary=false;data.attendanceCondition=null;}
-  for (const key of ['eventRef','round','mode','venue','address','room','timezone','timeKind','evidence'] as const) {
+  for (const key of ['eventRef','round','mode','venue','address','room','timezone','timeKind','evidence','preliminary','dateStart','dateEnd'] as const) {
     const value = change[key];
     if (value !== undefined && value !== null && value !== '') Object.assign(data, { [key]: value });
     if (emailId === null && value === null) Object.assign(data,{[key]:null});
@@ -239,7 +240,7 @@ export function applySchedule(appId: number, emailId: number | null, receivedAt:
     if (e.preparationTasks?.length) data.preparationTasks = [...new Map([...(old.preparationTasks ?? []),...e.preparationTasks].map(task=>[`${task.scheduledAt}/${task.title}`,task])).values()];
   }
   if (e.timeEvidence) data.timeEvidence = e.timeEvidence;
-  if (!row && !data.eventTime) throw AppError.validation('新日程需要确认活动时间');
+  if (!row && !data.eventTime && !data.preliminary) throw AppError.validation('新日程需要确认活动时间');
   if (data.eventTimeEnd && (!data.eventTime || data.eventTimeEnd <= data.eventTime)) throw AppError.validation('日程结束时间必须晚于开始时间');
   const status = change.action === 'cancel' ? 'cancelled' : data.eventTime ? 'scheduled' : 'awaiting_time';
   if (!row) {

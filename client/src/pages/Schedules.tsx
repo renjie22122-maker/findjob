@@ -47,7 +47,7 @@ export default function Schedules() {
         {conflicts(s).length>0 && <Alert type="error" showIcon message={translate("时间冲突")} description={conflicts(s).map(o=>`${o.companyName} · ${EMAIL_EVENT_LABELS[o.kind as keyof typeof EMAIL_EVENT_LABELS]??o.kind} · ${formatDateTime(o.data.eventTime!)}${o.data.eventTimeEnd?' — '+formatDateTime(o.data.eventTimeEnd):''}`).join('；')}/>}
         {s.data.sharedWithScheduleId && <Typography.Text type="secondary">{`已确认共用日程 #${s.data.sharedWithScheduleId} 的活动提醒；本申请独立保留`}</Typography.Text>}
 
-        {s.data.preliminary && <Alert type="warning" message={`${s.data.stageLabel??'预通知'}：${s.data.dateStart} 至 ${s.data.dateEnd}，等待正式时间`} description={s.data.attendanceCondition??'不推断具体时刻，正式通知后补齐提醒'}/>}
+        {s.data.preliminary && <Alert type="warning" message={`${s.data.stageLabel??'时间待确定'}${s.data.dateStart&&s.data.dateEnd?`：${s.data.dateStart} 至 ${s.data.dateEnd}`:''}，等待预约结果或正式时间`} description={s.data.attendanceCondition??'不推断具体时刻，正式通知后补齐提醒'}/>}
         <ActivityTime data={s.data} status={s.status}/>
         <Typography.Text>{s.data.mode==='online'?'线上参加':s.data.mode==='offline'?'线下参加':'参加方式待通知'}{[s.data.venue,s.data.address,s.data.room].filter(Boolean).length?' · '+[s.data.venue,s.data.address,s.data.room].filter(Boolean).join(' · '):s.data.mode==='offline'?' · 地点待通知':''}</Typography.Text>
         {!!s.data.preparationTasks?.length&&<Typography.Text type="secondary">{s.data.preparationTasks.length} 项准备事项 · 详情中查看</Typography.Text>}

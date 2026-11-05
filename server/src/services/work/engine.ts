@@ -162,6 +162,8 @@ identify-company: {aliasId,canonicalId,reason,confidence,evidence} 可自动关�
 默认自动执行，用户不需要逐项批准。question仅用于实际无法解决的重大问题，不是礼貌征询。用户可用简短对话修改事项，结合历史与图谱定位对象，不要求用户填写编号。
 如果图谱中有相关旧通知但本轮没有正文，可返回 requestedNoticeIds:[编号] 请求补取本地原文，actions为空。系统允许一次补取，不必把可检索的信息问用户。
 返回JSON {reply,actions:[]}。明确证据充分的可自动执行，只对真实歧义填写question。不要问用户要不要为明确截止建立提醒。不要猜测已完成，不用同一时间推断同一活动。分行/岗位保持独立；统一考试可以关联多个申请，共享提醒；后续面试各自跟踪。结果通知不是新考试。灵活作答窗口不是固定占用时段。未知岗位用未定岗位跟踪，不编造职位。24:00为次日00:00。不要因缺编号、名称略不同、时间不同而提问：综合主体、正文、先后顺序、轮次判断。不同时间可以是独立轮次或改期；明确改期更新原活动，独立轮次建新活动。申请关联到该单位唯一已有岗位时直接使用，不凭空假设同名岗位歧义。
+pending通知若已经对应现有活动（包括中英文重复通知），必须用apply-notice并指定applicationId和targetScheduleId以归档并补充来源，只做link不会消除待处理状态。活动类型不同即使同时间也不可合并。已有待定岗位遇到明确岗位应补全原申请，不额外新建。明确岗位调剂用extraction.applicationChange={kind:'transfer',fromPositionTitle,evidence}，保留申请历史；询问意愿不能当成调剂已发生。
+面试时间待预约/另行通知：extraction.eventTime=null,eventTimeEnd=null,schedule.preliminary=true,dateStart/dateEnd仅填明确日期范围；预约截止用preparationTasks生成提醒。不得虚构午夜的面试时间。地点仍保留在schedule.venue/address/room。正式时间到达后关联该待定日程并补全。链接另发不阻止已经明确的自由作答窗口入库。
 每个action都要reason,confidence(0..1),evidence:[{noticeId,quote:连续原文}]，可选question。
 操作：
 1 link: {source,target,relation}，端点使用上下文已有ID或本次创建的work:key。关系自由命名英文小写如 participates,depends_on,passed,belongs_to，表示关联而非合并实体。
@@ -182,7 +184,7 @@ export function runWorkAnalysis(message='自动关联新通知、进度与共用
     const db=getDb(),before=fingerprint();
     let ids=noticeIds??(db.prepare("SELECT id FROM email_items ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END,id DESC LIMIT 24").all() as {id:number}[]).map(n=>n.id);
     let sources=workSources(ids);const graph=workGraph('',0,100);
-    if(automatic&&db.prepare("SELECT id FROM work_decisions WHERE fingerprint=? AND input=? LIMIT 1").get(before,message))return {status:'unchanged'};
+    if(automatic&&db.prepare("SELECT id FROM work_decisions WHERE fingerprint=? AND input=? AND status='applied' LIMIT 1").get(before,message))return {status:'unchanged'};
     const history=workHistory().slice(0,6).map(h=>({id:h.id,input:h.input,status:h.status,plan:safeJson(h.plan,{}),result:h.result.slice(0,1500)}));
     const context=JSON.stringify({request:redactMailSecrets(message),currentTime:nowIso(),scope:{noticeCount:sources.length,graphTruncated:graph.hasMore},sources,graph,history});
     const options={maxTokens:0,temperature:.1,auditDetail:'通用进度核查：脱敏本地通知与关联图谱，不访问通知链接'};

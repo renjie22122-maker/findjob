@@ -1,3 +1,4 @@
+import {evolveApplication,transferEvidence} from './applicationEvolution.js';
 import { getDb } from '../../db/connection.js';
 import { AppError } from '../../middleware/error.js';
 import { EMAIL_ANALYZE_MAX_DAYS, EMAIL_ANALYZE_MODE, EMAIL_LLM_MAX_EMAILS } from '../../config.js';
@@ -236,8 +237,9 @@ function applyEmailItemInternal(
   if (extracted?.schedule && !SCHEDULE_KINDS.includes(extracted.eventType ?? '')) throw AppError.validation('日程变更必须指定考试、测评或面试类型，取消活动不等于拒信');
   if (extracted?.eventTime && !validEventTime(extracted.eventTime)) throw AppError.validation('事件时间格式或日期无效');
   if (extracted?.eventTimeEnd && (!validEventTime(extracted.eventTimeEnd) || !extracted.eventTime || extracted.eventTimeEnd <= extracted.eventTime)) throw AppError.validation('结束时间必须晚于开始时间');
-  if (extracted && ['written_test', 'interview', 'assessment'].includes(extracted.eventType ?? '') && !extracted.eventTime && (!extracted.schedule || extracted.schedule.action === 'create')) throw AppError.validation('请先填写正文或附件中的活动时间，不能使用收件时间代替');
+  if (extracted && ['written_test', 'interview', 'assessment'].includes(extracted.eventType ?? '') && !extracted.eventTime && !extracted.schedule?.preliminary && (!extracted.schedule || extracted.schedule.action === 'create')) throw AppError.validation('请先填写正文或附件中的活动时间，不能使用收件时间代替');
 
+  if(extracted?.applicationChange&&!transferEvidence(extracted,`${row.subject}\n${row.snippet}`))throw AppError.validation('岗位调剂缺少明确原文依据，意愿询问不代表已调剂');
   let applicationId: number | null = null;
   let timelineEvent: TimelineEvent | null = null;
   let reminder: Reminder | null = null;
@@ -291,6 +293,7 @@ function applyEmailItemInternal(
         } catch { throw AppError.conflict('无法创建匹配的申请，请在投递管理中核对岗位'); }
       }
       applicationId = appRow?.id ?? null;
+      if(applicationId)evolveApplication(applicationId,extracted,`${row.subject}\n${row.snippet}`,row.received_at);
     }
   } else {
     warning = '未识别到公司信息，仅记录邮件内容。';
@@ -510,7 +513,7 @@ export function applyEmailBatch(minConfidence = 0.8, options: ApplyOptions = {})
       extraction = null;
     }
     const informational=extraction?.eventType==='other' && (extraction.intent==='progress' || extraction.intent==='task' && extraction.preparationTasks?.length || extraction.positionTitle && qualificationNotice(`${row.subject}\n${row.snippet}`));
-    if (!extraction || !extraction.timeSource || extraction.timeSource === 'unknown' || extraction.confidence < minConfidence || extraction.reviewReasons?.length || !extraction.company || !extraction.eventType || (extraction.eventType === 'other' && !informational) || (['interview', 'written_test', 'assessment'].includes(extraction.eventType) && !extraction.eventTime && (!extraction.schedule || extraction.schedule.action === 'create'))) {
+    if (!extraction || !extraction.timeSource || extraction.timeSource === 'unknown' || extraction.confidence < minConfidence || extraction.reviewReasons?.length || !extraction.company || !extraction.eventType || (extraction.eventType === 'other' && !informational) || (['interview', 'written_test', 'assessment'].includes(extraction.eventType) && !extraction.eventTime && !extraction.schedule?.preliminary && (!extraction.schedule || extraction.schedule.action === 'create'))) {
       skipped++;
       continue;
     }

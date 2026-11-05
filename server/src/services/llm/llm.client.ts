@@ -136,6 +136,7 @@ export async function chatVision(
 }
 
 export const emailExtractionSchema = z.object({
+  applicationChange: z.object({kind:z.literal('transfer'),fromPositionTitle:z.string().min(1).max(200),evidence:z.string().min(2).max(2000)}).optional(),
   intent: z.enum(['invitation','progress','task','receipt']).optional(),
   schedule: scheduleChangeSchema.optional(),
   recruitmentId: z.string().max(100).nullish(),
@@ -171,6 +172,8 @@ JSON 格式：
 规则：written_test 包括线下统一考试、考位预约成功后的笔试安排；assessment 包括 coding assessment。应聘雇主从正文/主题识别，不要把中华英才网、HackerRank 等代发平台当雇主。recruitmentId 提取明确的 Job number / requisition ID / 职位编号，无法判断为 null；不要用简历编号、验证码或候选人编号作为职位编号。positionTitle 只填岗位名称，编号单独填写。
 仅明确告知本次申请被拒才是 reject，投递回执中假设性的“if ... not selected”不算拒信。只取该场考试/面试本身时间为 eventTime/eventTimeEnd，客服工作时间、预约窗口、准考证打印时间均不算考试起止。预约成功不等于考试已完成，不代表录用。多个地区/场次且无法确定用户所属时 eventTime=null，summary 列明待选地区及时间，不能擅自选择。没有结束时间不要推算。
 preparationTasks 可选数组，提取明确的考位预约开始/截止、准考证打印截止等独立准备事项，每条为 {title, scheduledAt:本地 ISO 时间, timeEvidence:连续原文}，没有明确时间不要编造。不要将这些事项混入考试时间。
+具体面试时间以预约为准或另行通知：eventTime=null，eventTimeEnd=null，schedule.preliminary=true；仅有日期范围用dateStart/dateEnd (YYYY-MM-DD)，不能虚构00:00或23:59。预约截止作为preparationTasks，不能把预约区间当自由作答窗口。已有明确自由作答窗口的预通知，即使链接另发也正常建立window及截止提醒。
+明确已将原岗位调剂/调整到新岗位：positionTitle填新岗位，applicationChange={kind:'transfer',fromPositionTitle:原岗位,evidence:包含原岗位新岗位和实际调剂决定的连续原文}。询问调剂意愿、推荐其他岗位不等于实际调剂，应保留原申请并记录进度或有截止的确认任务。原岗位未知时交给跨通知关联，不编造原岗位。
 时间缺失则 eventTime=null，历史日期必须保留。明确“收到邮件后 N 天内完成”以 receivedAt 推算截止，timeEvidence 保留相对时间原文。日期有歧义则返回 null。只给时间点或截止时间时 eventTimeEnd=null。`;
 
 /** DeepSeek（OpenAI 兼容）结构化提取；失败抛错由调用方降级；记录出站审计 */

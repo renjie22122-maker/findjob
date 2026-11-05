@@ -71,6 +71,9 @@ export interface Reminder {
 }
 
 export interface RecruitmentScheduleChange {
+  preliminary?: boolean;
+  dateStart?: string;
+  dateEnd?: string;
   action: 'create' | 'update' | 'reschedule' | 'cancel' | 'restore';
   eventRef?: string | null;
   round?: string | null;
@@ -85,6 +88,7 @@ export interface RecruitmentScheduleChange {
 }
 
 export interface EmailExtraction {
+  applicationChange?: { kind: 'transfer'; fromPositionTitle: string; evidence: string };
   intent?: 'invitation' | 'progress' | 'task' | 'receipt';
   schedule?: RecruitmentScheduleChange;
   recruitmentId?: string | null;

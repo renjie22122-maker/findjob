@@ -1,3 +1,5 @@
+import {transferEvidence} from './applicationEvolution.js';
+import {awaitingAppointment} from './preliminary.js';
 import type { EmailExtraction } from '../../domain/types.js';
 import type { RawEmail } from './imap.client.js';
 import { explicitActivityWindow, mailTimeToLocal, validEventTime } from './eventTime.js';
@@ -16,6 +18,7 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
   const sourceText = `${raw.subject}\n${raw.content?.body ?? raw.snippet}\n${raw.content?.attachmentText ?? ''}`;
   // A warning about actions the user must perform is not uncertainty about a date.
   result.reviewReasons=result.reviewReasons.filter(w=>!w.startsWith('邮件含身份验证或一次性操作信息：') && !decorativeReceiptWarning(result,raw.content?.body ?? raw.snippet,w));
+  if(!transferEvidence(result,sourceText))result.reviewReasons.push('岗位调剂缺少明确原文依据，意愿询问不代表已调剂');
   const recovered = ['interview','assessment','written_test'].includes(result.eventType ?? '') && (!result.schedule || ['create','update'].includes(result.schedule.action)) ? explicitActivityWindow(sourceText) : null;
   if (recovered) {
     if ((result.eventTime && validEventTime(result.eventTime) !== recovered.start) || (result.eventTimeEnd && validEventTime(result.eventTimeEnd) !== recovered.end)) result.reviewReasons.push('模型时间与明确活动时间段冲突，请复核');
@@ -23,6 +26,13 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
       result.eventTime=recovered.start; result.eventTimeEnd=recovered.end; result.timeEvidence=recovered.evidence;
       if (recovered.window) result.schedule={...result.schedule,action:result.schedule?.action ?? 'create',timeKind:'window'};
     }
+  }
+  const waiting=['interview','written_test','assessment'].includes(result.eventType??'') ? awaitingAppointment(result.timeEvidence||(!result.eventTime?sourceText:''),raw.receivedAt) : null;
+  if(waiting && (!result.schedule || result.schedule.action==='create')){
+    result.eventTime=null;result.eventTimeEnd=null;
+    result.schedule={...result.schedule,action:'create',timeKind:'start',...waiting,evidence:result.schedule?.evidence||result.timeEvidence||waiting.evidence};
+  }else if(result.schedule?.preliminary && result.schedule.action==='create'){
+    delete result.schedule.preliminary;delete result.schedule.dateStart;delete result.schedule.dateEnd;
   }
   const change = result.schedule;
   // A fixed exam with a late-login exclusion is not a freely selectable completion window.
@@ -108,7 +118,7 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     if (!result.eventTime && result.eventType === 'offer') {
       result.eventTime = mailTimeToLocal(raw.receivedAt); result.timeSource = 'received';
     }
-    if (!result.eventTime && !changeOnly && ['written_test', 'interview', 'assessment'].includes(result.eventType ?? '')) {
+    if (!result.eventTime && !change?.preliminary && !changeOnly && ['written_test', 'interview', 'assessment'].includes(result.eventType ?? '')) {
       result.reviewReasons.push('未确定活动时间，请核对原邮件或附件后填写');
     }
   }
@@ -121,6 +131,7 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
   if(result.eventType==='other' && result.company && (result.intent==='progress' || result.intent==='task' && result.preparationTasks?.length || result.positionTitle && qualificationNotice(sourceText))){
     result.eventTime=mailTimeToLocal(raw.receivedAt);result.timeSource='received';result.timeEvidence=null;
   } else if (!result.company || !result.eventType || result.eventType === 'other') result.reviewReasons.push('公司或事件信息不完整，需人工确认');
+  if(result.schedule?.preliminary && waiting && result.timeSource==='unknown')result.timeSource=(raw.content?.body??raw.snippet).replace(/\s/g,'').includes(waiting.evidence)?'body':'attachment';
   result.reviewReasons = [...new Set(result.reviewReasons)];
   return result;
 }

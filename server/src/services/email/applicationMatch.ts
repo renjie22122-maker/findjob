@@ -1,3 +1,4 @@
+import {placeholderPosition} from './applicationEvolution.js';
 import { getDb } from '../../db/connection.js';
 import { AppError } from '../../middleware/error.js';
 import type { EmailExtraction } from '../../domain/types.js';
@@ -11,6 +12,12 @@ export function matchEmailApplication(companyId: number, extraction: EmailExtrac
     const app = apps.find(a => a.id === target);
     if (!app) throw AppError.validation('所选申请不属于此公司，请核对公司和申请');
     return app;
+  }
+  if(extraction.applicationChange){
+    const matches=apps.filter(a=>a.position_title===extraction.applicationChange!.fromPositionTitle);
+    if(matches.length!==1)throw AppError.conflict('调剂原岗位无法唯一关联，保留原记录');
+    if(apps.some(a=>a.id!==matches[0].id&&a.position_title===extraction.positionTitle))throw AppError.conflict('调剂目标已有独立申请，需跨通知判断关联');
+    return matches[0];
   }
   const ref = extraction.recruitmentId?.trim();
   let matches: { id: number }[];
@@ -32,6 +39,7 @@ export function matchEmailApplication(companyId: number, extraction: EmailExtrac
     if (apps.length) throw AppError.conflict('岗位或职位编号缺失，同公司可能有多个匹配岗位，请明确选择已有申请或新建独立申请');
     matches = [];
   }
+  if(!matches.length&&!ref&&extraction.eventType!=='reject'&&apps.length===1&&placeholderPosition(apps[0].position_title))return apps[0];
   if (matches.length > 1) throw AppError.conflict('同公司存在多个匹配岗位，请明确选择申请');
   return matches[0];
 }
