@@ -17,6 +17,7 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:920}});let request;
  await page.route('**/api/work/analyze',async route=>{request=route.request().postDataJSON();await route.fulfill({json:{status:'applied',results:[]}});});
  await page.goto(`http://127.0.0.1:${server.address().port}/assistant`);
+ await page.getByText(/自动纠错/).waitFor();
  await page.getByText('关联图',{exact:true}).click();
  await page.getByRole('img',{name:'公司岗位事项通知关联图'}).waitFor();
  await page.getByRole('button',{name:'软件工程师',exact:true}).click();await page.getByRole('button',{name:'让 AI 核对此项'}).click();

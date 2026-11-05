@@ -117,3 +117,25 @@ it('一封通知的面试与测评分别建日程，不把它们合为同一阶�
  expect(apply([a,{...a,extraction:{...extraction,eventType:'assessment'}}]).status).toBe('applied');
  expect(getDb().prepare('SELECT COUNT(*) n FROM recruitment_schedules').get()).toEqual({n:2});expect(getDb().prepare('SELECT COUNT(*) n FROM applications').get()).toEqual({n:1});
 });
+it('AI可以补齐活动提醒，已完成记录保持原样且需要对应来源',()=>{
+ const n=notice();applyEmailItem(n,undefined,{createIfMissing:true});const db=getDb();
+ const schedule=db.prepare('SELECT id,revision FROM recruitment_schedules').get() as {id:number;revision:number};
+ const first=db.prepare('SELECT id FROM reminders ORDER BY id LIMIT 1').get() as {id:number};db.prepare('UPDATE reminders SET done=1 WHERE id=?').run(first.id);db.prepare('DELETE FROM reminders WHERE done=0').run();
+ const action:WorkAction={type:'repair-reminders',scheduleId:schedule.id,revision:schedule.revision,reason:'补齐遗漏提醒',confidence:.99,evidence:[{noticeId:n,quote:'成绩全集团有效'}]};
+ expect(apply([action]).status).toBe('applied');expect(db.prepare('SELECT done FROM reminders WHERE id=?').get(first.id)).toEqual({done:1});
+ const other=notice('其他考试成绩全集团有效');expect(apply([{...action,evidence:[{noticeId:other,quote:'成绩全集团有效'}]}]).status).toBe('pending');
+});
+it('模型可请求按关键词检索本地旧通知后再执行',async()=>{
+ const n=notice('历史预约通知：成绩全集团有效'),recent=notice('新的通知');
+ mock.mockResolvedValueOnce({reply:'先查旧通知',requestedQueries:['历史预约通知'],actions:[]}).mockResolvedValueOnce({reply:'关联进度',actions:[item(n)]});
+ expect(await runWorkAnalysis('自动整理',[recent])).toMatchObject({status:'applied'});
+ expect(mock.mock.calls[1][1]).toContain('历史预约通知');
+});
+it('执行成功但模型省略学习字段时，独立归纳经验而不重复执行动作',async()=>{
+ const n=notice('样例集团：请于2099年11月5日14点前完成信息填报。');
+ const extraction={relevant:true,intent:'task',company:'样例集团',positionTitle:'软件岗',eventType:'other',eventTime:null,summary:'填报',confidence:.98,preparationTasks:[{title:'填报截止',scheduledAt:'2099-11-05T14:00:00',timeEvidence:'2099年11月5日14点前完成信息填报'}]};
+ mock.mockResolvedValueOnce({reply:'补齐待办',actions:[{type:'apply-notice',noticeId:n,extraction,reason:'明确任务截止',confidence:.98,evidence:[{noticeId:n,quote:'完成信息填报'}]}]}).mockResolvedValueOnce({learning:[{key:'dated-task',revision:0,title:'有截止的填报任务',signals:['填报截止'],approach:'记录独立截止待办，不创建考试，核对原文时间。'}]});
+ expect(await runWorkAnalysis('整理',[n])).toMatchObject({status:'applied'});
+ expect(getDb().prepare('SELECT COUNT(*) n FROM reminders').get()).toEqual({n:1});
+ expect(getDb().prepare('SELECT key,successes FROM work_strategies').get()).toEqual({key:'dated-task',successes:1});expect(mock).toHaveBeenCalledTimes(2);
+});

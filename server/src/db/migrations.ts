@@ -391,6 +391,16 @@ const migrations: Migration[] = [
     );
     CREATE TABLE IF NOT EXISTS company_search_cache (query TEXT PRIMARY KEY,result TEXT NOT NULL,created_at TEXT NOT NULL);
   `);}},
+  {version:14,up(db){db.exec(`
+    CREATE TABLE IF NOT EXISTS work_strategies (
+      key TEXT PRIMARY KEY,title TEXT NOT NULL,data TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,
+      successes INTEGER NOT NULL DEFAULT 0,failures INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL DEFAULT 'trial',updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS work_strategy_history (
+      id INTEGER PRIMARY KEY, strategy_key TEXT NOT NULL,decision_id TEXT NOT NULL,outcome TEXT NOT NULL,snapshot TEXT NOT NULL,created_at TEXT NOT NULL,
+      UNIQUE(strategy_key,decision_id,outcome)
+    );
+  `);}},
 ];
 
 /** 按 PRAGMA user_version 顺序执行迁移 */
