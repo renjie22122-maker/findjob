@@ -10,6 +10,7 @@ import { validEventTime } from '../email/eventTime.js';
 import { redactMailSecrets } from '../email/contentSafety.js';
 
 export interface ChatOptions {
+  timeoutMs?: number;
   temperature?: number;
   maxTokens?: number;
   jsonMode?: boolean;
@@ -52,7 +53,7 @@ export async function chatCompletion(
         ...(opts.maxTokens===0?{}:{max_tokens:opts.maxTokens??2000}),
         ...(opts.jsonMode ? { response_format: { type: 'json_object' } } : {}),
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 60000),
     });
 
     if (!res.ok) {
