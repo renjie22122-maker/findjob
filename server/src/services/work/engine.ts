@@ -58,8 +58,12 @@ function perform(a:WorkAction,confirmed:boolean,input:string){
     const data=safeJson<{sharedWithScheduleId?:number}>(row.data,{}),canonical=data.sharedWithScheduleId??a.scheduleId;
     const ids=[canonical,...(db.prepare("SELECT id FROM recruitment_schedules WHERE json_extract(data,'$.sharedWithScheduleId')=?").all(canonical) as {id:number}[]).map(r=>r.id)];
     const before=ids.flatMap(id=>db.prepare('SELECT * FROM reminders WHERE schedule_id=?').all(id));
-    for(const id of ids)db.prepare('UPDATE reminders SET done=1,done_at=? WHERE schedule_id=? AND done=0').run(nowIso(),id);
-    return {type:a.type,scheduleIds:ids,before,userQuote:a.userQuote};
+    const activitiesBefore=ids.map(id=>db.prepare('SELECT id,revision,data FROM recruitment_schedules WHERE id=?').get(id));
+    for(const id of ids){
+      db.prepare('UPDATE reminders SET done=1,done_at=? WHERE schedule_id=? AND done=0').run(nowIso(),id);
+      db.prepare("UPDATE recruitment_schedules SET data=json_set(data,'$.completedAt',?,'$.completionSource','user'),revision=revision+1,updated_at=? WHERE id=? AND json_extract(data,'$.completedAt') IS NULL").run(nowIso(),nowIso(),id);
+    }
+    return {type:a.type,scheduleIds:ids,before,activitiesBefore,activitiesAfter:ids.map(id=>db.prepare('SELECT id,revision,data FROM recruitment_schedules WHERE id=?').get(id)),userQuote:a.userQuote};
   }
   if(!a.evidence.length)throw AppError.validation('自动处理必须提供通知依据');
   if(a.type==='identify-company'){

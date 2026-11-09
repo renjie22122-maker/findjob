@@ -22,12 +22,16 @@ try{
  await page.locator('.ant-select').filter({has:page.getByRole('combobox',{name:'界面主题'})}).click();await page.getByText('☾ 暗色',{exact:true}).click();await page.keyboard.press('Escape');
  await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+2);
  await page.screenshot({path:'server/data/ui-review/time-priority-mobile.png',fullPage:true});assert.deepEqual(errors,[]);
- await page.route('**/api/email/schedules',route=>route.fulfill({json:{items:[{id:99,applicationId:1,companyName:'示例公司',positionTitle:'工程师',kind:'written_test',status:'awaiting_time',revision:1,sources:[],data:{preliminary:true,awaitingReason:'external_time'}}]}}));
+ await page.route('**/api/email/schedules',route=>route.fulfill({json:{items:[{id:99,applicationId:1,companyName:'示例公司',positionTitle:'工程师',kind:'written_test',status:'awaiting_time',revision:1,sources:[],data:{preliminary:true,awaitingReason:'external_time'}},{id:100,applicationId:1,companyName:'已完成示例公司',positionTitle:'工程师',kind:'written_test',status:'awaiting_time',revision:2,sources:[],data:{preliminary:true,awaitingReason:'external_time',completedAt:'2099-11-01'}}]}}));
  await page.goto(`http://127.0.0.1:${server.address().port}/schedules`);
  await page.getByText('时间待从入口补全',{exact:true}).waitFor();
  await page.getByText('时间仅在外部入口公布。考试或登录入口需本人查看，将时间告诉助手即可补齐提醒。',{exact:true}).waitFor();
  assert.equal(await page.getByText(/等待预约结果或正式时间/).count(),0);
  await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+2);
  await page.screenshot({path:'server/data/ui-review/external-time-mobile.png',fullPage:true});assert.deepEqual(errors,[]);
+ await page.getByText('已完成',{exact:true}).click();
+ await page.locator('.schedule-card').getByText('已完成示例公司',{exact:true}).waitFor();
+ assert.match(await page.locator('.schedule-card').innerText(),/不再提醒/);
+ assert.doesNotMatch(await page.locator('.schedule-card').innerText(),/截止时间待补全/);
  console.log('Time UI passed: exact interval, flexible deadline, separate advance reminder, location, dark/mobile containment.');
 }finally{await browser.close();await new Promise(r=>server.close(r));closeDb();}

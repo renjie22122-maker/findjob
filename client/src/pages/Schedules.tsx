@@ -28,28 +28,37 @@ export default function Schedules() {
   const [search,setSearch] = useState('');
   const {data,isLoading,error,refetch} = useQuery({queryKey:['schedules'],queryFn:()=>emailApi.schedules(),refetchInterval:30000});
   const conflicts=(s:RecruitmentSchedule)=>(data?.items??[]).filter(other=>new Date(s.data.eventTimeEnd??s.data.eventTime??'').getTime()>=Date.now() && new Date(other.data.eventTimeEnd??other.data.eventTime??'').getTime()>=Date.now() && schedulesConflict(s,other));
-  const rows = (data?.items ?? []).filter(s => (filter === 'all' || (filter === 'conflicts' ? conflicts(s).length > 0 : filter === 'awaiting' ? s.status === 'awaiting_time' : filter === 'cancelled' ? s.status === 'cancelled' : s.status !== 'cancelled' && (s.status==='awaiting_time' || !s.data.eventTime || new Date(s.data.eventTimeEnd??s.data.eventTime).getTime()>=Date.now()))) && `${s.companyName} ${s.positionTitle} ${s.data.venue ?? ''} ${s.data.round ?? ''} ${s.data.address ?? ''} ${s.data.room ?? ''}`.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>(a.data.timeKind==='window'?a.data.eventTimeEnd??'9999':a.data.eventTime??'9999').localeCompare(b.data.timeKind==='window'?b.data.eventTimeEnd??'9999':b.data.eventTime??'9999'));
+  const matchesFilter=(s:RecruitmentSchedule)=>{
+    if(filter==='all')return true;
+    if(filter==='completed')return Boolean(s.data.completedAt);
+    if(s.data.completedAt)return false;
+    if(filter==='conflicts')return conflicts(s).length>0;
+    if(filter==='awaiting')return s.status==='awaiting_time';
+    if(filter==='cancelled')return s.status==='cancelled';
+    return s.status!=='cancelled'&&(s.status==='awaiting_time'||!s.data.eventTime||new Date(s.data.eventTimeEnd??s.data.eventTime).getTime()>=Date.now());
+  };
+  const rows=(data?.items??[]).filter(s=>matchesFilter(s)&&`${s.companyName} ${s.positionTitle} ${s.data.venue??''} ${s.data.round??''} ${s.data.address??''} ${s.data.room??''}`.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>(a.data.timeKind==='window'?a.data.eventTimeEnd??'9999':a.data.eventTime??'9999').localeCompare(b.data.timeKind==='window'?b.data.eventTimeEnd??'9999':b.data.eventTime??'9999'));
   return <Space direction="vertical" size={16} style={{width:'100%'}}>
     <Card className="schedule-overview" title={translate("招聘日程")} extra={<Button onClick={()=>void refetch()}>{translate("刷新")}</Button>}>
       <Typography.Paragraph type="secondary">{translate("先看时间和地点；来源、准备事项与调整操作在详情中。")}</Typography.Paragraph>
       <div className="schedule-metrics" aria-label={translate("日程概览")}>
-        {[{label:translate("全部日程"),value:'all',count:data?.items.length??0},{label:translate("时间冲突"),value:'conflicts',count:(data?.items??[]).filter(s=>conflicts(s).length>0).length},{label:translate("等待正式时间"),value:'awaiting',count:(data?.items??[]).filter(s=>s.status==='awaiting_time').length}].map(metric=><button key={metric.value} className={`schedule-metric ${metric.value==='conflicts'&&metric.count?'is-danger':''}`} aria-pressed={filter===metric.value} onClick={()=>setFilter(metric.value)}><span>{metric.label}</span><strong>{metric.count}</strong><span>{translate("查看日程 →")}</span></button>)}
+        {[{label:translate("全部日程"),value:'all',count:data?.items.length??0},{label:translate("时间冲突"),value:'conflicts',count:(data?.items??[]).filter(s=>conflicts(s).length>0).length},{label:translate("等待正式时间"),value:'awaiting',count:(data?.items??[]).filter(s=>!s.data.completedAt&&s.status==='awaiting_time').length}].map(metric=><button key={metric.value} className={`schedule-metric ${metric.value==='conflicts'&&metric.count?'is-danger':''}`} aria-pressed={filter===metric.value} onClick={()=>setFilter(metric.value)}><span>{metric.label}</span><strong>{metric.count}</strong><span>{translate("查看日程 →")}</span></button>)}
       </div>
-      <Space wrap><Segmented value={filter} onChange={setFilter} options={[{value:'active',label:translate("待进行")},{value:'cancelled',label:translate("已取消")},{value:'all',label:translate("全部")},{value:'conflicts',label:translate("冲突")},{value:'awaiting',label:translate("待通知")}]} /><Input.Search allowClear placeholder={translate("搜索公司、岗位、考点")} value={search} onChange={e=>setSearch(e.target.value)} /></Space>
+      <Space wrap><Segmented value={filter} onChange={setFilter} options={[{value:'active',label:translate("待进行")},{value:'completed',label:translate("已完成")},{value:'cancelled',label:translate("已取消")},{value:'all',label:translate("全部")},{value:'conflicts',label:translate("冲突")},{value:'awaiting',label:translate("待通知")}]} /><Input.Search allowClear placeholder={translate("搜索公司、岗位、考点")} value={search} onChange={e=>setSearch(e.target.value)} /></Space>
     </Card>
 
     {error && <Alert type="error" message={error instanceof Error ? error.message : '加载失败'} />}
     {isLoading && <Card loading />}
     {!isLoading && !error && !rows.length && <Empty description={translate("暂无符合条件的日程；在邮件分析中确认并应用考试或面试通知")} />}
-    {rows.map(s=><Card className={`schedule-card ${conflicts(s).length ? 'has-conflict' : ''}`} key={s.id} title={<Space wrap><Typography.Text className="entity-title" strong>{s.companyName}</Typography.Text><Typography.Text className="entity-subtitle">{EMAIL_EVENT_LABELS[s.kind as keyof typeof EMAIL_EVENT_LABELS]??s.kind}{s.data.round?` · ${s.data.round}`:''}</Typography.Text><Tag color={s.status==='cancelled'?'red':s.status==='awaiting_time'?'orange':'blue'}>{{scheduled:'已安排',cancelled:'已取消',awaiting_time:s.data.awaitingReason==='external_time'?'时间待从入口补全':s.data.preliminary?'预通知 · 等待正式时间':'延期 · 等待新时间'}[s.status]}</Tag></Space>} extra={<Button onClick={()=>setDetail(s)}>查看详情</Button>}>
+    {rows.map(s=><Card className={`schedule-card ${conflicts(s).length ? 'has-conflict' : ''}`} key={s.id} title={<Space wrap><Typography.Text className="entity-title" strong>{s.companyName}</Typography.Text><Typography.Text className="entity-subtitle">{EMAIL_EVENT_LABELS[s.kind as keyof typeof EMAIL_EVENT_LABELS]??s.kind}{s.data.round?` · ${s.data.round}`:''}</Typography.Text><Tag color={s.status==='cancelled'?'red':s.status==='awaiting_time'?'orange':'blue'}>{s.data.completedAt?'已完成':{scheduled:'已安排',cancelled:'已取消',awaiting_time:s.data.awaitingReason==='external_time'?'时间待从入口补全':s.data.preliminary?'预通知 · 等待正式时间':'延期 · 等待新时间'}[s.status]}</Tag></Space>} extra={<Button onClick={()=>setDetail(s)}>查看详情</Button>}>
       <Space direction="vertical" style={{width:'100%'}}>
         <Typography.Text type="secondary">{s.positionTitle}</Typography.Text>
         {conflicts(s).length>0 && <Alert type="error" showIcon message={translate("时间冲突")} description={conflicts(s).map(o=>`${o.companyName} · ${EMAIL_EVENT_LABELS[o.kind as keyof typeof EMAIL_EVENT_LABELS]??o.kind} · ${formatDateTime(o.data.eventTime!)}${o.data.eventTimeEnd?' — '+formatDateTime(o.data.eventTimeEnd):''}`).join('；')}/>}
         {s.data.sharedWithScheduleId && <Typography.Text type="secondary">{`已确认共用日程 #${s.data.sharedWithScheduleId} 的活动提醒；本申请独立保留`}</Typography.Text>}
 
-        {s.data.preliminary && !s.data.awaitingReason && <Alert type="warning" message={`${s.data.stageLabel??'时间待确定'}${s.data.dateStart&&s.data.dateEnd?`：${s.data.dateStart} 至 ${s.data.dateEnd}`:''}，等待预约结果或正式时间`} description={s.data.attendanceCondition??'不推断具体时刻，正式通知后补齐提醒'}/>}
-        {s.data.awaitingReason==='external_time'&&<Typography.Text type="warning">时间仅在外部入口公布。考试或登录入口需本人查看，将时间告诉助手即可补齐提醒。</Typography.Text>}
-        <ActivityTime data={s.data} status={s.status}/>
+        {!s.data.completedAt && s.data.preliminary && !s.data.awaitingReason && <Alert type="warning" message={`${s.data.stageLabel??'时间待确定'}${s.data.dateStart&&s.data.dateEnd?`：${s.data.dateStart} 至 ${s.data.dateEnd}`:''}，等待预约结果或正式时间`} description={s.data.attendanceCondition??'不推断具体时刻，正式通知后补齐提醒'}/>}
+        {!s.data.completedAt&&s.data.awaitingReason==='external_time'&&<Typography.Text type="warning">时间仅在外部入口公布。考试或登录入口需本人查看，将时间告诉助手即可补齐提醒。</Typography.Text>}
+        <ActivityTime data={s.data} status={s.data.completedAt?'completed':s.status}/>
         <Typography.Text>{s.data.mode==='online'?'线上参加':s.data.mode==='offline'?'线下参加':'参加方式待通知'}{[s.data.venue,s.data.address,s.data.room].filter(Boolean).length?' · '+[s.data.venue,s.data.address,s.data.room].filter(Boolean).join(' · '):s.data.mode==='offline'?' · 地点待通知':''}</Typography.Text>
         {!!s.data.preparationTasks?.length&&<Typography.Text type="secondary">{s.data.preparationTasks.length} 项准备事项 · 详情中查看</Typography.Text>}
 

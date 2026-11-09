@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { redactMailSecrets, sensitiveContentWarnings } from './contentSafety.js';
 import {publicNoticeExcerpt} from './publicNoticePages.js';
+import {getDb} from '../../db/connection.js';
 
 export interface AttachmentEvidence { name: string; status: 'parsed' | 'skipped'; detail: string }
 export interface MailContent { body: string; attachmentText: string; attachments: AttachmentEvidence[]; warnings: string[] }
@@ -47,7 +48,8 @@ export async function parseMailContent(source: Buffer): Promise<MailContent> {
   const parsed = await simpleParser(source, { skipHtmlToText: true, skipTextToHtml: true, skipImageLinks: true });
   const rawBody = parsed.text || (parsed.html ? htmlText(parsed.html) : '');
   const result: MailContent = { body: redactMailSecrets(rawBody).slice(0, 16000), attachmentText: '', attachments: [], warnings: sensitiveContentWarnings(rawBody) };
-  result.body += await publicNoticeExcerpt(rawBody,parsed.html||'');
+  const completed=parsed.messageId?getDb().prepare("SELECT COUNT(*) total,SUM(CASE WHEN json_extract(s.data,'$.completedAt') IS NOT NULL THEN 1 ELSE 0 END) completed FROM recruitment_schedules s JOIN schedule_sources ss ON ss.schedule_id=s.id JOIN email_items m ON m.id=ss.email_id WHERE m.message_id=?").get(parsed.messageId) as {total:number;completed:number}:null;
+  if(!completed?.total||completed.total!==completed.completed)result.body += await publicNoticeExcerpt(rawBody,parsed.html||'');
   const sourceText = source.toString('utf8');
   const headers = sourceText.split(/\r?\n\r?\n/, 1)[0].replace(/\r?\n\s+/g, ' ');
   const boundary = /boundary\s*=\s*(?:"([^"]+)"|([^;\s]+))/i.exec(headers);

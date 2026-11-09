@@ -11,6 +11,28 @@ const mock=vi.hoisted(()=>vi.fn());
 vi.mock('../settings.service.js',()=>({getLlmConfig:()=>({apiKey:'synthetic'})}));
 vi.mock('../llm/llm.client.js',async original=>({...await original<object>(),chatJson:mock}));
 beforeEach(()=>{closeDb();getDb();mock.mockReset();});
+it('无提醒的待定活动也能持久完成，后续补全和核查不得重新生成提醒',()=>{
+ const id=notice();applyEmailItem(id,undefined,{createIfMissing:true});
+ const db=getDb(),row=db.prepare('SELECT id,revision FROM recruitment_schedules').get() as {id:number;revision:number};
+ db.prepare('DELETE FROM reminders').run();
+ const result=applyWorkPlan({reply:'完成',actions:[{type:'complete-activity',scheduleId:row.id,revision:row.revision,userQuote:'这个考试已经做完了',reason:'本人确认',confidence:1,evidence:[]}]},'这个考试已经做完了',workFingerprint(),false);
+ expect(result.status).toBe('applied');
+ expect(db.prepare("SELECT json_extract(data,'$.completedAt') at FROM recruitment_schedules WHERE id=?").get(row.id)).toMatchObject({at:expect.any(String)});
+ const fresh=db.prepare('SELECT revision FROM recruitment_schedules WHERE id=?').get(row.id) as {revision:number};
+ const repair=apply([{type:'repair-reminders',scheduleId:row.id,revision:fresh.revision,reason:'重新核查',confidence:1,evidence:[{noticeId:id,quote:'成绩全集团有效'}]}]);
+ expect(repair.status).toBe('applied');expect(db.prepare('SELECT COUNT(*) n FROM reminders').get()).toEqual({n:0});
+});
+it('已完成场次后来确认跨岗位共用时，保留整体完成状态',()=>{
+ const body='本次考试只需考一次，成绩全集团有效。',a=notice(body,'样例甲','工程师'),b=notice(body,'样例乙','工程师');
+ applyEmailItem(a,undefined,{createIfMissing:true});applyEmailItem(b,undefined,{createIfMissing:true});
+ const db=getDb(),rows=db.prepare('SELECT id,revision FROM recruitment_schedules ORDER BY id').all() as {id:number;revision:number}[];
+ const quote='这场考试已完成';
+ applyWorkPlan({reply:'完成',actions:[{type:'complete-activity',scheduleId:rows[0].id,revision:rows[0].revision,userQuote:quote,reason:quote,confidence:1,evidence:[]}]},quote,workFingerprint(),false);
+ const result=apply([{type:'share-reminders',source:`schedule:${rows[0].id}`,target:`schedule:${rows[1].id}`,reason:'同场',confidence:1,evidence:[{noticeId:a,quote:'只需考一次'},{noticeId:b,quote:'只需考一次'}]}]);
+ expect(result.status).toBe('applied');
+ expect(db.prepare("SELECT COUNT(*) n FROM recruitment_schedules WHERE json_extract(data,'$.completedAt') IS NOT NULL").get()).toEqual({n:2});
+ expect(db.prepare('SELECT COUNT(*) n FROM reminders WHERE done=0').get()).toEqual({n:0});
+});
 it('跨语言通知关联同一活动，不重复提醒或重开完成记录',()=>{
  const a=notice('样例集团考试 2099年11月5日09:00 至11:00');
  applyEmailItem(a,undefined,{createIfMissing:true});

@@ -20,6 +20,8 @@ export function publicIPv4(ip:string):boolean {
 }
 export function publicPageText(html:string):string {
  const $=load(html);
+ $('[hidden],[aria-hidden="true"]').remove();
+ $('[style]').each((_i,node)=>{if(/display\s*:\s*none|visibility\s*:\s*hidden/i.test($(node).attr('style')||''))$(node).remove();});
  if($('input[type=password],input[autocomplete=one-time-code],.question input,[data-question-id],input[name*=answer],input[name*=question]').length || /答题中|考试已开始|剩余答题时间|第\s*\d+\s*题|question\s+\d+\s+of/i.test($.text()))throw Error('页面涉及身份验证或实际答题');
  // Reading instructions is independent of action controls. Never submit or follow them.
  $('button,input,select,textarea,nav').remove();
@@ -29,24 +31,36 @@ export function publicPageText(html:string):string {
  const text=$.text().trim();if(text.length>8000)throw Error('公开页超出文本限额');
  return redactMailSecrets(text);
 }
-async function readPage(url:URL):Promise<string>{
+export async function readPublicResource(url:URL,kind:'document'|'script'|'stylesheet'|'data'='document'):Promise<{body:Buffer;contentType:string}>{
  let timer:ReturnType<typeof setTimeout>|undefined;
  const addresses=await Promise.race([lookup(url.hostname,{all:true}),new Promise<never>((_resolve,reject)=>{timer=setTimeout(()=>reject(Error('域名解析超时')),3000);})]).finally(()=>clearTimeout(timer));
- if(!addresses.length||addresses.some(a=>a.family!==4||!publicIPv4(a.address)))throw Error('非公开地址');
- const address=addresses[0].address;
+ const ipv4=addresses.filter(a=>a.family===4);
+ if(!ipv4.length||ipv4.some(a=>!publicIPv4(a.address)))throw Error('非公开地址');
+ const address=ipv4[0].address;
  return new Promise((resolve,reject)=>{
   // Pin the validated DNS address. No cookies, authorization, JS, redirects or subresources.
-  const req=request(url,{method:'GET',family:4,headers:{Accept:'text/html,text/plain','Accept-Encoding':'identity'},lookup:(_host,_options,cb)=>cb(null,address,4)},res=>{
-   if(res.statusCode!==200||!/^text\/(html|plain)(?:;|$)/i.test(res.headers['content-type']||'')||res.headers['content-encoding']&&res.headers['content-encoding']!=='identity'){
+  const accept={document:'text/html,text/plain',script:'application/javascript,text/javascript',stylesheet:'text/css',data:'application/json'}[kind];
+  const req=request(url,{method:'GET',family:4,headers:{Accept:accept,'Accept-Encoding':'identity'},lookup:(_host,_options,cb)=>cb(null,address,4)},res=>{
+   if(res.statusCode!==200||!(kind==='document'?/^text\/(html|plain)(?:;|$)/i:kind==='script'?/^(?:application|text)\/(?:javascript|x-javascript)(?:;|$)/i:kind==='stylesheet'?/^text\/css(?:;|$)/i:/^application\/json(?:;|$)/i).test(res.headers['content-type']||'')||res.headers['content-encoding']&&res.headers['content-encoding']!=='identity'){
     res.destroy();req.destroy();reject(Error('非只读文本响应'));return;
    }
    let size=0;const chunks:Buffer[]=[];
-   res.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>128*1024){req.destroy(Error('公开页超过128KiB'));return;}chunks.push(chunk);});
-   res.on('error',reject);res.on('end',()=>{try{resolve(publicPageText(Buffer.concat(chunks).toString('utf8')));}catch(e){reject(e);}});
+   res.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>(kind==='script'?2*1024*1024:128*1024)){req.destroy(Error('公开页超过128KiB'));return;}chunks.push(chunk);});
+   res.on('error',reject);res.on('end',()=>{try{resolve({body:Buffer.concat(chunks),contentType:res.headers['content-type']||'text/plain'});}catch(e){reject(e);}});
   });
   const timer=setTimeout(()=>req.destroy(Error('公开页读取超时')),5000);
   req.on('error',reject);req.on('close',()=>clearTimeout(timer));req.end();
  });
+}
+async function readPage(url:URL):Promise<string>{
+ const resource=await readPublicResource(url);
+ const text=publicPageText(resource.body.toString('utf8'));
+ if(!/(?:截止|有效期|考试时间|面试时间|时间安排|deadline|schedule)[\s\S]{0,200}\d{1,2}[:：]\d{2}/i.test(text)&&process.env.CAREERFLOW_DYNAMIC_READ!=='off'){
+  const {readDynamicInstructions}=await import('./dynamicReader.js');
+  const rendered=await readDynamicInstructions(url,resource.body.toString('utf8'));
+  if(rendered.html)return publicPageText(rendered.html);
+ }
+ return text;
 }
 const cache=new Map<string,{at:number;text:string}>();
 /** At most one AI review and two static GETs per mail; only eligible instruction links are considered. */

@@ -17,7 +17,7 @@ export function workGraph(query='',offset=0,limit=100){
   }
   for(const s of db.prepare('SELECT id,application_id,kind,status,data,revision FROM recruitment_schedules').all() as {id:number;application_id:number;kind:string;status:string;data:string;revision:number}[]){
     const data=safeJson<Record<string,unknown>>(s.data,{});
-    nodes.push({id:`schedule:${s.id}`,kind:'activity',title:String(data.round||s.kind),state:s.status,revision:s.revision,data:{...data,activityKind:s.kind,applicationId:s.application_id}});
+    nodes.push({id:`schedule:${s.id}`,kind:'activity',title:String(data.round||s.kind),state:data.completedAt?'completed':s.status,revision:s.revision,data:{...data,activityKind:s.kind,applicationId:s.application_id}});
     edges.push({source:`application:${s.application_id}`,target:`schedule:${s.id}`,relation:'participates'});
     if(data.sharedWithScheduleId)edges.push({source:`schedule:${s.id}`,target:`schedule:${data.sharedWithScheduleId}`,relation:'shares_reminders'});
   }

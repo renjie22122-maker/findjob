@@ -2,7 +2,7 @@ import type { RecruitmentSchedule } from '../types';
 
 /** Availability windows and due dates do not reserve the user's whole interval. */
 export function schedulesConflict(a: RecruitmentSchedule, b: RecruitmentSchedule): boolean {
-  if (a.id === b.id || a.status !== 'scheduled' || b.status !== 'scheduled') return false;
+  if (a.data.completedAt || b.data.completedAt || a.id === b.id || a.status !== 'scheduled' || b.status !== 'scheduled') return false;
   if ([a.data.timeKind, b.data.timeKind].some(kind => kind === 'window' || kind === 'deadline')) return false;
   const sameTime = a.data.eventTime === b.data.eventTime && (a.data.eventTimeEnd ?? null) === (b.data.eventTimeEnd ?? null);
   if (sameTime && (a.data.sharedWithScheduleId === b.id || b.data.sharedWithScheduleId === a.id ||

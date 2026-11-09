@@ -35,6 +35,7 @@ export function adoptUntrackedInvitations(companyId: number, requireEvidence = f
   }
 }
 interface ScheduleData extends Partial<RecruitmentScheduleChange> {
+  completedAt?:string;completionSource?:string;
   preliminary?:boolean;dateStart?:string;dateEnd?:string;stageLabel?:string;attendanceCondition?:string|null;sharedWithScheduleId?:number;
   eventTime?: string | null;
   eventTimeEnd?: string | null;
@@ -98,6 +99,11 @@ export function shareScheduleReminders(id:number,targetId:number) {
     const x:ScheduleData=JSON.parse(a.data),y:ScheduleData=JSON.parse(b.data);
     if(a.kind!==b.kind || a.status!=='scheduled'|| b.status!=='scheduled'||!x.eventTime||x.eventTime!==y.eventTime||(x.eventTimeEnd??null)!==(y.eventTimeEnd??null)||y.sharedWithScheduleId||db.prepare("SELECT id FROM recruitment_schedules WHERE json_extract(data,'$.sharedWithScheduleId')=?").get(id))throw AppError.conflict('仅可共享同类型、同起止时间的活动，且不能形成共享链');
     x.sharedWithScheduleId=targetId;
+    if(x.completedAt||y.completedAt){
+      const at=x.completedAt||y.completedAt!;x.completedAt=at;x.completionSource='shared-activity';y.completedAt=at;y.completionSource='shared-activity';
+      db.prepare('UPDATE recruitment_schedules SET data=?,revision=revision+1,updated_at=? WHERE id=?').run(JSON.stringify(y),nowIso(),targetId);
+      rebuildReminders({...b,data:JSON.stringify(y)},y,true);
+    }
     db.prepare('UPDATE recruitment_schedules SET data=?,revision=revision+1,updated_at=? WHERE id=?').run(JSON.stringify(x),nowIso(),id);
     db.prepare("INSERT INTO schedule_sources(schedule_id,email_id,action,snapshot,received_at,created_at) VALUES (?,NULL,'manual:share',?,?,?)").run(id,JSON.stringify({...x,reason:'用户确认同一场考试，共用提醒'}),new Date().toISOString(),nowIso());
     rebuildReminders({...a,data:JSON.stringify(x)},x,true);
@@ -152,6 +158,7 @@ export function applicationFromRepeatedWindow(companyId: number, e: EmailExtract
 
 function rebuildReminders(row: Row, data: ScheduleData, keepOverdue = false) {
   const db = getDb(); const now = nowIso();
+  if(data.completedAt){db.prepare('UPDATE reminders SET done=1,done_at=COALESCE(done_at,?) WHERE schedule_id=? AND done=0').run(data.completedAt,row.id);return;}
   const retained = new Set<number>();
   // Reconcile in place: repeated checks must not churn reminder IDs or completion state.
   if (row.status !== 'scheduled' && row.status !== 'awaiting_time') { db.prepare('DELETE FROM reminders WHERE schedule_id=? AND done=0').run(row.id); return; }
