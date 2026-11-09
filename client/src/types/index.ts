@@ -89,6 +89,7 @@ export interface Reminder {
 }
 
 export interface RecruitmentScheduleChange {
+  awaitingReason?: 'external_time';
   action: 'create' | 'update' | 'reschedule' | 'cancel' | 'restore';
   eventRef?: string | null;
   round?: string | null;
@@ -108,7 +109,7 @@ export interface EmailExtraction {
   schedule?: RecruitmentScheduleChange;
   recruitmentId?: string | null;
   preparationTasks?: Array<{ title: string; scheduledAt: string; timeEvidence: string }>;
-  timeSource?: 'received' | 'body' | 'attachment' | 'unknown' | 'manual';
+  timeSource?: 'received' | 'body' | 'attachment' | 'web' | 'unknown' | 'manual';
   timeEvidence?: string | null;
   reviewReasons?: string[];
   attachments?: Array<{ name: string; status: 'parsed' | 'skipped'; detail: string }>;

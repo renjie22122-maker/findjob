@@ -213,7 +213,7 @@ export default function EmailAnalysis() {
                   {item.extracted?.positionTitle && <Tag>{translate("岗位：")}{item.extracted.positionTitle}</Tag>}
                   <Tag color={item.extracted && item.extracted.confidence >= 0.7 ? 'green' : item.extracted && item.extracted.confidence >= 0.4 ? 'gold' : 'red'}>{translate("置信度")}{Math.round((item.extracted?.confidence ?? 0) * 100)}%
                   </Tag>
-                  <Tag>{translate("时间来源：")}{{ received: '收件时间', body: '正文', attachment: '附件', manual: '人工确认', unknown: '待确认' }[item.extracted?.timeSource ?? 'unknown']}</Tag>
+                  <Tag>{translate("时间来源：")}{{ received: '收件时间', body: '正文', attachment: '附件', web: '公开通知页', manual: '人工确认', unknown: '待确认' }[item.extracted?.timeSource ?? 'unknown']}</Tag>
                   {item.applicationId && <Button size="small" type="link" onClick={() => navigate(`/applications/${item.applicationId}`)}>{translate("查看申请 #")}{item.applicationId} →</Button>}
                 </Space>
                 {item.extracted?.summary&&<Typography.Paragraph type="secondary" style={{margin:0}} ellipsis={{rows:2}}>{item.extracted.summary}</Typography.Paragraph>}

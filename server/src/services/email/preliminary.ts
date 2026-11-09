@@ -1,5 +1,12 @@
 import {validEventTime} from './eventTime.js';
 
+/** Time exists behind an external entry; this is a known missing field, not a failed invitation. */
+export function externallyPublishedTime(text:string){
+ const sentences=text.split(/[。\n]/).map(s=>s.trim()).filter(Boolean);
+ const evidence=sentences.find(s=>s.length<500 && /链接|页面|平台|portal|link|page/i.test(s) && /截止|有效期|考试时间|面试时间|作答时间|deadline|availability/i.test(s) && /标有|显示|查看|详见|见|为准|shown|available|see/i.test(s));
+ return evidence?{preliminary:true as const,awaitingReason:'external_time' as const,evidence}:null;
+}
+
 /** Separate dated stages from a pre-notice; never invent midnight as an activity time. */
 export function preliminaryInterview(body:string,receivedAt:string) {
   const matches=[...body.matchAll(/(?:初面|面试)为([^。\n]{0,30})形式[。\s]*将于(?:(20\d{2})年)?(\d{1,2})月(\d{1,2})[-—至](\d{1,2})日[^。\n]*开展/g)];

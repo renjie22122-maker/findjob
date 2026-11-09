@@ -1,5 +1,6 @@
 import {transferEvidence} from './applicationEvolution.js';
-import {awaitingAppointment} from './preliminary.js';
+import {awaitingAppointment,externallyPublishedTime} from './preliminary.js';
+import {PAGE_MARKER} from './publicNoticePages.js';
 import type { EmailExtraction } from '../../domain/types.js';
 import type { RawEmail } from './imap.client.js';
 import { explicitActivityWindow, mailTimeToLocal, validEventTime } from './eventTime.js';
@@ -27,13 +28,14 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
       if (recovered.window) result.schedule={...result.schedule,action:result.schedule?.action ?? 'create',timeKind:'window'};
     }
   }
-  const waiting=['interview','written_test','assessment'].includes(result.eventType??'') ? awaitingAppointment(result.timeEvidence||(!result.eventTime?sourceText:''),raw.receivedAt) : null;
+  const waiting=['interview','written_test','assessment'].includes(result.eventType??'') ? awaitingAppointment(result.timeEvidence||(!result.eventTime?sourceText:''),raw.receivedAt) || (!result.eventTime ? externallyPublishedTime(sourceText) : null) : null;
   if(waiting && (!result.schedule || result.schedule.action==='create')){
     result.eventTime=null;result.eventTimeEnd=null;
     result.schedule={...result.schedule,action:'create',timeKind:'start',...waiting,evidence:result.schedule?.evidence||result.timeEvidence||waiting.evidence};
   }else if(result.schedule?.preliminary && result.schedule.action==='create'){
     delete result.schedule.preliminary;delete result.schedule.dateStart;delete result.schedule.dateEnd;
   }
+  if(!waiting && result.schedule)delete result.schedule.awaitingReason;
   const change = result.schedule;
   // A fixed exam with a late-login exclusion is not a freely selectable completion window.
   if(change?.timeKind==='window' && result.eventType==='written_test' && /考试开始[^。\n]{0,45}(?:未登录|缺考)/.test(sourceText))change.timeKind='start';
@@ -95,7 +97,8 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     const body = raw.content?.body ?? raw.snippet;
     const attachments = raw.content?.attachmentText ?? '';
     const normalize = (text: string) => text.replace(/\s+/gu, '');
-    const source = evidence && /\d/.test(evidence) ? (normalize(body).includes(normalize(evidence)) ? 'body' : normalize(attachments).includes(normalize(evidence)) ? 'attachment' : null) : null;
+    const [mailBody,...pages]=body.split(PAGE_MARKER);
+    const source = evidence && /\d/.test(evidence) ? (normalize(mailBody).includes(normalize(evidence)) ? 'body' : normalize(pages.join('\n')).includes(normalize(evidence)) ? 'web' : normalize(attachments).includes(normalize(evidence)) ? 'attachment' : null) : null;
     if (result.eventTime && !source) {
       result.eventTime = null; result.eventTimeEnd = null;
       result.reviewReasons.push('模型提供的时间缺少可核对原文，需人工确认');

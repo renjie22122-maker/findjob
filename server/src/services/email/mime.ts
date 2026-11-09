@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { redactMailSecrets, sensitiveContentWarnings } from './contentSafety.js';
+import {publicNoticeExcerpt} from './publicNoticePages.js';
 
 export interface AttachmentEvidence { name: string; status: 'parsed' | 'skipped'; detail: string }
 export interface MailContent { body: string; attachmentText: string; attachments: AttachmentEvidence[]; warnings: string[] }
@@ -46,6 +47,7 @@ export async function parseMailContent(source: Buffer): Promise<MailContent> {
   const parsed = await simpleParser(source, { skipHtmlToText: true, skipTextToHtml: true, skipImageLinks: true });
   const rawBody = parsed.text || (parsed.html ? htmlText(parsed.html) : '');
   const result: MailContent = { body: redactMailSecrets(rawBody).slice(0, 16000), attachmentText: '', attachments: [], warnings: sensitiveContentWarnings(rawBody) };
+  result.body += await publicNoticeExcerpt(rawBody,parsed.html||'');
   const sourceText = source.toString('utf8');
   const headers = sourceText.split(/\r?\n\r?\n/, 1)[0].replace(/\r?\n\s+/g, ' ');
   const boundary = /boundary\s*=\s*(?:"([^"]+)"|([^;\s]+))/i.exec(headers);

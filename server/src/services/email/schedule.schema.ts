@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const scheduleChangeSchema = z.object({
   preliminary: z.boolean().optional(),
+  awaitingReason: z.enum(['external_time']).optional(),
   dateStart: z.string().optional(),
   dateEnd: z.string().optional(),
   action: z.enum(['create', 'update', 'reschedule', 'cancel', 'restore']),

@@ -7,7 +7,7 @@ const value=(v?:string)=>v || '未提供／待确认';
 const time=(v?:string)=>v ? formatDateTime(v) : '未提供／待确认';
 const place=(v:{venue?:string;address?:string;room?:string})=>[v.venue,v.address,v.room].filter(Boolean).join(' · ') || '未提供／待确认';
 const stages:Record<string,string>={applied:'投递',interview:'面试',written_test:'笔试',assessment:'测评',rejected:'拒信',offer:'录用'};
-const sources:Record<string,string>={body:'正文',attachment:'附件',manual:'人工确认',unknown:'待确认'};
+const sources:Record<string,string>={body:'正文',attachment:'附件',web:'公开通知页',manual:'人工确认',unknown:'待确认'};
 const statuses:Record<string,string>={...STATUS_LABELS,pending:'待处理',confirmed:'已应用',dismissed:'已忽略',scheduled:'已安排',cancelled:'已取消',postponed:'延期待定'};
 
 export function savedComparison(raw:string):Comparison|undefined {

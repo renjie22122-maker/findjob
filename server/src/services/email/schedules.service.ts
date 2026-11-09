@@ -62,6 +62,7 @@ function matchSchedule(appId: number, e: EmailExtraction, target?: number | null
   const candidates = rows.filter(row => {
     const d = JSON.parse(row.data) as ScheduleData;
     if (change?.eventRef) return d.eventRef === change.eventRef;
+    if(change?.awaitingReason==='external_time' && d.awaitingReason==='external_time' && row.status==='awaiting_time' && change.evidence && change.evidence.replace(/\s/g,'')===d.evidence?.replace(/\s/g,'') && (change.round||'')===(d.round||''))return true;
     if (!matchTime && change?.round && change.action !== 'create') return d.round === change.round;
     if(change?.preliminary && d.preliminary && change.dateStart && change.dateStart===d.dateStart && change.dateEnd===d.dateEnd && (!change.mode||!d.mode||change.mode===d.mode))return true;
     const provisional=d.preliminary && row.status==='awaiting_time' && matchTime && d.dateStart && d.dateEnd && matchTime.slice(0,10)>=d.dateStart && matchTime.slice(0,10)<=d.dateEnd;
@@ -219,11 +220,11 @@ export function applySchedule(appId: number, emailId: number | null, receivedAt:
   if (row && !old.preliminary && change.action === 'create' && e.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('同一活动编号出现不同时间，请确认是改期还是另一场活动');
   if (row && ['create','update'].includes(change.action) && e.eventTimeEnd && old.eventTimeEnd && old.eventTimeEnd !== e.eventTimeEnd) throw AppError.conflict('活动截止时间发生变化，请确认改期后更新');
   if (row && change.action === 'update' && e.eventTime && old.eventTime && old.eventTime !== e.eventTime) throw AppError.conflict('补充信息含不同活动时间，请明确选择改期');
-  if(row && emailId!==null && change.action==='create' && ['mode','venue','address','room','timeKind'].some(key=>old[key as keyof ScheduleData] && change[key as keyof typeof change] && old[key as keyof ScheduleData]!==change[key as keyof typeof change])) throw AppError.conflict('重复通知的地点或时间类型与已有日程冲突，请确认变更后更新');
+  if(row && emailId!==null && change.action==='create' && ['mode','venue','address','room','timeKind'].some(key=>!(key==='timeKind' && old.preliminary && !old.eventTime) && old[key as keyof ScheduleData] && change[key as keyof typeof change] && old[key as keyof ScheduleData]!==change[key as keyof typeof change])) throw AppError.conflict('重复通知的地点或时间类型与已有日程冲突，请确认变更后更新');
   if (change.action === 'restore' && !e.eventTime) throw AppError.validation('恢复日程必须确认活动时间');
   const data: ScheduleData = { ...old };
-  if(e.eventTime && old.preliminary){data.preliminary=false;data.attendanceCondition=null;}
-  for (const key of ['eventRef','round','mode','venue','address','room','timezone','timeKind','evidence','preliminary','dateStart','dateEnd'] as const) {
+  if(e.eventTime && old.preliminary){data.preliminary=false;data.attendanceCondition=null;delete data.awaitingReason;}
+  for (const key of ['eventRef','round','mode','venue','address','room','timezone','timeKind','evidence','preliminary','dateStart','dateEnd','awaitingReason'] as const) {
     const value = change[key];
     if (value !== undefined && value !== null && value !== '') Object.assign(data, { [key]: value });
     if (emailId === null && value === null) Object.assign(data,{[key]:null});

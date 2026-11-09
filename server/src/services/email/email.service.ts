@@ -334,7 +334,7 @@ function applyEmailItemInternal(
         windowText ? `时间：${windowText}` : null,
         row.subject ? `主题：${row.subject}` : null,
         `收件时间：${mailTime}`,
-        `时间依据：${extracted.eventType === 'applied' || extracted.timeSource === 'received' ? '收件时间' : extracted.timeSource === 'attachment' ? '附件' : extracted.timeSource === 'manual' ? '人工确认' : '正文'}`,
+        `时间依据：${extracted.eventType === 'applied' || extracted.timeSource === 'received' ? '收件时间' : extracted.timeSource === 'web' ? '公开通知页' : extracted.timeSource === 'attachment' ? '附件' : extracted.timeSource === 'manual' ? '人工确认' : '正文'}`,
         extracted.timeEvidence ? `原文：${extracted.timeEvidence}` : null,
       ]
         .filter(Boolean)
@@ -465,7 +465,7 @@ function applyEmailItemInternal(
     ) {
       warning = warning
         ? `${warning}（未识别到时间，未生成提醒）`
-        : '未识别到时间，未生成提醒：可在申请详情手动添加';
+        : extracted.schedule?.awaitingReason==='external_time' ? '已跟踪邀请：时间在外部入口中，补全后生成提醒；不自动打开考试或身份验证入口' : '未识别到时间，未生成提醒：可在申请详情手动添加';
     }
   }
 
