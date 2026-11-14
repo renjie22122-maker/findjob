@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 /** Pure matching rules; a company name alone is never a sufficient identity. */
-data class Event(val company:String="",val role:String="",val ref:String="",val stage:String="",val kind:String="start",val start:String="",val end:String="",val location:String="",val action:String="create",val evidence:String="",val round:String="",val applicationStatus:String="")
+data class Event(val company:String="",val role:String="",val ref:String="",val stage:String="",val kind:String="start",val start:String="",val end:String="",val location:String="",val action:String="create",val evidence:String="",val round:String="",val applicationStatus:String="",val intent:String="",val preliminary:Boolean=false)
 object ScheduleRules {
  fun company(value:String)=value.lowercase().replace(Regex("[\\s（）()]"),"").removeSuffix("有限公司")
  fun time(value:String):Long?=try { LocalDateTime.parse(value).atZone(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli() } catch(_:Exception){null}
@@ -29,6 +29,8 @@ object ScheduleRules {
   val exactTime=a.start.isNotBlank()&&a.start==b.start&&a.kind==b.kind&&(a.end.isBlank()||b.end.isBlank()||a.end==b.end)
   // Unique exact occurrence may link a terse SMS without inventing a job identity.
   if(exactTime)return true
+  if(sameIdentity(a,b)&&a.preliminary&&b.preliminary&&a.round.isNotBlank()&&a.round==b.round&&a.evidence.replace(Regex("\\s+"),"")==b.evidence.replace(Regex("\\s+"),""))return true
+  if(sameIdentity(a,b)&&b.preliminary&&a.start.isNotBlank()&&NoticeSemantics.withinRange(b,a))return true
   return sameIdentity(a,b)&&((a.start.isBlank()&&a.action=="update")||(a.ref.isNotBlank()&&a.ref==b.ref&&(a.action in listOf("update","reschedule","cancel")||b.start.isBlank())))
  }
  fun overlaps(a:Event,b:Event):Boolean {if(a.kind!="start"||b.kind!="start")return false;val x=time(a.start)?:return false;val y=time(b.start)?:return false;if(a.end.isBlank()||b.end.isBlank())return x==y;return x<time(b.end)!!&&y<time(a.end)!!}
@@ -38,12 +40,12 @@ object ScheduleRules {
   if(e.action=="reschedule"&&!Regex("改期|调整|延期|reschedul|postpon",RegexOption.IGNORE_CASE).containsMatchIn(e.evidence))return false
   if(e.location.isNotBlank()&&!body.contains(e.location))return false
   if(e.ref.isNotBlank()&&!body.contains(e.ref))return false
-  if(e.start.isBlank())return e.action in listOf("cancel","update")
+  if(e.start.isBlank())return e.action in listOf("cancel","update") || e.preliminary && NoticeSemantics.provisional(e.evidence)
   if(time(e.start)==null||e.end.isNotBlank()&&(time(e.end)==null||time(e.end)!!<time(e.start)!!))return false
   // Require each date/time component in the quoted evidence, never infer a date from the API.
   fun supported(value:String):Boolean {
    val d=try{LocalDateTime.parse(value)}catch(_:Exception){return false}
-   val q=e.evidence.replace(Regex("[年月/.-]"),"-").replace("日"," ").replace("：",":")
+   val q=e.evidence.replace(Regex("[年月/.-]"),"-").replace("日"," ").replace("：",":").replace(Regex("(\\d{1,2})[点时](?:(\\d{1,2})分?)?")){m->m.groupValues[1]+":"+(m.groupValues[2].ifBlank{"00"}.padStart(2,'0'))}
    val explicit=Regex("${d.year}-0?${d.monthValue}-0?${d.dayOfMonth}(?!\\d)").containsMatchIn(q)
    val monthDay=Regex("(?<!\\d)0?${d.monthValue}-0?${d.dayOfMonth}(?!\\d)").containsMatchIn(q)
    val yearAlreadyQuoted=q.contains("${d.year}-")

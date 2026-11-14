@@ -49,7 +49,8 @@ class LocalStore(context:Context,databaseName:String="careerflow.db"):SQLiteOpen
  fun received(id:Long):Long=readableDatabase.rawQuery("SELECT received FROM notices WHERE id=?",arrayOf(id.toString())).use{if(it.moveToFirst())it.getLong(0) else 0}
  fun body(id:Long):String?=readableDatabase.rawQuery("SELECT body FROM notices WHERE id=?",arrayOf(id.toString())).use{if(it.moveToFirst())it.getString(0) else null}
  fun analyzed(id:Long,result:JSONObject){val db=writableDatabase;db.beginTransaction();try{
-  val body=body(id)?:return;val events=result.optJSONArray("events")?:JSONArray();var review=false;var waiting=false;val reasons=JSONArray()
+  val body=body(id)?:return;val events=if(NoticeSemantics.informational(body))JSONArray()else result.optJSONArray("events")?:JSONArray();
+  for(i in 0 until events.length()){val raw=events.getJSONObject(i);val original=NoticeSemantics.normalize(EventJson.read(raw),body);val workspace=WorkspaceStore(contextRef);val e=try{AnalysisContext.application(raw,original,body,this,workspace)}finally{workspace.close()};if(e.company!=original.company||e.role!=original.role)record("AI application association #$id: ${original.company}/${original.role} → ${e.company}/${e.role}");val normalized=EventJson.write(e);for(key in normalized.keys())raw.put(key,normalized.get(key))};var review=false;var waiting=false;val reasons=JSONArray()
   remapLinks(id,events)
   val linkCount=db.rawQuery("SELECT count(*) FROM evidence WHERE notice=?",arrayOf(id.toString())).use{it.moveToFirst();it.getInt(0)}
   if(linkCount>events.length()){review=true;reasons.put("旧日程未全部重新识别，已保留 / Some previous events were not rediscovered; preserved")}
@@ -60,18 +61,18 @@ class LocalStore(context:Context,databaseName:String="careerflow.db"):SQLiteOpen
      if(!compatible||!ScheduleRules.verified(e,body,received(id))){review=true;reasons.put("重新分析与原关联不同，保留原日程 / Reanalysis differs; existing event preserved")}
      else if(!previous.optBoolean("manualEdited")){
       val newest=db.rawQuery("SELECT MAX(n.received) FROM evidence x JOIN notices n ON n.id=x.notice WHERE x.schedule=?",arrayOf(linked.toString())).use{it.moveToFirst();it.getLong(0)}
-      if(received(id)>=newest){val normalized=if(e.kind=="deadline"&&old.kind=="window"&&e.end==old.end)e.copy(start=old.start,kind="window")else e;val corrected=normalized.copy(role=e.role.ifBlank{old.role},ref=e.ref.ifBlank{old.ref},round=e.round.ifBlank{old.round},start=normalized.start.ifBlank{old.start},end=if(normalized.start.isBlank())old.end else normalized.end,kind=if(normalized.start.isBlank())old.kind else normalized.kind,location=e.location.ifBlank{old.location})
+      if(received(id)>=newest){val normalized=if(e.kind=="deadline"&&old.kind=="window"&&e.end==old.end)e.copy(start=old.start,kind="window")else e;val corrected=normalized.copy(preliminary=if(normalized.start.isNotBlank())false else old.preliminary||normalized.preliminary,role=e.role.ifBlank{old.role},ref=e.ref.ifBlank{old.ref},round=e.round.ifBlank{old.round},start=normalized.start.ifBlank{old.start},end=if(normalized.start.isBlank())old.end else normalized.end,kind=if(normalized.start.isBlank())old.kind else normalized.kind,location=e.location.ifBlank{old.location})
        if(corrected!=old){db.execSQL("UPDATE schedules SET data=?,cancelled=CASE WHEN ?='cancel' THEN 1 WHEN ?='reschedule' THEN 0 ELSE cancelled END,revision=revision+1 WHERE id=?",arrayOf(EventJson.write(corrected).toString(),corrected.action,corrected.action,linked));record("重新分析修正 / Reanalysis #$linked · before="+previous.toString()+" · after="+EventJson.write(corrected).toString());advanceApplication(corrected)}
       }
      }
     };continue}
 
    val e=EventJson.read(events.getJSONObject(i));
-   if(e.stage in listOf("applied","offer","reject")){val workspace=WorkspaceStore(contextRef);try{if(!workspace.applicationNotice(e,body,received(id))){waiting=true;reasons.put("申请信息待补充 / Waiting for application details")}}finally{workspace.close()};if(e.stage!="offer"||e.start.isBlank())continue}
+   if(e.stage in listOf("applied","offer","reject") || e.intent=="progress"){val workspace=WorkspaceStore(contextRef);try{if(!workspace.applicationNotice(e,body,received(id))){waiting=true;reasons.put("申请信息待补充 / Waiting for application details")}}finally{workspace.close()};if(e.stage!="offer"||e.start.isBlank())continue}
    val proposed=if(e.start.isBlank()&&e.action=="create")e.copy(action="update")else e
    val target=if(events.getJSONObject(i).optLong("targetScheduleId")>0)AnalysisContext.target(events.getJSONObject(i),proposed,schedules(false).also{list->for(n in 0 until list.length()){val candidate=list.getJSONObject(n);if(candidate.getLong("id")==events.getJSONObject(i).optLong("targetScheduleId"))candidate.put("sources",sources(candidate.getLong("id")))}})else null
    if(target!=null&&ScheduleRules.verified(proposed,body,received(id))){apply(id,i,proposed,target);record("AI 跨通知关联 / Cross-notice link #$id → #$target · "+events.getJSONObject(i).optString("linkReason").take(300));continue}
-   if(e.start.isBlank()&&e.action=="create"){
+   if(e.start.isBlank()&&e.action=="create"&&!e.preliminary){
     val all=schedules(false);val known=(0 until all.length()).map{all.getJSONObject(it)}.filter{ScheduleRules.sameIdentity(e,EventJson.read(it))};
     if(known.size==1&&ScheduleRules.verified(e.copy(action="update"),body,received(id))){apply(id,i,e.copy(action="update"),known[0].getLong("id"));continue}
     waiting=true;reasons.put("时间待后续通知 / Awaiting schedule time");continue}
@@ -81,7 +82,7 @@ class LocalStore(context:Context,databaseName:String="careerflow.db"):SQLiteOpen
    if(candidates.size>1||(candidates.isEmpty()&&(related||e.action!="create"))){review=true;reasons.put("多个岗位或场次无法唯一关联 / Multiple possible jobs or events");continue}
    apply(id,i,e,candidates.firstOrNull()?.getLong("id"));
   }
-  db.update("notices",ContentValues().apply{put("analysis",JSONObject(result.toString()).put("reviewReasons",reasons).toString());put("state",if(review)"review" else if(waiting)"waiting" else if(events.length()==0)"informational" else "linked")},"id=?",arrayOf(id.toString()));db.setTransactionSuccessful()
+  db.update("notices",ContentValues().apply{put("analysis",JSONObject(result.toString()).put("events",events).put("reviewReasons",reasons).toString());put("state",if(review)"review" else if(waiting)"waiting" else if(events.length()==0)"informational" else "linked")},"id=?",arrayOf(id.toString()));db.setTransactionSuccessful()
  }finally{db.endTransaction()}}
  private fun compatible(a:Event,b:Event):Boolean=ScheduleRules.company(a.company)==ScheduleRules.company(b.company)&&a.stage==b.stage&&(a.role.isBlank()||b.role.isBlank()||a.role==b.role)&&(a.ref.isBlank()||b.ref.isBlank()||a.ref==b.ref)&&(a.round.isBlank()||b.round.isBlank()||a.round==b.round)
  private fun remapLinks(id:Long,events:JSONArray){val old=mutableListOf<Pair<Long,Event>>();readableDatabase.rawQuery("SELECT s.id,s.data FROM evidence e JOIN schedules s ON s.id=e.schedule WHERE e.notice=?",arrayOf(id.toString())).use{while(it.moveToNext())old.add(it.getLong(0) to EventJson.read(JSONObject(it.getString(1))))};if(old.size<2)return
@@ -93,7 +94,8 @@ class LocalStore(context:Context,databaseName:String="careerflow.db"):SQLiteOpen
  private fun apply(notice:Long,ordinal:Int,e:Event,target:Long?){val db=writableDatabase;var data=e;var sid=target
   if(sid!=null){val previous=db.rawQuery("SELECT data FROM schedules WHERE id=?",arrayOf(sid.toString())).use{if(!it.moveToFirst())throw IllegalArgumentException("Missing schedule");EventJson.read(JSONObject(it.getString(0)))}
    val normalized=if(e.kind=="deadline"&&previous.kind=="window"&&e.end==previous.end)e.copy(start=previous.start,kind="window")else e
-   data=normalized.copy(round=e.round.ifBlank{previous.round},role=e.role.ifBlank{previous.role},ref=e.ref.ifBlank{previous.ref},start=normalized.start.ifBlank{previous.start},end=normalized.end.ifBlank{if(e.action=="reschedule"&&normalized.start.isNotBlank()&&normalized.start!=previous.start)"" else previous.end},location=e.location.ifBlank{previous.location},kind=if(normalized.start.isBlank())previous.kind else normalized.kind)
+   data=normalized.copy(preliminary=if(normalized.start.isNotBlank())false else previous.preliminary||normalized.preliminary,round=e.round.ifBlank{previous.round},role=e.role.ifBlank{previous.role},ref=e.ref.ifBlank{previous.ref},start=normalized.start.ifBlank{previous.start},end=normalized.end.ifBlank{if(e.action=="reschedule"&&normalized.start.isNotBlank()&&normalized.start!=previous.start)"" else previous.end},location=e.location.ifBlank{previous.location},kind=if(normalized.start.isBlank())previous.kind else normalized.kind)
+   if(e.preliminary&&previous.start.isNotBlank())data=previous
    // Preserve completion; sources only extend evidence. Revision changes invalidate stale reminders.
    val newest=db.rawQuery("SELECT max(n.received) FROM evidence ev JOIN notices n ON n.id=ev.notice WHERE ev.schedule=?",arrayOf(sid.toString())).use{it.moveToFirst();it.getLong(0)}
    val received=db.rawQuery("SELECT received FROM notices WHERE id=?",arrayOf(notice.toString())).use{it.moveToFirst();it.getLong(0)}

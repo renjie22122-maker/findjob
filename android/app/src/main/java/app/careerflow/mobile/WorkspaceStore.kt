@@ -37,7 +37,12 @@ class WorkspaceStore(private val context:Context,name:String="workspace.db",priv
  }
  fun restore(id:String,versionId:Long){val old=readableDatabase.rawQuery("SELECT data FROM versions WHERE record=? AND id=?",arrayOf(id,versionId.toString())).use{require(it.moveToFirst());JSONObject(it.getString(0))};val kind=readableDatabase.rawQuery("SELECT kind FROM records WHERE id=?",arrayOf(id)).use{require(it.moveToFirst());it.getString(0)};save(kind,old,id,"用户编辑 / Edited")}
  fun trackSchedules(){val local=LocalStore(context,scheduleDatabase);try{val schedules=local.schedules(false);for(i in 0 until schedules.length()){val s=schedules.getJSONObject(i);if(s.optBoolean("cancelled"))continue;ensureApplication(s.optString("company"),s.optString("role").ifBlank{"岗位待补充 / Role pending"},s.optString("stage"),s.optString("applicationStatus"))}}finally{local.close()}}
- fun applicationNotice(e:Event,body:String,received:Long):Boolean {
+ fun applicationNotice(original:Event,body:String,received:Long):Boolean {
+  var e=original
+  val applications=list("application");val peers=(0 until applications.length()).map{applications.getJSONObject(it).getJSONObject("data")}.filter{ScheduleRules.company(it.optString("companyName"))==ScheduleRules.company(e.company)}
+  if(e.role.isBlank()&&peers.size==1)e=e.copy(role=peers[0].optString("positionTitle"))
+  val exact=peers.filter{it.optString("positionTitle")==e.role};if(exact.size==1)e=e.copy(company=exact[0].optString("companyName"))
+  if(e.intent=="progress"&&exact.isEmpty())return false
   if(e.company.isBlank()||e.evidence.isBlank()||!body.contains(e.evidence)||e.role.isBlank())return false
   if(e.stage=="reject"&&Regex("如果|若|if your|if you",RegexOption.IGNORE_CASE).containsMatchIn(e.evidence))return false
   val existing=list("application");val found=(0 until existing.length()).map{existing.getJSONObject(it)}.filter{it.getJSONObject("data").optString("companyName")==e.company&&it.getJSONObject("data").optString("positionTitle")==e.role}

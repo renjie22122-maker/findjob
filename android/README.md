@@ -205,3 +205,19 @@ English: persistent, one-at-a-time reanalysis of all saved notices with progress
 - 不需要迁移数据库，不改变邮箱、短信分析或提醒策略；使用原签名覆盖安装。桌面与手机仍是独立数据，未实现跨设备同步。
 
 验证：`node server/scripts/android-model-test.mjs`、`node server/scripts/android-ui-smoke.mjs`；Gradle `testDebugUnitTest assembleRelease`；Android 14 模拟器 instrumentation（包含历史阶段保留回归）。真实手机后台策略仍以系统授权和省电设置为准。
+
+## 0.8.0 · 自动关联与通知语义
+
+- 新邮件、短信、历史重分析共用同一条识别与校验流程；分析上下文增加最多 80 条已有申请，并继续使用有预算限制的关联通知和日程原文。
+- 考试通过是进度结果，不再要求填写新考试时间；不会因此创建重复笔试或清空原场次完成标记。没有可靠关联的结果保留待后续信息补全，不凭空新建申请。
+- 公司全称/简称的 AI 关联须提供已有申请 ID、来源引文、关系说明及至少 0.98 置信度，校验岗位/编号和真实来源后复用。模型不能仅凭编号任意修改记录；不同岗位、轮次仍分开。
+- 日期范围内由招聘方分配“其中半天”的通知保存为预通知，手机显示“具体时段待分配”。正式邮件/短信有日期落在原范围、身份唯一且证据有效时自动补全，保留来源和完成状态；预通知不覆盖正式时间，不占用整个范围。
+- 报名反馈、预约、补材料等截止作为独立事项；支持“14点”“24点”等时间证据。补发回复和“如已提交则无需重复”说明不代表实际完成，不撤销原待办。未读材料清单的限制保留在原文/分析摘要中；应用不打开附件链接或身份验证入口。
+- 短信入口增加初面、复面、二面、终面和资料预审/补充资料识别，认证码排除不变。相同场次重复邮件/短信复用来源与提醒；已有完成、取消及人工编辑保护继续生效。
+- 本版不做数据库破坏性迁移，不新增高频轮询。仍按原有串行 Worker、增量 UID 和热状态退避运行。需要联网的工作可能受 Android 休眠/省电影响，强行停止后需重新打开。
+
+安装：覆盖安装 **CareerFlow-0.8.0.apk**，不卸载。使用原签名；已保存邮箱/API 配置、手机通知及完成状态保留。新通知自动使用新逻辑；旧通知可使用总览的“重新分析已有通知”按断点批次修复。桌面与手机仍为独立数据，不自动迁移桌面完成记录。
+
+验证：28 项 JVM 单元测试；Android 14 模拟器 instrumentation 报告 56 项通过（需要显式 live/SMS 参数的测试默认跳过）；新增真实 SQLite 场景覆盖预通知邮件→正式短信→完成→重复催办→旧邮件重分析，以及条件式更正、补材料去重和有来源的公司全称关联。六类合成通知通过配置 API 测试，原生规则补齐模型遗漏的意图/预通知字段。手机 UI 测试含 1,200 条日程、分页/按需原文、双语、冲突及完成状态。未连接用户手机做实机省电或温度测量。
+
+English: shared email/SMS semantics now distinguish stage results, provisional invitations, task deadlines and conditional information. Source-verified AI application association and subsequent schedule updates preserve completion and audit records. Install 0.8.0 over the existing app; desktop/mobile data remain independent. Background timing still depends on Android permissions and power policy.

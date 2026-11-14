@@ -15,9 +15,9 @@ function scheduleCard(s,state){
         const role=node('p',s.role || t('岗位待补充','Role pending'));role.className='agenda-role';card.append(role);
         card.append(node('small',s.round || stage(s.stage)));
         const timing=node('div','');timing.className='agenda-time';
-        timing.append(node('small',s.cancelled?t('已取消','Canceled'):s.kind==='window'?t('完成截止 · 时间自选','Complete by · flexible'):s.kind==='deadline'?t('完成截止','Complete by'):t('固定场次 · 北京时间','Appointment · UTC+8')));
+        timing.append(node('small',s.cancelled?t('已取消','Canceled'):s.preliminary&&!s.start?t('预通知 · 等待正式安排','Pre-notice · awaiting assignment'):s.kind==='window'?t('完成截止 · 时间自选','Complete by · flexible'):s.kind==='deadline'?t('完成截止','Complete by'):t('固定场次 · 北京时间','Appointment · UTC+8')));
         const primary=s.kind==='window'?s.end:s.kind==='deadline'?(s.end||s.start):s.start;
-        timing.append(node('strong',time(primary)+(s.kind==='start'&&s.end?' – '+(s.start.slice(0,10)===s.end.slice(0,10)?s.end.slice(11,16):time(s.end)):'')));
+        timing.append(node('strong',(s.preliminary&&!s.start?t('具体时段待分配','Time slot not yet assigned'):time(primary))+(s.kind==='start'&&s.end?' – '+(s.start.slice(0,10)===s.end.slice(0,10)?s.end.slice(11,16):time(s.end)):'')));
         if(s.kind==='window'&&s.start)timing.append(node('small',t('开放：','Opens: ')+time(s.start)+t(' · 北京时间',' · UTC+8')));
         card.append(timing);
         if(s.location)card.append(node('p',s.location));

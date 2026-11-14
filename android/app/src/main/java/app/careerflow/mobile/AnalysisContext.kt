@@ -5,6 +5,17 @@ import org.json.JSONObject
 
 /** Bounded, source-backed context. No network fetching, link expansion or credential lookup. */
 object AnalysisContext {
+ /** AI may select an existing application only with a quote from its saved event source. */
+ fun application(raw:JSONObject,e:Event,body:String,store:LocalStore,workspace:WorkspaceStore):Event {
+  val target=raw.optString("targetApplicationId");if(target.isBlank()||raw.optDouble("associationConfidence",0.0)<.98||raw.optString("linkReason").isBlank())return e
+  val app=workspace.data(target)?:return e
+  val company=app.optString("companyName");val role=app.optString("positionTitle");val quote=raw.optString("contextQuote")
+  if(company.isBlank()||role.isBlank()||e.company.isBlank()||!body.contains(e.company)||e.evidence.isBlank()||!body.contains(e.evidence)||quote.length<8)return e
+  if(e.role.isNotBlank()&&e.role!=role)return e
+  val all=store.schedules(false)
+  val supported=(0 until all.length()).map{all.getJSONObject(it)}.filter{it.optString("company")==company&&it.optString("role")==role&&(e.ref.isBlank()||it.optString("ref").isBlank()||e.ref==it.optString("ref"))}.any{schedule->val sources=store.sources(schedule.getLong("id"),3);(0 until sources.length()).any{sources.getJSONObject(it).optString("body").contains(quote)}}
+  return if(supported)e.copy(company=company,role=role)else e
+ }
  private fun terms(text:String)=Regex("[\\p{IsHan}]{2,8}|[A-Za-z0-9]{3,}").findAll(text.lowercase()).flatMap{val value=it.value;if(value.any{c->c.code in 0x4E00..0x9FFF})value.windowed(2).asSequence()else sequenceOf(value)}.toSet()
  private fun score(a:String,b:String):Int=terms(a).intersect(terms(b)).size
  fun build(store:LocalStore,id:Long):JSONObject {
@@ -31,7 +42,7 @@ object AnalysisContext {
   if(e.role.isNotBlank()&&old.role.isNotBlank()&&e.role!=old.role)return null
   if(e.round.isNotBlank()&&old.round.isNotBlank()&&e.round!=old.round)return null
   // Changed timing needs an explicit update; an invitation for another occurrence stays separate.
-  if(e.start.isNotBlank()&&e.start!=old.start&&e.action !in listOf("reschedule","cancel")&&!(e.kind=="deadline"&&e.end==old.end))return null
+  if(e.start.isNotBlank()&&e.start!=old.start&&e.action !in listOf("reschedule","cancel")&&!(e.kind=="deadline"&&e.end==old.end)&&!(old.preliminary&&NoticeSemantics.withinRange(old,e)))return null
   return id
  }
 }
