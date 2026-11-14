@@ -10,8 +10,9 @@ import {workHistory,runWorkAnalysis,workFingerprint,applyWorkPlan} from './servi
 import {workPlanSchema} from './services/work/schema.js';
 import {redactMailSecrets} from './services/email/contentSafety.js';
 import {workAgenda} from './services/work/agenda.js';
+import {noticeTriage} from './services/work/triage.js';
 
-const server=new McpServer({name:'careerflow-progress',version:'1.1.0'});
+const server=new McpServer({name:'careerflow-progress',version:'1.2.0'});
 const writeEnabled=process.env.CAREERFLOW_MCP_WRITE==='1';
 const content=(data:unknown)=>({content:[{type:'text' as const,text:redactMailSecrets(JSON.stringify(data))}]});
 const guard=()=>{if(!writeEnabled)throw new Error('MCP writes are disabled. Set CAREERFLOW_MCP_WRITE=1 for this trusted local agent.');};
@@ -24,4 +25,5 @@ server.registerTool('progress_apply_plan',{description:'Submit an evidence-backe
 server.registerTool('progress_automation',{description:'Read verified automatic-repair state, pending/retrying/paused counts and local findings. Read-only; never triggers a model call.',annotations:{readOnlyHint:true}},async()=>content({automation:autonomyStatus(),findings:workFindings()}));
 server.registerTool('progress_strategies',{description:'Read versioned learned decision categories, observed success/failure counts and methods needing revision. Optional key returns version/outcome history. Hints only, never evidence or authority to bypass validation.',inputSchema:{key:z.string().regex(/^[a-z][a-z0-9_-]{1,60}$/).optional()},annotations:{readOnlyHint:true}},async q=>content(q.key?{strategy:strategyLibrary().find(s=>s.key===q.key)??null,history:strategyHistory(q.key)}:strategyLibrary()));
 server.registerTool('progress_search_sources',{description:'Search redacted local email/SMS text by a literal phrase, with bounded pagination. Does not sync mail, follow links or trigger authentication.',inputSchema:{query:z.string().trim().min(2).max(100),offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(40).default(20)},annotations:{readOnlyHint:true}},async q=>content(searchWorkSources(q.query,q.offset,q.limit)));
+server.registerTool('progress_triage',{description:'Read paginated pending notices with semantic category, evidence blockers, provisional dates, attachment limitations and linked activity revisions/completion data. No model calls or writes. Use progress_analyze for evidence-backed reconciliation, never infer completion from conditional corrections.',inputSchema:{offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(40).default(20)},annotations:{readOnlyHint:true,openWorldHint:false}},async q=>content({...noticeTriage(q.offset,q.limit),fingerprint:workFingerprint()}));
 await server.connect(new StdioServerTransport());

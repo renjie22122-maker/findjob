@@ -49,6 +49,14 @@ it('跨语言通知关联同一活动，不重复提醒或重开完成记录',()
  expect(db.prepare('SELECT id,done FROM reminders ORDER BY id').all()).toEqual(before);
 });
 let count=0;
+it('同发件人同岗位的结果通知不能因公司名称变化重复建申请',()=>{
+ const first=notice('考试通知','示例科技','产品经理');applyEmailItem(first,undefined,{createIfMissing:true});
+ const next=notice('恭喜您通过笔试','示例科技有限公司','产品经理');
+ const extraction={company:'示例科技有限公司',positionTitle:'产品经理',eventType:'other' as const,intent:'progress' as const,eventTime:null,confidence:.95,summary:'通过笔试'};
+ expect(()=>applyEmailItem(next,extraction,{createIfMissing:true})).toThrow('不能重复新建');
+ expect(getDb().prepare('SELECT COUNT(*) n FROM applications').get()).toEqual({n:1});
+ expect(getDb().prepare('SELECT status FROM email_items WHERE id=?').get(next)).toEqual({status:'pending'});
+});
 function notice(body='本次考试只需考一次，成绩全集团有效。',company='样例集团',position='软件岗'){
  const extracted={company,positionTitle:position,eventType:'written_test',eventTime:'2099-11-05T09:00:00',eventTimeEnd:'2099-11-05T11:00:00',timeSource:'body',timeEvidence:'2099年11月5日09:00',confidence:.95,summary:'统一笔试'};
  return Number(getDb().prepare("INSERT INTO email_items(message_id,subject,sender,snippet,received_at,extracted,status,created_at) VALUES (?,'招聘考试','样例集团',?,'2099-11-01',?,'pending','2099-11-01')").run(`work-${++count}`,body,JSON.stringify(extracted)).lastInsertRowid);

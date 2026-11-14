@@ -6,7 +6,9 @@ const client=new Client({name:'careerflow-contract-test',version:'1.0.0'});
 const transport=new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('../dist/mcp.js',import.meta.url))],env:{...process.env,FINDJOB_DB_PATH:':memory:',CAREERFLOW_MCP_WRITE:'0'},stderr:'pipe'});
 try{
  await client.connect(transport);
- const tools=await client.listTools();assert.equal(tools.tools.length,9);
+ const tools=await client.listTools();assert.equal(tools.tools.length,10);
+ const triage=await client.callTool({name:'progress_triage',arguments:{}});assert.equal(JSON.parse(triage.content[0].text).total,0);
+ const badTriage=await client.callTool({name:'progress_triage',arguments:{limit:1000}});assert.equal(badTriage.isError,true);
  const graph=await client.callTool({name:'progress_graph',arguments:{}});const value=JSON.parse(graph.content[0].text);
  assert.equal(value.nodes.length,0);assert.equal(value.fingerprint.length,64);
  const agenda=await client.callTool({name:'progress_agenda',arguments:{from:'2099-01-01',to:'2099-12-31'}});assert.equal(JSON.parse(agenda.content[0].text).total,0);

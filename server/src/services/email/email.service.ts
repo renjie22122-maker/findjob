@@ -273,6 +273,9 @@ function applyEmailItemInternal(
       if (!appRow && extracted.schedule && extracted.schedule.action !== 'create') throw AppError.conflict('变更通知无法确认原申请，请先选择原日程');
       // 开启 createIfMissing 且无匹配时：自动建一条「待投递」记录（后续可推进为已投递）
       if (!appRow && options.createIfMissing) {
+        if(extracted.intent==='progress' && extracted.positionTitle && (db.prepare("SELECT e.extracted FROM email_items e WHERE e.status='confirmed' AND e.application_id IS NOT NULL AND e.sender=? AND e.id<>?").all(row.sender,id) as {extracted:string}[]).some(peer=>{
+          try{return JSON.parse(peer.extracted).positionTitle===extracted.positionTitle;}catch{return false;}
+        }))throw AppError.conflict('同一发件人已有同岗位记录，结果通知需先核对公司别名和原申请，不能重复新建');
         const title =
           extracted.positionTitle?.trim() ||
             `${extracted.company} · 岗位待定`;

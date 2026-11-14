@@ -4,7 +4,7 @@ import {PAGE_MARKER} from './publicNoticePages.js';
 import type { EmailExtraction } from '../../domain/types.js';
 import type { RawEmail } from './imap.client.js';
 import { explicitActivityWindow, mailTimeToLocal, validEventTime } from './eventTime.js';
-import {qualificationNotice} from './automationEvidence.js';
+import {qualificationNotice,passedStageNotice} from './automationEvidence.js';
 import {localIso} from '../../utils/time.js';
 
 /** Decorative images cannot block an explicit application receipt; other attachments still do. */
@@ -12,13 +12,22 @@ export function decorativeReceiptWarning(e:EmailExtraction,body:string,warning:s
   if(e.eventType!=='applied' || !e.positionTitle || !body.includes(e.positionTitle) || !/已成功完成简历提交|已成功提交|已完成简历提交|投递成功|申请已提交/.test(body))return false;
   return Boolean(e.attachments?.some(a=>a.status==='skipped' && /\.(png|jpe?g|gif|webp)$/i.test(a.name) && /头图|二维码|logo|banner/i.test(a.name) && warning===`${a.name}：${a.detail}` && a.detail.startsWith('不支持的附件')));
 }
+/** An explicitly labelled materials checklist does not invalidate dates stated in the body.
+ * Its skipped attachment metadata remains visible; its contents are never assumed read. */
+export function materialsAttachmentWarning(e:EmailExtraction,body:string,warning:string):boolean {
+  if(!awaitingAppointment(body,'2000-01-01') || !/材料[^。\n]{0,35}(?:详见|见)附件/.test(body))return false;
+  return Boolean(e.attachments?.some(a=>a.status==='skipped' && /所需材料|携带材料|材料清单/.test(a.name) && !/时间|地点|考场|安排|准考证/.test(a.name) && warning===`${a.name}：${a.detail}` && a.detail.startsWith('不支持的附件')));
+}
 
 /** Confidence alone cannot authorize a dated event: require source evidence. */
 export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): EmailExtraction {
   const result = { ...extraction, schedule: extraction.schedule ? {...extraction.schedule} : undefined, attachments: raw.content?.attachments ?? [], reviewReasons: [...(raw.content?.warnings ?? [])] };
   const sourceText = `${raw.subject}\n${raw.content?.body ?? raw.snippet}\n${raw.content?.attachmentText ?? ''}`;
+  if (passedStageNotice(raw.content?.body ?? raw.snippet) && !result.preparationTasks?.length && !result.eventTime && (!result.schedule || result.schedule.action==='create')) {
+    result.eventType='other';result.intent='progress';result.schedule=undefined;result.eventTimeEnd=null;result.timeEvidence=null;
+  }
   // A warning about actions the user must perform is not uncertainty about a date.
-  result.reviewReasons=result.reviewReasons.filter(w=>!w.startsWith('邮件含身份验证或一次性操作信息：') && !decorativeReceiptWarning(result,raw.content?.body ?? raw.snippet,w));
+  result.reviewReasons=result.reviewReasons.filter(w=>!w.startsWith('邮件含身份验证或一次性操作信息：') && !decorativeReceiptWarning(result,raw.content?.body ?? raw.snippet,w) && !materialsAttachmentWarning(result,raw.content?.body ?? raw.snippet,w));
   if(!transferEvidence(result,sourceText))result.reviewReasons.push('岗位调剂缺少明确原文依据，意愿询问不代表已调剂');
   const recovered = ['interview','assessment','written_test'].includes(result.eventType ?? '') && (!result.schedule || ['create','update'].includes(result.schedule.action)) ? explicitActivityWindow(sourceText) : null;
   if (recovered) {
@@ -131,7 +140,8 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
   if (result.eventTimeEnd && (!result.eventTime || result.eventTimeEnd <= result.eventTime)) {
     result.eventTimeEnd = null; result.reviewReasons.push('结束时间不晚于开始时间，需复核');
   }
-  if(result.eventType==='other' && result.company && (result.intent==='progress' || result.intent==='task' && result.preparationTasks?.length || result.positionTitle && qualificationNotice(sourceText))){
+  if(result.eventType==='other' && result.company && (result.intent==='progress' || result.preparationTasks?.length || result.positionTitle && qualificationNotice(sourceText))){
+    if(result.preparationTasks?.length && result.intent!=='progress')result.intent='task';
     result.eventTime=mailTimeToLocal(raw.receivedAt);result.timeSource='received';result.timeEvidence=null;
   } else if (!result.company || !result.eventType || result.eventType === 'other') result.reviewReasons.push('公司或事件信息不完整，需人工确认');
   if(result.schedule?.preliminary && waiting && result.timeSource==='unknown')result.timeSource=(raw.content?.body??raw.snippet).replace(/\s/g,'').includes(waiting.evidence)?'body':'attachment';
