@@ -2,7 +2,7 @@ import {translate, useLanguage} from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts/core';
 import { BarChart, LineChart, PieChart, FunnelChart as EChartsFunnel } from 'echarts/charts';
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
+import { GridComponent, LegendComponent, TooltipComponent, DataZoomComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { EChartsCoreOption } from 'echarts/core';
 import type { OverviewStats, TrendPoint } from '../types';
@@ -10,7 +10,7 @@ import { STATUS_COLORS, STATUS_LABELS, ALL_STATUSES } from '../utils/constants';
 import type { AppStatus } from '../types';
 import { useAppTheme } from '../theme';
 
-echarts.use([BarChart, LineChart, PieChart, EChartsFunnel, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+echarts.use([BarChart, LineChart, PieChart, EChartsFunnel, GridComponent, LegendComponent, TooltipComponent, DataZoomComponent, CanvasRenderer]);
 
 function useChart(option: EChartsCoreOption, onSelect?: (key:string)=>void) {
   const click=useRef(onSelect);click.current=onSelect;
@@ -50,8 +50,9 @@ export function TrendChart({ trends }: { trends: TrendPoint[] }) {
   const colors=['#1677ff','#9254de','#faad14','#ff4d4f'];
   const ref = useChart({
     tooltip: { trigger: 'axis', confine: true },
-    grid: { left: 12, right: 16, top: 16, bottom: 16, containLabel: true },
-    xAxis: { type: 'category', data: trends.map((t) => t.date.slice(5)), axisLabel: { hideOverlap: true } },
+    grid: { left: 12, right: 16, top: 16, bottom: 64, containLabel: true },
+    dataZoom:[{type:'inside',zoomOnMouseWheel:true,moveOnMouseMove:true},{type:'slider',bottom:8,height:24}],
+    xAxis: { type: 'category', data: trends.map((t) => t.date), axisLabel: { hideOverlap: true } },
     yAxis: { type: 'value', minInterval: 1 },
     series: [
       { name: '投递', type: 'line', smooth: true, data: trends.map((t) => t.applied), color: '#1677ff' },

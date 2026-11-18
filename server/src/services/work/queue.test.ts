@@ -7,9 +7,15 @@ vi.mock('../settings.service.js',()=>({getLlmConfig:()=>({apiKey:'test'})}));
 vi.mock('../email/check.service.js',()=>({checkExistingEmails:()=>({})}));
 beforeEach(()=>{closeDb();getDb();run.mockReset();});
 function seed(n=1){for(let i=1;i<=n;i++)getDb().prepare("INSERT INTO email_items(message_id,subject,snippet,received_at,extracted,status,created_at) VALUES (?,'通知','待办','2026-11-01','{}','pending','2026-11-01')").run(`queue-${i}`);}
+it('部门名称差异扩大上下文但不会自行合并主体',async()=>{
+ seed(2);getDb().prepare('UPDATE email_items SET extracted=? WHERE id=1').run(JSON.stringify({company:'示例证券股份有限公司固定收益部'}));
+ getDb().prepare("UPDATE email_items SET extracted=?,status='confirmed' WHERE id=2").run(JSON.stringify({company:'示例证券股份有限公司'}));
+ run.mockResolvedValue({status:'pending'});await processWorkQueue();expect(run.mock.calls[0][1]).toContain(2);
+ expect(getDb().prepare('SELECT COUNT(*) n FROM company_aliases').get()).toEqual({n:0});
+});
 it('内容指纹增量、每批有界，重启后不重复分析已处理通知',async()=>{
- seed(15);run.mockImplementation(async (_message:string,ids:number[])=>{for(const id of ids)getDb().prepare("UPDATE email_items SET status='confirmed' WHERE id=?").run(id);return {status:'applied'};});await processWorkQueue();expect(run.mock.calls[0][1]).toHaveLength(12);
- await processWorkQueue();expect(run.mock.calls[1][1]).toHaveLength(3);await processWorkQueue();expect(run).toHaveBeenCalledTimes(2);
+ seed(5);run.mockImplementation(async (_message:string,ids:number[])=>{for(const id of ids)getDb().prepare("UPDATE email_items SET status='confirmed' WHERE id=?").run(id);return {status:'applied'};});await processWorkQueue();expect(run.mock.calls[0][1]).toHaveLength(3);
+ await processWorkQueue();expect(run.mock.calls[1][1]).toHaveLength(2);await processWorkQueue();expect(run).toHaveBeenCalledTimes(2);
  getDb().prepare("UPDATE email_items SET snippet='补充新时间' WHERE id=1").run();await processWorkQueue();expect(run.mock.calls[2][1]).toEqual([1]);
 });
 it('网络失败退避，busy不吞批次，新内容重新获得重试机会',async()=>{

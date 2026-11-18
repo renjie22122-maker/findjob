@@ -1,5 +1,5 @@
 import {translate, useLanguage} from '../i18n';
-import { Alert, Button, Card, Drawer, Col, Input, List, Row, Select, Table, Typography, Space, Tag, message } from 'antd';
+import { Alert, Button, Card, DatePicker, Drawer, Col, Input, List, Row, Select, Table, Typography, Space, Tag, message } from 'antd';
 import {
   FileTextOutlined,
   SearchOutlined,
@@ -8,6 +8,7 @@ import {
   CalendarOutlined,
 } from '@ant-design/icons';
 import { useState } from 'react';
+import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useOverview, useTrends } from '../hooks';
@@ -33,7 +34,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const applicationFilters = useFiltersStore();
   const { data: stats, isLoading } = useOverview();
-  const { data: trendsData } = useTrends(30);
+  const [trendDays,setTrendDays]=useState(90);const [trendEnd,setTrendEnd]=useState(()=>dayjs().format('YYYY-MM-DD'));
+  const { data: trendsData } = useTrends(trendDays,trendEnd);
 
   const { data: recent } = useQuery({
     queryKey: ['applications', 'recent'],
@@ -115,7 +117,9 @@ export default function Dashboard() {
           {title:'当前状态',dataIndex:'status',render:value=><StatusTag status={value}/>}
         ]}/>
       </Drawer>
-      <Card title={translate("近 30 天趋势")} size="small">
+      <Card title={translate("进度时间轴")} size="small">
+        <Space wrap style={{marginBottom:12}}><Button onClick={()=>setTrendEnd(dayjs(trendEnd).subtract(trendDays,'day').format('YYYY-MM-DD'))}>← 更早</Button><Button onClick={()=>setTrendEnd(dayjs(trendEnd).add(trendDays,'day').format('YYYY-MM-DD'))}>更晚 →</Button><Select aria-label="时间轴范围" value={trendDays} onChange={setTrendDays} options={[7,30,90,365].map(value=>({value,label:`${value} 天`}))}/><DatePicker aria-label="时间轴结束日期" value={dayjs(trendEnd)} allowClear={false} onChange={value=>{if(value)setTrendEnd(value.format('YYYY-MM-DD'));}}/><Button onClick={()=>setTrendEnd(dayjs().format('YYYY-MM-DD'))}>回到今天</Button></Space>
+        <Typography.Paragraph type="secondary">拖动图表平移，滚轮或底部滑块缩放；“更早 / 更晚”加载范围之外的记录。未来尚无进度记录时显示为空。</Typography.Paragraph>
         <TrendChart trends={trendsData?.items ?? []} />
       </Card>
 

@@ -15,6 +15,10 @@ export function decorativeReceiptWarning(e:EmailExtraction,body:string,warning:s
 /** An explicitly labelled materials checklist does not invalidate dates stated in the body.
  * Its skipped attachment metadata remains visible; its contents are never assumed read. */
 export function materialsAttachmentWarning(e:EmailExtraction,body:string,warning:string):boolean {
+  // Admission documents/maps are supplementary only when body independently states time and venue.
+  if(e.eventTime && e.timeEvidence && body.replace(/\s/g,'').includes(e.timeEvidence.replace(/\s/g,'')) && /考试时间|面试时间/.test(body) && /考试地点|面试地点/.test(body) && /打印附件|打印.{0,12}入校凭证/.test(body)){
+    if(e.attachments?.some(a=>a.status==='skipped' && /入校凭证|考点地图/.test(a.name) && !/时间安排|场次安排|更正/.test(a.name) && warning===`${a.name}：${a.detail}` && a.detail.startsWith('不支持的附件')))return true;
+  }
   if(!awaitingAppointment(body,'2000-01-01') || !/材料[^。\n]{0,35}(?:详见|见)附件/.test(body))return false;
   return Boolean(e.attachments?.some(a=>a.status==='skipped' && /所需材料|携带材料|材料清单/.test(a.name) && !/时间|地点|考场|安排|准考证/.test(a.name) && warning===`${a.name}：${a.detail}` && a.detail.startsWith('不支持的附件')));
 }
@@ -37,7 +41,7 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
       if (recovered.window) result.schedule={...result.schedule,action:result.schedule?.action ?? 'create',timeKind:'window'};
     }
   }
-  const waiting=['interview','written_test','assessment'].includes(result.eventType??'') ? awaitingAppointment(result.timeEvidence||(!result.eventTime?sourceText:''),raw.receivedAt) || (!result.eventTime ? externallyPublishedTime(sourceText) : null) : null;
+  const waiting=['interview','written_test','assessment'].includes(result.eventType??'') ? awaitingAppointment(result.timeEvidence||'',raw.receivedAt) || (!result.eventTime ? awaitingAppointment(sourceText,raw.receivedAt) || externallyPublishedTime(sourceText) : null) : null;
   if(waiting && (!result.schedule || result.schedule.action==='create')){
     result.eventTime=null;result.eventTimeEnd=null;
     result.schedule={...result.schedule,action:'create',timeKind:'start',...waiting,evidence:result.schedule?.evidence||result.timeEvidence||waiting.evidence};
@@ -74,10 +78,10 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     result.recruitmentId = null;
     result.reviewReasons.push('职位编号未在原文出现，需确认申请关联');
   }
-  const early=[...new Map([...sourceText.matchAll(/提前(\d{1,2})分钟(?:登录|进入笔试|打开笔试链接)/g)].map(match=>[match[1],match])).values()];
+  const early=[...new Map([...sourceText.matchAll(/提前(\d{1,2})分钟(?:登录|进入笔试|打开笔试链接|抵达考场|到达考场|签到)/g)].map(match=>[match[1],match])).values()];
   if(validEventTime(result.eventTime) && early.length===1 && Number(early[0][1])>0 && ['written_test','interview','assessment'].includes(result.eventType??'')){
     const at=localIso(new Date(new Date(result.eventTime!).getTime()-Number(early[0][1])*60000));
-    if(!(result.preparationTasks??[]).some(t=>t.scheduledAt===at))result.preparationTasks=[...(result.preparationTasks??[]),{title:'提前登录／设备准备（需本人操作）',scheduledAt:at,timeEvidence:early[0][0]}];
+    if(!(result.preparationTasks??[]).some(t=>t.scheduledAt===at))result.preparationTasks=[...(result.preparationTasks??[]),{title:/抵达|到达|签到/.test(early[0][0])?'提前到场／签到（需本人操作）':'提前登录／设备准备（需本人操作）',scheduledAt:at,timeEvidence:early[0][0]}];
   }
   result.preparationTasks = (result.preparationTasks ?? []).filter(task => {
     const valid = validEventTime(task.scheduledAt);
@@ -87,7 +91,7 @@ export function attachEvidence(extraction: EmailExtraction, raw: RawEmail): Emai
     const reference=midnight?new Date(new Date(`${valid!.slice(0,10)}T00:00:00Z`).getTime()-86400000).toISOString():valid;
     const dateMatches = reference && dates.some(m => (!m[1] || m[1] === reference.slice(0, 4)) && Number(m[2]) === Number(reference.slice(5, 7)) && Number(m[3]) === Number(reference.slice(8, 10)));
     const clockMatches = midnight || (valid && [...(quote ?? '').matchAll(/(\d{1,2})(?:[:：](\d{2})|[点时](?:(\d{1,2})分?)?)/g)].some(m => Number(m[1]) === Number(valid.slice(11, 13)) && Number(m[2]??m[3]??0) === Number(valid.slice(14, 16))));
-    const lead=quote?.match(/提前(\d{1,2})分钟(?:登录|进入笔试|打开笔试链接)/);
+    const lead=quote?.match(/提前(\d{1,2})分钟(?:登录|进入笔试|打开笔试链接|抵达考场|到达考场|签到)/);
     const relative=lead && validEventTime(result.eventTime) && valid===localIso(new Date(new Date(result.eventTime!).getTime()-Number(lead[1])*60000));
     if (!valid || !quote || !sourceText.replace(/\s+/gu, '').includes(quote) || (!relative && (!dateMatches || !clockMatches))) {
       result.reviewReasons.push('准备事项缺少有效时间或原文依据，未创建该提醒');

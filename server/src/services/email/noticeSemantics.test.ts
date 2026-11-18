@@ -3,6 +3,19 @@ import {awaitingAppointment} from './preliminary.js';
 import {informationalNotice,passedStageNotice} from './automationEvidence.js';
 import {attachEvidence} from './evidence.js';
 const raw={messageId:'test',subject:'招聘通知',sender:'HR',receivedAt:'2026-11-12T09:00:00+08:00',snippet:''};
+it('uses full-body later-notice evidence when the model quoted only the date',()=>{
+ const date='我们将于2026年11月24日在北京、深圳两地开展现场面试';
+ const snippet=date+'。请于2026年11月17日12:00反馈。在反馈后，我们将通过另一份正式通知邮件告知您准确的面试时段及地点。';
+ const e=attachEvidence({company:'示例单位',eventType:'interview',eventTime:null,timeEvidence:date,confidence:.95,summary:null,positionTitle:'工程师'},{...raw,snippet});
+ expect(e.schedule).toMatchObject({preliminary:true,dateStart:'2026-11-24',dateEnd:'2026-11-24'});expect(e.reviewReasons).toEqual([]);expect(e.eventTime).toBeNull();
+});
+it('keeps admission-document limitations while applying independently stated venue/time and arrival lead',()=>{
+ const snippet='考试时间：2026年11月22日09:30。考试地点：A楼403教室。请提前30分钟抵达考场，提前自行打印附件入校凭证。';
+ const attachment={name:'入校凭证及考点地图.doc',status:'skipped' as const,detail:'不支持的附件'};
+ const e=attachEvidence({company:'示例单位',eventType:'written_test',eventTime:'2026-11-22T09:30:00',timeEvidence:'2026年11月22日09:30',confidence:.98,summary:null,positionTitle:null},{...raw,snippet,content:{body:snippet,attachmentText:'',attachments:[attachment],warnings:[`${attachment.name}：${attachment.detail}`]}});
+ expect(e.reviewReasons).toEqual([]);expect(e.attachments?.[0].status).toBe('skipped');
+ expect(e.preparationTasks?.[0]).toMatchObject({scheduledAt:'2026-11-22T09:00:00',title:'提前到场／签到（需本人操作）'});
+});
 it.each(['11月19日（周四）-11月20日（周五）其中半天（具体时间以后续正式通知为准）','【11月19-20日】其中半天（具体时间以正式通知为准）'])('preserves unassigned date ranges: %s',snippet=>{
  expect(awaitingAppointment(snippet,raw.receivedAt)).toMatchObject({dateStart:'2026-11-19',dateEnd:'2026-11-20',preliminary:true});
  const e=attachEvidence({company:'示例单位',eventType:'interview',eventTime:null,timeEvidence:snippet,confidence:.95,summary:null,positionTitle:null},{...raw,snippet});

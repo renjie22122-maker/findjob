@@ -11,6 +11,16 @@ const mock=vi.hoisted(()=>vi.fn());
 vi.mock('../settings.service.js',()=>({getLlmConfig:()=>({apiKey:'synthetic'})}));
 vi.mock('../llm/llm.client.js',async original=>({...await original<object>(),chatJson:mock}));
 beforeEach(()=>{closeDb();getDb();mock.mockReset();});
+it('自动执行校验失败后反馈原文错误并有界纠正，不要求用户逐条处理',async()=>{
+ const n=notice('样例集团：请于2099年11月5日14点前完成信息填报。');
+ const base={relevant:true,company:'样例集团',positionTitle:'软件岗',eventType:'interview',eventTime:null,confidence:.98,summary:'填报'};
+ const action={type:'apply-notice',noticeId:n,extraction:base,reason:'通知',confidence:.98,evidence:[{noticeId:n,quote:'完成信息填报'}]};
+ mock.mockResolvedValueOnce({reply:'处理',actions:[action]}).mockResolvedValueOnce({reply:'修正为任务',usedStrategies:['task'],actions:[{...action,extraction:{...base,eventType:'other',intent:'task',preparationTasks:[{title:'填报',scheduledAt:'2099-11-05T14:00:00',timeEvidence:'2099年11月5日14点前完成信息填报'}]}}]});
+ expect(await runWorkAnalysis('自动整理',[n],true)).toMatchObject({status:'applied'});
+ expect(mock.mock.calls[1][1]).toContain('failedActions');expect(mock).toHaveBeenCalledTimes(2);
+ expect(getDb().prepare('SELECT status FROM email_items WHERE id=?').get(n)).toEqual({status:'confirmed'});
+ expect(getDb().prepare('SELECT COUNT(*) n FROM recruitment_schedules').get()).toEqual({n:0});
+});
 it('无提醒的待定活动也能持久完成，后续补全和核查不得重新生成提醒',()=>{
  const id=notice();applyEmailItem(id,undefined,{createIfMissing:true});
  const db=getDb(),row=db.prepare('SELECT id,revision FROM recruitment_schedules').get() as {id:number;revision:number};

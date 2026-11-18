@@ -25,8 +25,9 @@ router.get(
 router.get(
   '/trends',
   asyncHandler(async (req, res) => {
-    const days = Number(req.query.days ?? 30);
-    res.json({ items: getTrends(Number.isFinite(days) ? days : 30) });
+    const range=parse(z.object({days:z.coerce.number().int().min(1).max(365).default(30),end:z.string().date().optional()}),req.query);
+      const days=range.days;
+    res.json({ items: getTrends(days,range.end) });
   }),
 );
 

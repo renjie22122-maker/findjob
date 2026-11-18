@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 const state = vi.hoisted(() => ({ fetching: false, lockOptions: null as unknown, fetches: [] as unknown[], searches: [] as unknown[] }));
 vi.mock('imapflow', () => ({ ImapFlow: class {
   mailbox = { uidValidity: 12345n };
+  on(){} close(){}
   async connect() {}
   async logout() {}
   async list() { return []; }

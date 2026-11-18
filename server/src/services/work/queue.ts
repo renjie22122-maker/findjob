@@ -29,11 +29,11 @@ export async function processWorkQueue(){
   const peersByCompany=new Map<string,Notice[]>();
   for(const row of rows){const key=company(row);if(key){if(!peersByCompany.has(key))peersByCompany.set(key,[]);peersByCompany.get(key)!.push(row);}}
   for(const group of peersByCompany.values())group.sort((a,b)=>b.id-a.id);
-  const peersFor=(r:Notice)=>peersByCompany.get(company(r))||[];
-  const signature=(r:Notice)=>r.status!=='pending'?digest({id:r.id,subject:r.subject,snippet:r.snippet,extracted:r.extracted}):digest({notice:r,policy:'verified-outcome-v1',related:r.status==='pending'&&company(r)?peersFor(r).filter(p=>p.id!==r.id).slice(0,20).map(p=>[p.id,digest(p.extracted),digest(p.snippet)]):[]});
+  const peersFor=(r:Notice)=>{const name=company(r);const exact=peersByCompany.get(name)||[];const related=name.length>=4?rows.filter(p=>{const other=company(p);return other.length>=4&&(name.includes(other)||other.includes(name));}).sort((a,b)=>b.id-a.id):[];return [...new Map([...exact,...related].map(p=>[p.id,p])).values()];};
+  const signature=(r:Notice)=>r.status!=='pending'?digest({id:r.id,subject:r.subject,snippet:r.snippet,extracted:r.extracted}):digest({notice:r,policy:'verified-outcome-v3',related:r.status==='pending'&&company(r)?peersFor(r).filter(p=>p.id!==r.id).slice(0,20).map(p=>[p.id,digest(p.extracted),digest(p.snippet)]):[]});
   const checkpoints=new Map((db.prepare('SELECT * FROM work_scan').all() as (Checkpoint&{notice_id:number})[]).map(c=>[c.notice_id,c]));
-  const selected=rows.filter(r=>{const c=checkpoints.get(r.id);return !c||c.signature!==signature(r)||Boolean(c.error&&c.attempts<3&&c.next_attempt<=now);}).slice(0,12);
-  if(!selected.length){await bootstrapStrategyLibrary();save('idle',0,0,previous.pending,'等待新通知；同样的内容不会反复调用 API');return;}
+  const selected=rows.filter(r=>{const c=checkpoints.get(r.id);return !c||c.signature!==signature(r)||Boolean(c.error&&c.attempts<3&&c.next_attempt<=now);}).slice(0,3);
+  if(!selected.length){await bootstrapStrategyLibrary();save(previous.retrying?'retrying':previous.paused?'paused':'idle',0,0,previous.pending,previous.retrying?'等待退避重试；网络超时不代表通知无法识别':previous.paused?'重试上限已达；新通知或规则升级后重新核对，已保留失败原因':'等待新通知；同样的内容不会反复调用 API');return;}
   const related=new Set(selected.map(r=>r.id));
   for(const r of selected){
    for(const peer of peersFor(r).slice(0,6))if(related.size<36)related.add(peer.id);

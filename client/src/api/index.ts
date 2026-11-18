@@ -94,7 +94,7 @@ export const remindersApi = {
 // ---------- stats / today ----------
 export const statsApi = {
   overview: () => http.get<OverviewStats>('/stats/overview'),
-  trends: (days = 30) => http.get<{ items: TrendPoint[] }>(`/stats/trends?days=${days}`),
+  trends: (days = 30,end?:string) => http.get<{ items: TrendPoint[] }>(`/stats/trends?days=${days}${end?`&end=${end}`:""}`),
   today: () => http.get<TodayPayload>('/stats/today'),
 };
 

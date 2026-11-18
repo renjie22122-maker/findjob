@@ -5,6 +5,11 @@ import { createCompany } from './companies.service.js';
 import { createApplication, transitionApplication } from './applications.service.js';
 import { closeDb, getDb } from '../db/connection.js';
 import { localIso, nowIso } from '../utils/time.js';
+it('趋势范围可跨年平移且不混入结束日期之后的记录',()=>{
+ closeDb();getDb();const points=getTrends(3,'2025-01-01');
+ expect(points.map(p=>p.date)).toEqual(['2024-12-30','2024-12-31','2025-01-01']);
+ expect(points.every(p=>p.applied===0)).toBe(true);
+});
 
 describe('导入规范化', () => {
   it('中文状态名映射为枚举', () => {

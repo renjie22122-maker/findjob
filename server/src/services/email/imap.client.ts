@@ -15,6 +15,7 @@ import { ensureFreshAccessToken } from '../oauth2/outlook.js';
 import { auditTimer } from '../audit.service.js';
 import { MAX_MESSAGE_BYTES, parseMailContent, type MailContent } from './mime.js';
 import { isAuthenticationMail, redactMailSecrets } from './contentSafety.js';
+import {boundedImap,imapFailure} from './imapReliability.js';
 
 export interface RawEmail {
   messageId: string;
@@ -218,7 +219,8 @@ async function fetchOnce(
     greetingTimeout: IMAP_SOCKET_TIMEOUT_MS,
     ...(IMAP_DEBUG ? { logger: makeImapLogger() } : {}),
   });
-  try {
+  client.on('error',()=>undefined); // Commands report safe diagnostics; do not crash on socket errors.
+  return boundedImap(client,async()=>{
     await client.connect();
     const folders = await resolveFolders(client, cfg, options.includeJunk ?? true);
     const merged: RawEmail[] = [];
@@ -234,9 +236,7 @@ async function fetchOnce(
       }
     }
     return { emails: merged, withoutSnippet, folders };
-  } finally {
-    await client.logout().catch(() => undefined);
-  }
+  },Math.max(30_000,EMAIL_FETCH_BUDGET_MS+2*IMAP_SOCKET_TIMEOUT_MS));
 }
 
 /** 拉取最近 N 天邮件（失败自动重试一次），记录出站审计 */
@@ -245,6 +245,8 @@ export async function fetchRecentEmails(
   days: number,
   options: FetchEmailsOptions = {},
 ): Promise<RawEmail[]> {
+  const cooldown=Number(getSetting('email.fetch.retryAfter')??0);
+  if(cooldown>Date.now())throw AppError.conflict(`邮箱暂时不可用，正在冷却重试，请在 ${Math.ceil((cooldown-Date.now())/1000)} 秒后重试；本地通知仍可核查`);
   const timer = auditTimer({
     kind: 'imap',
     target: `${cfg.host}:${cfg.port}（${cfg.folder || 'INBOX'}）`,
@@ -255,6 +257,7 @@ export async function fetchRecentEmails(
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const { emails, withoutSnippet, folders } = await fetchOnce(cfg, days, options);
+      setSetting('email.fetch.retryAfter','0');
       timer.ok(
         `拉取 ${emails.length} 封（${folders.join('+')}）${withoutSnippet ? `（${withoutSnippet} 封无正文摘要）` : ''}${attempt > 1 ? '（重试后成功）' : ''}`,
       );
@@ -265,6 +268,7 @@ export async function fetchRecentEmails(
         timer.fail(err.message);
         throw err;
       }
+      if(!imapFailure(err).retry)break;
       if (attempt === 1) {
         // 记录原始错因（命令名/响应/堆栈），便于排查上游行为（如限流、半开连接）
         console.error('[imap] 拉取失败，准备重试（上游响应不写入日志）');
@@ -276,9 +280,10 @@ export async function fetchRecentEmails(
     }
   }
 
-  const message = lastError instanceof Error && lastError.message.toLowerCase().includes('auth') ? '邮箱认证失败，请检查授权配置' : '邮箱连接或读取失败';
-  timer.fail(message);
-  throw AppError.badGateway(`邮件拉取失败：${message}（常见于邮箱服务商限流或连接中断，可稍后重试或缩短分析天数）`);
+  const failure=imapFailure(lastError);
+  if(failure.retry)setSetting('email.fetch.retryAfter',String(Date.now()+60_000));
+  timer.fail(`${failure.kind}: ${failure.message}`);
+  throw AppError.badGateway(`邮件拉取失败：${failure.message}${failure.retry?'；已暂停连接重试 60 秒，避免连续请求':''}`);
 }
 
 /** 测试 IMAP 连接（设置页「测试连接」，两种认证模式通用），记录出站审计 */
@@ -290,16 +295,15 @@ export async function testEmailConnection(cfg: EmailConfig): Promise<{ ok: boole
   });
   try {
     const client = new ImapFlow({ ...(await resolveAuth(cfg)), connectionTimeout: IMAP_SOCKET_TIMEOUT_MS, greetingTimeout: IMAP_SOCKET_TIMEOUT_MS, socketTimeout: IMAP_SOCKET_TIMEOUT_MS });
-    try {
+    client.on('error',()=>undefined);
+    return await boundedImap(client,async()=>{
       await client.connect();
       const status = await client.status(cfg.folder || 'INBOX', { messages: true });
       timer.ok(`连接成功，收件箱 ${status.messages} 封`);
       return { ok: true, message: `连接成功，收件箱共 ${status.messages} 封邮件` };
-    } finally {
-      await client.logout().catch(() => undefined);
-    }
+    },2*IMAP_SOCKET_TIMEOUT_MS);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = imapFailure(err).message;
     timer.fail(msg);
     return { ok: false, message: `连接失败：${msg}` };
   }

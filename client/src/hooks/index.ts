@@ -10,10 +10,10 @@ export function useOverview() {
   });
 }
 
-export function useTrends(days = 30) {
+export function useTrends(days = 30,end?:string) {
   return useQuery({
-    queryKey: ['stats', 'trends', days],
-    queryFn: () => statsApi.trends(days),
+    queryKey: ['stats', 'trends', days,end],
+    queryFn: () => statsApi.trends(days,end),
     refetchInterval: 30_000,
   });
 }

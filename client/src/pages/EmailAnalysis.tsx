@@ -53,6 +53,7 @@ export default function EmailAnalysis() {
       queryClient.invalidateQueries({ queryKey: ['stats'] });
     },
     onError: (err) => message.error(err instanceof Error ? err.message : '分析失败'),
+    onSettled:()=>queryClient.invalidateQueries({queryKey:['email','auto']}),
   });
 
   const applyMutation = useMutation({

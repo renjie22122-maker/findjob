@@ -20,10 +20,14 @@ export function preliminaryInterview(body:string,receivedAt:string) {
 /** Explicitly unassigned appointment: a booking range is not a self-service activity window. */
 export function awaitingAppointment(text:string,receivedAt:string) {
  const compact=text.replace(/\s+/g,'').replace(/[（(](?:周|星期)[一二三四五六日天][）)]/g,'').replace(/[【】]/g,'');
- const condition=compact.match(/(?:具体|实际)(?:面试|考试|笔试)?时间(?:以.{0,20}(?:预约|正式通知|后续通知).{0,12}为准|待预约|另行通知)|(?:面试|考试|笔试)时间(?:待预约|另行通知)/);
+ const condition=compact.match(/(?:具体|实际)(?:面试|考试|笔试)?时间(?:以.{0,20}(?:预约|正式通知|后续通知).{0,12}为准|待预约|另行通知)|(?:面试|考试|笔试)时间(?:待预约|另行通知)|(?:正式通知|另行通知)[^。；]{0,35}(?:告知|通知)[^。；]{0,15}(?:准确|具体)的?(?:面试|考试|笔试)?(?:时段|时间)/);
  if(!condition)return null;
  const m=compact.match(/(?:(20\d{2})年)?(\d{1,2})月(\d{1,2})日?[-—–至](?:(20\d{2})年)?(?:(\d{1,2})月)?(\d{1,2})日/);
- if(!m)return {preliminary:true as const,evidence:condition[0]};
+ if(!m){
+  const dates=[...compact.matchAll(/(?:(20\d{2})年)?(\d{1,2})月(\d{1,2})日(?=[^。；，]{0,35}(?:开展|现场|举行|参加)(?:现场)?(?:面试|考试|笔试))/g)];
+  if(dates.length===1){const d=dates[0],date=`${d[1]??receivedAt.slice(0,4)}-${d[2].padStart(2,'0')}-${d[3].padStart(2,'0')}`;if(validEventTime(`${date}T00:00:00`))return {preliminary:true as const,dateStart:date,dateEnd:date,evidence:condition[0]};}
+  return {preliminary:true as const,evidence:condition[0]};
+ }
  const start=`${m[1]??receivedAt.slice(0,4)}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
  const end=`${m[4]??m[1]??receivedAt.slice(0,4)}-${(m[5]??m[2]).padStart(2,'0')}-${m[6].padStart(2,'0')}`;
  if(!validEventTime(`${start}T00:00:00`)||!validEventTime(`${end}T00:00:00`)||end<start)return null;

@@ -82,19 +82,20 @@ export function getOverview(): OverviewStats {
 }
 
 /** 近 N 天趋势（按时间线事件聚合，文档 04 §3.3 口径） */
-export function getTrends(days: number): TrendPoint[] {
+export function getTrends(days: number,endDate?:string): TrendPoint[] {
   const db = getDb();
   const clamped = Math.min(365, Math.max(1, days));
-  const start = daysAgoStartIso(clamped - 1);
+  const end=endDate?`${endDate}T00:00:00`:todayStartIso();
+  const start = addDays(end, -(clamped - 1));
 
   const rows = db
     .prepare(
       `SELECT substr(occurred_at, 1, 10) AS d, to_status, COUNT(*) AS c
        FROM timeline_events
-       WHERE event_type = 'status_change' AND to_status IS NOT NULL AND occurred_at >= ?
+       WHERE event_type = 'status_change' AND to_status IS NOT NULL AND occurred_at >= ? AND occurred_at < ?
        GROUP BY d, to_status`,
     )
-    .all(start) as { d: string; to_status: string; c: number }[];
+    .all(start,addDays(end,1)) as { d: string; to_status: string; c: number }[];
 
   // 先按日期聚合一次：原来对每一天都重新扫描全部事件行（O(天数 × 事件数)，365 天会放大 365 倍）。
   interface TrendBucket {
@@ -115,7 +116,7 @@ export function getTrends(days: number): TrendPoint[] {
 
   const points: TrendPoint[] = [];
   for (let i = clamped - 1; i >= 0; i--) {
-    const date = daysAgoStartIso(i).slice(0, 10);
+    const date = addDays(end,-i).slice(0, 10);
     const bucket = totals.get(date);
     points.push({
       date,

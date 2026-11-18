@@ -107,7 +107,12 @@ export function checkExistingEmails(trigger:'manual'|'incremental'|'apply'|'conf
         db.prepare('UPDATE email_items SET extracted=? WHERE id=?').run(JSON.stringify(next),mail.id);
         record(runId,null,`自动补全邮件 #${mail.id} 的可核对依据`,old,next);
         if(!next.reviewReasons?.length){
-          try{const applied=applyEmailItem(Number(mail.id),undefined,{createIfMissing:true,markApplied:true});record(runId,null,`自动应用正文明确的投递回执 #${mail.id}`,mail,applied.item);}catch{/* Existing matching safeguards leave ambiguous applications for review. */}
+          try{
+            // Provisional notices often use department names and abbreviated roles.
+            // Let cross-source AI resolve their identity before creating a new application.
+            if(next.schedule?.preliminary){const owner=next.company?findCanonicalCompany(next.company):undefined;if(!owner||!matchEmailApplication(owner.id,next))continue;}
+            const applied=applyEmailItem(Number(mail.id),undefined,{createIfMissing:true,markApplied:true});record(runId,null,`自动应用正文明确的通知 #${mail.id}`,mail,applied.item);
+          }catch{/* Existing matching safeguards leave ambiguous applications for review. */}
         }
       }
     }
