@@ -250,3 +250,18 @@ English: bounded execution-feedback correction patches failed events only and re
 验证：29 项 JVM 单元测试，Android 14 模拟器 instrumentation 报告 59 项通过（显式 live/SMS 用例默认跳过）；新增原生异步快照、返回关闭弹层和阶段历史验证。浏览器回归覆盖 1,200 日程/申请、分页、隐藏列表不渲染、无日程数据库读取的主页面导航、过期异步响应、320px 窄屏、双指缩放及日期拖动。未连接用户实机测量温度/耗电，不能据此承诺具体降温幅度。
 
 English: simplified mobile surfaces and bottom sheets; desktop-style local progress chart with one-finger pan, pinch zoom and date navigation and visible drill-down ring/funnel. Asynchronous snapshot refresh, background SMS import, lazy details and bounded workspace rendering reduce unnecessary UI work. Install over the existing app; phone data remain independent from desktop.
+
+## 0.11.0 · 连续手势与极简操作
+
+- 时间轴单指平移、双指捏合在移动过程中按动画帧预览，松手再提交日期范围；一帧最多更新一次图形变换，取消手势清理预览。双指缩放以手指中心为锚点，支持斜向捏合；不访问数据库、邮箱或 API。
+- 常驻时间轴控件仅范围和今天，具体日期/更早/更晚收进“日期范围”。保留 7–365 天视野；没有缩放滑块。
+- 环图使用整个环形区域按角度选择类别，避免必须点中细线；中心可查看全部申请，文字类别仍为至少 48px 点击目标。超过四种状态时其余类别按需展开。漏斗保留宽大的阶段入口。
+- 待办、日历明细、申请与通知每页最多 20 条。通知的“重新分析”收进详情，维护工具默认折叠；关闭维护区时进度检查由每 3 秒降低到每 15 秒。后台/隐藏页面不进行该检查。
+- 延续异步快照、延迟加载原文、完成状态和修改记录保护，不引入动画常驻循环或额外 AI 并发。
+
+安装原签名 **CareerFlow-0.11.0.apk**（versionCode 14）直接覆盖旧版。验证包含手机宽度 UI 回归、1,200 条日程/申请分页、拖动/缩放在松手前的预览、环图/漏斗明细入口，以及 Android WebView 实际双指 MotionEvent 注入。模拟器不能代表用户手机的温度、电池和所有刷新率表现。
+
+English: frame-coalesced pan/pinch previews with anchored zoom; enlarged ring hit area, fewer persistent controls, 20-item pages and collapsed maintenance actions. Gestures never trigger synchronization or AI calls. Install over the existing app to retain data.
+
+本版验证结果：29 项 JVM 单元测试；Android 14 模拟器报告 60 项 instrumentation 通过（显式 live/SMS 用例默认跳过），包含实际双指触摸预览与提交；完整 UI 回归通过。
+

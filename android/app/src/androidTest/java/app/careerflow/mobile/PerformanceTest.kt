@@ -57,6 +57,26 @@ class PerformanceTest {
    assertEquals("true",evaluate("active==='home'"))
   }finally{instrumentation.runOnMainSync{activity.finish()}}
  }
+ @Test fun actualWebViewTwoFingerGesturePreviewsAndCommits(){
+  val activity=instrumentation.startActivitySync(android.content.Intent(context,MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+  lateinit var web:android.webkit.WebView
+  instrumentation.runOnMainSync{web=(activity.findViewById<android.view.ViewGroup>(android.R.id.content)).getChildAt(0) as android.webkit.WebView}
+  fun js(script:String):String{val latch=CountDownLatch(1);var result="";instrumentation.runOnMainSync{web.evaluateJavascript(script){result=it;latch.countDown()}};assertTrue(latch.await(3,TimeUnit.SECONDS));return result}
+  try{
+   val limit=System.currentTimeMillis()+10000;while(js("!!document.querySelector('.progress-plot')")!="true"&&System.currentTimeMillis()<limit)Thread.sleep(100)
+   js("overviewSpan=90;renderOverviewTimeline();document.querySelector('.progress-plot').scrollIntoView({block:'center'})");Thread.sleep(250)
+   val encoded=js("JSON.stringify((()=>{const r=document.querySelector('.progress-plot').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2,width:innerWidth}})())")
+   val box=JSONObject(org.json.JSONTokener(encoded).nextValue() as String);val location=IntArray(2);var scale=1f
+   instrumentation.runOnMainSync{web.getLocationOnScreen(location);scale=web.width/box.getDouble("width").toFloat()}
+   val x=location[0]+box.getDouble("x").toFloat()*scale;val y=location[1]+box.getDouble("y").toFloat()*scale;val distance=40*scale;val down=android.os.SystemClock.uptimeMillis()
+   fun touch(action:Int,count:Int,gap:Float){val props=Array(count){i->android.view.MotionEvent.PointerProperties().apply{id=i;toolType=android.view.MotionEvent.TOOL_TYPE_FINGER}};val coords=Array(count){i->android.view.MotionEvent.PointerCoords().apply{this.x=x+if(i==0)-gap else gap;this.y=y;pressure=1f;size=1f}};val event=android.view.MotionEvent.obtain(down,android.os.SystemClock.uptimeMillis(),action,count,props,coords,0,0,1f,1f,0,0,android.view.InputDevice.SOURCE_TOUCHSCREEN,0);instrumentation.sendPointerSync(event);event.recycle()}
+   touch(android.view.MotionEvent.ACTION_DOWN,1,distance);touch(android.view.MotionEvent.ACTION_POINTER_DOWN or (1 shl 8),2,distance)
+   repeat(4){i->touch(android.view.MotionEvent.ACTION_MOVE,2,distance*(1+(i+1)*.15f));Thread.sleep(30)}
+   assertEquals("true",js("!!document.querySelector('.progress-plot g').getAttribute('transform')"))
+   touch(android.view.MotionEvent.ACTION_POINTER_UP or (1 shl 8),2,distance*1.6f);touch(android.view.MotionEvent.ACTION_UP,1,distance*1.6f);Thread.sleep(150)
+   assertEquals("true",js("overviewSpan<90 && overviewSpan>=7"))
+  }finally{instrumentation.runOnMainSync{activity.finish()}}
+ }
  @Test fun nativeConfiguredApiProbe(){
   Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("liveApi")=="true")
   val file=java.io.File(context.filesDir,"api-test.json");val configuration=JSONObject(file.readText());file.delete()

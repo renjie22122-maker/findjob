@@ -2,7 +2,7 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
 android {
  namespace = "app.careerflow.mobile"
  compileSdk = 34
- defaultConfig { applicationId = "app.careerflow.mobile"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"; minSdk = 26; targetSdk = 34; versionCode = 13; versionName = "0.10.0" }
+ defaultConfig { applicationId = "app.careerflow.mobile"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"; minSdk = 26; targetSdk = 34; versionCode = 14; versionName = "0.11.0" }
  val localKeystore = System.getenv("CAREERFLOW_KEYSTORE_PATH")
  if (!localKeystore.isNullOrBlank()) {
   signingConfigs { create("localRelease") { storeFile = file(localKeystore); storePassword = System.getenv("CAREERFLOW_STORE_PASSWORD"); keyAlias = "careerflow"; keyPassword = System.getenv("CAREERFLOW_STORE_PASSWORD") } }

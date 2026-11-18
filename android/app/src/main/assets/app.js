@@ -50,8 +50,8 @@ function render(snapshot = null) {
     if(active==='home')renderReanalysis();
     if(active==='settings')renderApiSettings();
     if(active==='inbox'){
-    const page=CareerFlow.noticePage?JSON.parse(CareerFlow.noticePage(inboxOffset,inboxFilter)):{items:state.items,total:state.noticeCount??state.items.length};const pageItems=page.items,total=page.total;
-    $('inboxPager').replaceChildren(button(t('上一页','Previous'),()=>{inboxOffset=Math.max(0,inboxOffset-50);render();}),node('span',`${total?inboxOffset+1:0}–${Math.min(inboxOffset+50,total)} / ${total}`),button(t('下一页','Next'),()=>{inboxOffset+=50;render();}));$('inboxPager').firstChild.disabled=inboxOffset===0;$('inboxPager').lastChild.disabled=inboxOffset+50>=total;
+    const page=CareerFlow.noticePage?JSON.parse(CareerFlow.noticePage(inboxOffset,inboxFilter)):{items:state.items,total:state.noticeCount??state.items.length};const pageItems=page.items.slice(0,20),total=page.total;
+    $('inboxPager').replaceChildren(button(t('上一页','Previous'),()=>{inboxOffset=Math.max(0,inboxOffset-20);render();}),node('span',`${total?inboxOffset+1:0}–${Math.min(inboxOffset+20,total)} / ${total}`),button(t('下一页','Next'),()=>{inboxOffset+=20;render();}));$('inboxPager').firstChild.disabled=inboxOffset===0;$('inboxPager').lastChild.disabled=inboxOffset+20>=total;
     $('inbox').replaceChildren();
     if (!pageItems.length) {
         const empty = node('div', t('还没有招聘通知。新的邮件和短信会显示在这里。', 'No recruitment messages yet. New email and SMS will appear here.'));
@@ -95,7 +95,7 @@ function render(snapshot = null) {
             }
             });
         }
-        card.append(button(t('重新分析', 'Analyze again'), () => { CareerFlow.analyze(item.id); feedback(t('已加入后台队列', 'Queued for background analysis')); }));
+        details.append(button(t('重新分析', 'Analyze again'), () => { CareerFlow.analyze(item.id); feedback(t('已加入后台队列', 'Queued for background analysis')); }));
         $('inbox').append(card);
     }
     }

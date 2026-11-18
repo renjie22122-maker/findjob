@@ -19,7 +19,7 @@ try {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.locator('#nextSteps').getByText('Example', { exact: true }).waitFor();
     await page.locator('#pipelineTitle').click();
-    await page.locator('#pipeline svg circle').first().click({position:{x:70,y:2}});
+    await page.locator('#pipeline svg').click({position:{x:95,y:15}});
     assert.equal(await page.locator('#categoryDialog .category-record').count(),1);
     await page.locator('#categoryDialog').getByRole('button',{name:'关闭',exact:true}).click();
     await page.locator('.funnel-step').first().click();
@@ -99,6 +99,7 @@ try {
     await page.getByRole('button', { name: 'Overview', exact: true }).click();
     await page.evaluate(()=>document.querySelector('#feedback').textContent='');
     await page.screenshot({ path: 'server/data/ui-review/android-home-dark.png', fullPage: true });
+    await page.locator('#maintenanceTitle').click();
     await page.getByRole('button',{name:'Reanalyze all',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#reanalysisStatus').textContent.includes('/ 100'));
     await page.evaluate(()=>{window.batch.finished=9;window.batch.failed=1;renderReanalysis();});assert.equal(await page.locator('#reanalysisProgress').getAttribute('value'),'10');
     await page.getByRole('button',{name:'Pause',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#reanalysisButtons').textContent.includes('Resume remaining'));
@@ -114,14 +115,18 @@ try {
     assert.equal(await page.locator('#overviewTimeline input[type=range]').count(),0);
     await page.getByLabel('Timeline range',{exact:true}).selectOption('30');
     assert.equal(await page.getByLabel('Timeline range',{exact:true}).inputValue(),'30');
+    await page.locator('.trend-more summary').click();
     const before=await page.getByLabel('Timeline end date',{exact:true}).inputValue();
     await page.locator('#overviewTimeline').getByRole('button',{name:'Later →',exact:true}).click();
     assert.notEqual(await page.getByLabel('Timeline end date',{exact:true}).inputValue(),before);
     await page.locator('#overviewTimeline').getByRole('button',{name:'Today',exact:true}).click();
     await page.locator('#overviewTimeline').screenshot({path:'server/data/ui-review/android-0100-trend.png'});
-    await page.locator('.progress-plot').evaluate(el=>{const start=new Event('touchstart');Object.defineProperty(start,'touches',{value:[{clientX:100,clientY:150},{clientX:200,clientY:150}]});el.dispatchEvent(start);const move=new Event('touchmove');Object.defineProperty(move,'touches',{value:[{clientX:50,clientY:150},{clientX:250,clientY:150}]});el.dispatchEvent(move);const end=new Event('touchend');Object.defineProperty(end,'changedTouches',{value:[{clientX:50,clientY:150}]});el.dispatchEvent(end);});
+    await page.locator('.progress-plot').evaluate(async el=>{const start=new Event('touchstart');Object.defineProperty(start,'touches',{value:[{clientX:100,clientY:150},{clientX:200,clientY:150}]});el.dispatchEvent(start);const move=new Event('touchmove');Object.defineProperty(move,'touches',{value:[{clientX:50,clientY:150},{clientX:250,clientY:150}]});el.dispatchEvent(move);await new Promise(requestAnimationFrame);if(!el.querySelector('g').getAttribute('transform')?.includes('scale(2'))throw new Error('Pinch must preview before release');const end=new Event('touchend');Object.defineProperty(end,'changedTouches',{value:[{clientX:50,clientY:150}]});el.dispatchEvent(end);});
     assert.equal(await page.getByLabel('Timeline range',{exact:true}).inputValue(),'15');
     await page.locator('.progress-plot').dispatchEvent('pointerdown',{pointerId:1,pointerType:'mouse',clientX:250,clientY:200});
+    await page.locator('.progress-plot').dispatchEvent('pointermove',{pointerId:1,pointerType:'mouse',clientX:180,clientY:200});
+    await page.evaluate(()=>new Promise(requestAnimationFrame));
+    assert.ok(await page.locator('.progress-plot g').getAttribute('transform'),'Drag follows movement before release');
     await page.locator('.progress-plot').dispatchEvent('pointerup',{pointerId:1,pointerType:'mouse',clientX:100,clientY:200});
     assert.notEqual(await page.getByLabel('Timeline end date',{exact:true}).inputValue(),before);
     await page.getByRole('button',{name:'Connections',exact:true}).click();
@@ -159,14 +164,14 @@ try {
     assert.deepEqual(errors,[]);
     await page.screenshot({path:'server/data/ui-review/android-workspace-jobs.png',fullPage:true});
     const stress=await page.evaluate(()=>{const base=window.perfState.schedules[0];window.perfState.schedules=Array.from({length:1200},(_,i)=>({...base,id:1000+i,done:false,kind:'window',company:'Company '+i,sources:[]}));active='schedule';taskFilter='all';scheduleOffsets.tasks=0;const start=performance.now();render();return {ms:performance.now()-start,cards:document.querySelectorAll('#schedules article').length};});
-    assert.equal(stress.cards,50,'Large task lists render one bounded page');assert.ok(stress.ms<4000,'1200-item view should remain responsive');
+    assert.equal(stress.cards,20,'Large task lists render one bounded page');assert.ok(stress.ms<4000,'1200-item view should remain responsive');
     await page.evaluate(()=>{CareerFlow.noticePage=offset=>JSON.stringify({items:window.perfState.items.slice(offset,offset+50),total:window.perfState.items.length});active='inbox';inboxOffset=0;render();});
-    assert.equal(await page.locator('#inbox article').count(),50);assert.equal(await page.locator('#inbox pre').count(),0,'Original text stays lazy');
-    await page.locator('#inboxPager').getByRole('button',{name:'Next',exact:true}).click();assert.equal(await page.locator('#inbox article').count(),50);
+    assert.equal(await page.locator('#inbox article').count(),20);assert.equal(await page.locator('#inbox pre').count(),0,'Original text stays lazy');
+    await page.locator('#inboxPager').getByRole('button',{name:'Next',exact:true}).click();assert.equal(await page.locator('#inbox article').count(),20);
     await page.evaluate(()=>{window.workspaceRecords=Array.from({length:1200},(_,i)=>({id:'large-'+i,kind:'application',data:{companyName:'Large '+i,positionTitle:'Engineer',status:'APPLIED'}}));navigate('home');});
     assert.equal(await page.locator('#workspaceList article').count(),0,'Home does not render hidden workspace records');
     await page.evaluate(()=>openWorkspace('application'));
-    assert.equal(await page.locator('#workspaceList article').count(),50,'Workspace lists are paginated');
+    assert.equal(await page.locator('#workspaceList article').count(),20,'Workspace lists are paginated');
     const navigation=await page.evaluate(()=>{const old=CareerFlow.state;let reads=0;CareerFlow.state=()=>{reads++;return old();};navigate('calendar');navigate('schedule');CareerFlow.state=old;return reads;});
     assert.equal(navigation,0,'Tab navigation reuses the current snapshot without database bridge reads');
     const stale=await page.evaluate(()=>{active='schedule';document.activeElement.blur();CareerFlow.requestState=()=>{};refreshMobile();navigate('calendar');const before=lastSnapshot;onMobileSnapshot(JSON.stringify({schedules:[],items:[]}));return before===lastSnapshot;});
@@ -177,7 +182,7 @@ try {
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Small phones must not overflow horizontally');
     await page.evaluate(()=>{navigate('calendar');document.getElementById('assistantDialog').showModal();handleMobileBack();});
     assert.equal(await page.locator('#assistantDialog').isVisible(),false);
-    assert.deepEqual(errors,[]);console.log('1200 schedule render: '+Math.round(stress.ms)+' ms; 50 visible cards; inbox pagination and lazy source passed.');
+    assert.deepEqual(errors,[]);console.log('1200 schedule render: '+Math.round(stress.ms)+' ms; 20 visible cards; inbox pagination and lazy source passed.');
     console.log('Android UI passed: bilingual, completion, evidence escaping, window conflicts, mobile width.');
 }
 finally {

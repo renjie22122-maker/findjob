@@ -18,5 +18,5 @@ function renderReanalysis(){
  if(s.failed>0&&s.status!=='running')$('reanalysisButtons').append(button(t('重试失败项','Retry failed'),()=>act('retry')));
  }
 }
-setInterval(()=>{if(!document.hidden&&active==='home')renderReanalysis();},3000);
+let maintenanceTick=0;setInterval(()=>{if(!document.hidden&&active==='home'&&(maintenanceDetails.open||++maintenanceTick%5===0))renderReanalysis();},3000);
 render();
