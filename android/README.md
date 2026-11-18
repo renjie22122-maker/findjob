@@ -221,3 +221,17 @@ English: persistent, one-at-a-time reanalysis of all saved notices with progress
 验证：28 项 JVM 单元测试；Android 14 模拟器 instrumentation 报告 56 项通过（需要显式 live/SMS 参数的测试默认跳过）；新增真实 SQLite 场景覆盖预通知邮件→正式短信→完成→重复催办→旧邮件重分析，以及条件式更正、补材料去重和有来源的公司全称关联。六类合成通知通过配置 API 测试，原生规则补齐模型遗漏的意图/预通知字段。手机 UI 测试含 1,200 条日程、分页/按需原文、双语、冲突及完成状态。未连接用户手机做实机省电或温度测量。
 
 English: shared email/SMS semantics now distinguish stage results, provisional invitations, task deadlines and conditional information. Source-verified AI application association and subsequent schedule updates preserve completion and audit records. Install 0.8.0 over the existing app; desktop/mobile data remain independent. Background timing still depends on Android permissions and power policy.
+
+## 0.9.0 · 有界自动纠错与可导航时间轴
+
+- 新邮件、短信和断点重分析共用执行反馈：记录未通过校验的事项序号和原因，向配置 API 请求最多一次纠正；连同首次识别，每次分析最多两次模型调用。已有时间证据纠正已消耗第二次调用时不再追加请求。网络异常保留首次成功结果，不递归调用。
+- 纠正只能替换失败事项，成功事项保持原内容；新结果仍经过原文、关联、先后顺序及人工修改保护校验。完成状态不重置；修正写入原有处理记录。原文确实没有时间时保留待后续通知，不编造时间来消除提示。
+- 预通知支持后段“正式通知邮件告知准确时段”的表述，以及单日面试后续分配场次。反馈截止和面试日期分别识别，正式邮件/短信落在原日程日期内时可关联同场安排。不会把未预约的多日范围当作持续占用的考试。
+- 总览日程时间轴支持横向拖动、7/30 天视野、前后时段、回到今天；点击日期进入当天安排。日历支持左右滑动、周/月缩放、日期跳转。仅在本机切换视图，不触发邮件同步或 API 请求。
+- 保持单分析锁、热状态退避、WorkManager 网络约束、原有增量同步和断点续跑。自动纠错前检查停止/热状态；不增加后台轮询。列表每页最多 50 条，原文仍按需加载。
+
+覆盖安装 **CareerFlow-0.9.0.apk**（versionCode 12），使用原签名，不要卸载。数据库无需破坏性迁移；本机邮箱/API 配置、完成状态、来源和修复记录保留。旧通知使用“重新分析”进入新流程；桌面与手机数据仍独立。
+
+验证：29 项 JVM 单元测试；Android 14 模拟器报告 58 项 instrumentation 测试通过（需要显式 live/SMS 参数的用例默认跳过），包括错误时间→执行反馈→修复→已完成日程不重复、成功序号不可被纠错覆盖，以及原有后台恢复/提醒回归。6 类合成通知通过配置 API；UI 回归覆盖 1,200 条日程、分页、周/月、跨年跳转和滑动。未连接用户实机测量发热或验证厂商锁屏策略；系统省电可能延迟执行，强行停止需重新打开。
+
+English: bounded execution-feedback correction patches failed events only and revalidates source evidence, preserving completion and audit history. Overview supports a scrollable 7/30-day timeline; calendar supports swipe, week/month zoom and date jump. Install over the existing app; background timing remains subject to Android power policy.

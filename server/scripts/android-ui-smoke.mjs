@@ -73,6 +73,20 @@ try {
     await page.evaluate(()=>document.querySelector('#feedback').textContent='');
     await page.screenshot({path:'server/data/ui-review/android-calendar.png',fullPage:true});
     await page.locator('#calendarToday').click();
+    await page.locator('.calendar-tools button').last().click();
+    assert.equal(await page.locator('.calendar-day').count(),7);
+    await page.locator('.calendar-tools input').fill('2027-01-04');
+    await page.locator('.calendar-tools input').dispatchEvent('change');
+    assert.match(await page.locator('#selectedDay').textContent(),/2027-01-04/);
+    await page.locator('#calendarGrid').evaluate(el=>{
+      const start=new Event('touchstart');Object.defineProperty(start,'touches',{value:[{clientX:250,clientY:150}]});el.dispatchEvent(start);
+      const end=new Event('touchend');Object.defineProperty(end,'changedTouches',{value:[{clientX:100,clientY:152}]});el.dispatchEvent(end);
+    });
+    assert.match(await page.locator('#selectedDay').textContent(),/2027-01-11/);
+    await page.locator('.calendar-tools button').last().click();
+    assert.equal(await page.locator('.calendar-day').count(),42);
+    await page.locator('#calendarToday').click();
+
     await page.getByRole('button',{name:'Tasks',exact:true}).click();
     await page.locator('#addEvent').click();
     assert.equal(await page.locator('#eventEditor').isVisible(),true);
@@ -94,6 +108,13 @@ try {
     assert.ok((await page.locator('#chatInput').inputValue()).includes('recover unfinished'));
     await page.locator('#assistantClose').click();
     await page.evaluate(()=>{CareerFlow.relationshipMap=()=>JSON.stringify({total:2,schedules:window.perfState.schedules.map(s=>({...s,links:[{id:101,source:'email',received:Date.now()},{id:102,source:'sms',received:Date.now()}]})),applications:[{company:'Example',role:'Engineer',status:'APPLIED'}],unlinked:[{id:103,source:'sms',received:Date.now()}]});CareerFlow.noticeBody=()=>'<script>alert(1)</script> original evidence';CareerFlow.changeHistory=()=>JSON.stringify([{at:Date.now(),detail:JSON.stringify({kind:'assistant_schedule',operation:'merge',before:{company:'Example',role:'Engineer',start:'2026-11-05T14:00:00',done:false},after:{id:1,company:'Example',role:'Engineer',start:'2026-11-05T14:00:00',done:true}})}]);});
+    assert.equal(await page.locator('#overviewTimeline .overview-days button').count(),7);
+    await page.locator('#overviewTimeline').getByRole('button',{name:'7 days · zoom',exact:true}).click();
+    assert.equal(await page.locator('#overviewTimeline .overview-days button').count(),30);
+    const before=await page.locator('#overviewTimeline .overview-days strong').first().textContent();
+    await page.locator('#overviewTimeline').getByRole('button',{name:'Next',exact:true}).click();
+    assert.notEqual(await page.locator('#overviewTimeline .overview-days strong').first().textContent(),before);
+    await page.locator('#overviewTimeline').getByRole('button',{name:'Today',exact:true}).click();
     await page.getByRole('button',{name:'Connections',exact:true}).click();
     assert.equal(await page.locator('.relation-company').count(),2);
     assert.equal(await page.locator('#relationsTree pre').count(),0);

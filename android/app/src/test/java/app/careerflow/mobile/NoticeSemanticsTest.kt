@@ -3,6 +3,15 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class NoticeSemanticsTest {
+ @Test fun singleDatePreNoticeUsesLaterParagraph(){
+  val quote="我们将于2026年11月24日开展现场面试。"
+  val body=quote+"请于11月17日12:00反馈。在您反馈后，我们将通过另一份正式通知邮件告知您准确的面试时段及地点。"
+  val e=NoticeSemantics.normalize(Event(company="示例",role="工程师",stage="interview",evidence=quote),body)
+  assertTrue(e.preliminary);assertTrue(ScheduleRules.verified(e,body))
+  assertTrue(NoticeSemantics.withinRange(e,e.copy(start="2026-11-24T12:40:00")))
+  assertFalse(NoticeSemantics.withinRange(e,e.copy(start="2026-11-25T12:40:00")))
+ }
+
  @Test fun resultsAreNotAppointments(){
   val text="恭喜您顺利通过笔试，工作人员会电话联系协商面试时间及形式。"
   val e=NoticeSemantics.normalize(Event(company="示例",stage="written_test",evidence=text),text)

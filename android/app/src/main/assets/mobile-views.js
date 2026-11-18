@@ -33,6 +33,7 @@ function scheduleCard(s,state){
         card.append(details);
 return card;
 }
+let calendarZoom='month',overviewSpan=7,overviewAnchor=MobileModel.day();
 let taskFilter='upcoming',inboxFilter='all',selectedDate=MobileModel.day(),calendarMonth=selectedDate.slice(0,7),editingEvent=null;
 function navigate(key){active=key;render();window.scrollTo(0,0);}
 function renderMobile(state){
@@ -49,7 +50,7 @@ function renderMobile(state){
  if(!upcoming.length)$('nextSteps').append(node('p',t('暂无待办。连接邮箱、导入短信或手动添加。','No upcoming tasks. Connect mail, import SMS or add one.')));
  for(const s of upcoming.slice(0,3))$('nextSteps').append(scheduleCard(s,state));
  if(reviewTotal)$('nextSteps').append(button(t(`${reviewTotal} 条关联冲突 · 查看`,`${reviewTotal} link conflicts`),()=>{inboxFilter='review';inboxOffset=0;navigate('inbox');}));
- renderDashboard();
+ renderDashboard();renderOverviewTimeline(state);
  if($('applications').parentElement.open){
  const groups=new Map();for(const s of state.schedules){const key=[s.company,s.role,s.ref].join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(s);}
  $('applications').replaceChildren(node('p',t('按公司、岗位和编号整理；不同岗位不自动合并。','Grouped by company, role and reference; different roles stay separate.')));for(const list of groups.values()){const d=node('details','');d.append(node('summary',list[0].company+' · '+(list[0].role||t('岗位待补充','Role unknown'))));for(const s of MobileModel.sort(list))d.append(button(stage(s.stage)+' · '+time(s.start||s.end),()=>{openEditor(s);}));$('applications').append(d);}
@@ -59,10 +60,10 @@ function renderMobile(state){
  $('taskFilters').replaceChildren();for(const [key,zh,en] of [['upcoming','待完成','Upcoming'],['today','今天','Today'],['overdue','已过期','Overdue'],['done','已完成','Done'],['all','全部','All']]){const b=button(t(zh,en),()=>{taskFilter=key;scheduleOffsets.tasks=0;render();});b.setAttribute('aria-pressed',taskFilter===key);$('taskFilters').append(b);}
  const tasks=MobileModel.tasks(state.schedules,taskFilter,$('taskSearch').value);renderSchedulePage($('schedules'),tasks,state,'tasks');if(!tasks.length)$('schedules').append(node('p',t('此分类暂无事项','No tasks in this view')));
  }
- if(active==='calendar'){
+ if(active==='calendar'){zoomCalendar.textContent=calendarZoom==='month'?t('缩放：月 → 周','Zoom: month → week'):t('缩放：周 → 月','Zoom: week → month');jumpCalendar.value=selectedDate;jumpCalendar.setAttribute('aria-label',t('跳转日期','Jump to date'));$('calendarHelp').textContent=t('左右滑动查看前后日期；切换周/月缩放，点日期看安排。','Swipe to browse dates; switch week/month zoom and tap a day for events.');
  $('monthLabel').textContent=new Intl.DateTimeFormat(english?'en-GB':'zh-CN',{year:'numeric',month:'long',timeZone:'UTC'}).format(new Date(calendarMonth+'-01T00:00:00Z'));
  $('calendarWeek').replaceChildren(...(english?['M','T','W','T','F','S','S']:['一','二','三','四','五','六','日']).map(x=>node('span',x)));
- $('calendarGrid').replaceChildren();for(const date of MobileModel.month(calendarMonth)){const events=state.schedules.filter(s=>MobileModel.live(s)&&MobileModel.onDay(s,date));const b=button('',()=>{selectedDate=date;scheduleOffsets.calendar=0;render();});b.className='calendar-day'+(date.slice(0,7)!==calendarMonth?' outside':'')+(date===MobileModel.day()?' today':'');b.setAttribute('aria-pressed',date===selectedDate);b.setAttribute('aria-label',date+' · '+events.length+t(' 项',' events'));b.append(node('span',String(Number(date.slice(-2)))));const dots=node('span','');dots.className='day-dots';for(const kind of [...new Set(events.map(e=>e.kind))]){const dot=node('i','');dot.dataset.kind=kind;dots.append(dot);}b.append(dots);$('calendarGrid').append(b);}
+ $('calendarGrid').replaceChildren();for(const date of (calendarZoom==='week'?MobileModel.month(calendarMonth).filter((_,i,a)=>Math.floor(i/7)===Math.floor(a.indexOf(selectedDate)/7)):MobileModel.month(calendarMonth))){const events=state.schedules.filter(s=>MobileModel.live(s)&&MobileModel.onDay(s,date));const b=button('',()=>{selectedDate=date;scheduleOffsets.calendar=0;render();});b.className='calendar-day'+(date.slice(0,7)!==calendarMonth?' outside':'')+(date===MobileModel.day()?' today':'');b.setAttribute('aria-pressed',date===selectedDate);b.setAttribute('aria-label',date+' · '+events.length+t(' 项',' events'));b.append(node('span',String(Number(date.slice(-2)))));const dots=node('span','');dots.className='day-dots';for(const kind of [...new Set(events.map(e=>e.kind))]){const dot=node('i','');dot.dataset.kind=kind;dots.append(dot);}b.append(dots);$('calendarGrid').append(b);}
  $('selectedDay').textContent=selectedDate+' · '+t('当天安排','Agenda');const selected=MobileModel.sort(state.schedules.filter(s=>!s.cancelled&&MobileModel.onDay(s,selectedDate)));renderSchedulePage($('calendarEvents'),selected,state,'calendar');if(!selected.length)$('calendarEvents').append(node('p',t('当天没有安排','No events on this day')));
  }
  $('inboxActions').replaceChildren(button(t('自动检查全部','Auto-check saved messages'),()=>{CareerFlow.recheck();feedback(t('后台自动整理中','Organizing in background'));}));$('inboxActions').append(button(t('重新分析与进度','Reanalysis & progress'),()=>{navigate('home');$('reanalysisPanel').scrollIntoView();}));$('inboxFilters').replaceChildren();for(const [key,zh,en] of [['all','全部','All'],['pending','分析中','Pending'],['review','关联冲突','Conflicts'],['waiting','等后续通知','Waiting'],['linked','已关联','Linked']]){const b=button(t(zh,en),()=>{inboxFilter=key;inboxOffset=0;render();});b.setAttribute('aria-pressed',inboxFilter===key);$('inboxFilters').append(b);}
@@ -71,7 +72,7 @@ function renderMobile(state){
 function openEditor(s=null){editingEvent=s;$('editId').value=s?.id||0;for(const [key,field] of [['Company','company'],['Role','role'],['Start','start'],['End','end'],['Location','location']])$('edit'+key).value=s?.[field]||'';for(const [id,zh,en] of [['editTitle','安排详情','Event details'],['companyLabel','公司','Company'],['roleLabel','岗位','Role'],['stageLabel','阶段','Stage'],['kindLabel','时间类型','Timing'],['startLabel','开始（北京时间）','Start (UTC+8)'],['endLabel','结束／截止（北京时间）','End / deadline (UTC+8)'],['locationLabel','地点／考场','Location / room'],['editSave','保存安排','Save event']])$(id).textContent=t(zh,en);$('editStage').replaceChildren(...['written_test','interview','assessment','offer','applied','other'].map(x=>new Option(stage(x),x)));$('editStage').value=s?.stage||'other';$('editKind').replaceChildren(...[['start',t('固定场次','Appointment')],['window',t('期限内完成','Flexible window')],['deadline',t('截止事项','Deadline')]].map(([v,l])=>new Option(l,v)));$('editKind').value=s?.kind||'start';$('eventEditor').showModal();}
 $('editClose').onclick=()=>$('eventEditor').close();$('eventForm').onsubmit=e=>{e.preventDefault();const data={...editingEvent,id:Number($('editId').value),company:$('editCompany').value.trim(),role:$('editRole').value.trim(),stage:$('editStage').value,kind:$('editKind').value,start:$('editStart').value,end:$('editEnd').value,location:$('editLocation').value.trim()};if(CareerFlow.saveEvent(JSON.stringify(data))){$('eventEditor').close();render();feedback(t('已保存，提醒已更新','Saved; reminders updated'));}else feedback(t('请核对时间，弹性窗口需要截止时间','Check dates; flexible windows require an end time'));};
 $('addEvent').onclick=()=>openEditor();let taskSearchTimer;$('taskSearch').oninput=()=>{clearTimeout(taskSearchTimer);taskSearchTimer=setTimeout(()=>{scheduleOffsets.tasks=0;const state=JSON.parse(lastSnapshot);renderSchedulePage($('schedules'),MobileModel.tasks(state.schedules,taskFilter,$('taskSearch').value),state,'tasks');},150);};
-function moveMonth(delta){const [y,m]=calendarMonth.split('-').map(Number);calendarMonth=new Date(Date.UTC(y,m-1+delta,1)).toISOString().slice(0,7);const lastDay=new Date(Date.UTC(y,m+delta,0)).getUTCDate();selectedDate=calendarMonth+'-'+String(Math.min(Number(selectedDate.slice(-2)),lastDay)).padStart(2,'0');render();}
+function moveMonth(delta){if(calendarZoom==='week'){const d=new Date(selectedDate+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+delta*7);selectedDate=d.toISOString().slice(0,10);calendarMonth=selectedDate.slice(0,7);scheduleOffsets.calendar=0;render();return;}const [y,m]=calendarMonth.split('-').map(Number);calendarMonth=new Date(Date.UTC(y,m-1+delta,1)).toISOString().slice(0,7);const lastDay=new Date(Date.UTC(y,m+delta,0)).getUTCDate();selectedDate=calendarMonth+'-'+String(Math.min(Number(selectedDate.slice(-2)),lastDay)).padStart(2,'0');render();}
 $('monthPrev').onclick=()=>moveMonth(-1);$('monthNext').onclick=()=>moveMonth(1);$('calendarToday').onclick=()=>{selectedDate=MobileModel.day();calendarMonth=selectedDate.slice(0,7);render();};$('backgroundSettings').onclick=()=>CareerFlow.backgroundSettings();
 
 let chatSnapshot='';
@@ -80,3 +81,21 @@ $('assistantClose').onclick=()=>$('assistantDialog').close();$('chatForm').onsub
 setInterval(()=>{if($('assistantDialog').open&&!document.hidden)renderChat();},2000);
 
 $('applications').parentElement.ontoggle=()=>{if(active==='home')render();};
+
+// Gesture navigation changes only the local viewport, never schedules or background jobs.
+const calendarTools=node('div','');calendarTools.className='calendar-tools';
+const zoomCalendar=button('',()=>{calendarZoom=calendarZoom==='month'?'week':'month';render();});
+const jumpCalendar=node('input','');jumpCalendar.type='date';jumpCalendar.onchange=()=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(jumpCalendar.value))return;selectedDate=jumpCalendar.value;calendarMonth=selectedDate.slice(0,7);scheduleOffsets.calendar=0;render();};
+calendarTools.append(zoomCalendar,jumpCalendar);$('calendarGrid').before(calendarTools);
+let calendarTouch=null;
+$('calendarGrid').addEventListener('touchstart',e=>{if(e.touches.length===1)calendarTouch={x:e.touches[0].clientX,y:e.touches[0].clientY};else calendarTouch=null;},{passive:true});
+$('calendarGrid').addEventListener('touchend',e=>{if(!calendarTouch)return;const dx=e.changedTouches[0].clientX-calendarTouch.x,dy=e.changedTouches[0].clientY-calendarTouch.y;calendarTouch=null;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5)moveMonth(dx<0?1:-1);},{passive:true});
+$('calendarGrid').addEventListener('touchcancel',()=>{calendarTouch=null;},{passive:true});
+
+function renderOverviewTimeline(state){
+ let host=$('overviewTimeline');if(!host){host=node('section','');host.id='overviewTimeline';host.className='panel';$('nextSteps').before(host);}host.replaceChildren(node('h3',t('日程时间轴','Schedule timeline')));
+ const move=delta=>{const d=new Date(overviewAnchor+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+delta*overviewSpan);overviewAnchor=d.toISOString().slice(0,10);render();};
+ const controls=node('div','');controls.className='calendar-tools';controls.append(button(t('上一段','Previous'),()=>move(-1)),button(overviewSpan+t(' 天 · 缩放',' days · zoom'),()=>{overviewSpan=overviewSpan===7?30:7;render();}),button(t('今天','Today'),()=>{overviewAnchor=MobileModel.day();render();}),button(t('下一段','Next'),()=>move(1)));host.append(controls);
+ const strip=node('div','');strip.className='overview-days';
+ for(let i=0;i<overviewSpan;i++){const d=new Date(overviewAnchor+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+i);const date=d.toISOString().slice(0,10);const events=state.schedules.filter(e=>!e.cancelled&&MobileModel.onDay(e,date));const b=button('',()=>{selectedDate=date;calendarMonth=date.slice(0,7);scheduleOffsets.calendar=0;navigate('calendar');});b.append(node('strong',date.slice(5)),node('span',events.length+t(' 项',' events')));if(events.length)b.className='has-events';strip.append(b);}host.append(strip);
+}

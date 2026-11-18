@@ -14,6 +14,27 @@ class NoticeAutomationTest {
  @Before fun setup(){context.deleteDatabase("notice-automation-test.db");store=LocalStore(context,"notice-automation-test.db")}
  @After fun cleanup(){store.close();context.deleteDatabase("notice-automation-test.db")}
  private fun analyze(id:Long,e:Event)=store.analyzed(id,JSONObject().put("events",JSONArray().put(EventJson.write(e))))
+ @Test fun failedExtractionCorrectionPreservesCompletedEvent(){
+  val text="纠错测试单位 开发工程师笔试2026年11月24日09:00。"
+  val e=Event(company="纠错测试单位",role="开发工程师",stage="written_test",start="2026-11-24T09:00:00",evidence=text)
+  val id=store.save("HR",text,1,"email","correct-original");analyze(id,e)
+  val sid=store.schedules().getJSONObject(0).getLong("id");store.complete(sid,true)
+  val next=store.save("HR","提醒："+text,2,"sms","correct-reminder")
+  analyze(next,e.copy(start="2026-11-25T09:00:00"))
+  val saved=store.analysisResult(next)!!;assertTrue(saved.getJSONArray("failedIndexes").length()>0)
+  val reply=JSONObject().put("corrections",JSONArray().put(JSONObject().put("index",0).put("event",EventJson.write(e))))
+  store.analyzed(next,AnalysisCorrection.merge(saved,reply)!!)
+  assertEquals(1,store.schedules().length());assertTrue(store.schedules().getJSONObject(0).getBoolean("done"))
+  assertEquals(0,store.analysisResult(next)!!.getJSONArray("failedIndexes").length())
+ }
+ @Test fun correctionCannotReplaySuccessfulOrdinal(){
+  val saved=JSONObject().put("events",JSONArray().put(JSONObject().put("company","kept")).put(JSONObject().put("company","failed"))).put("failedIndexes",JSONArray().put(1))
+  val response=JSONObject().put("corrections",JSONArray().put(JSONObject().put("index",0).put("event",JSONObject().put("company","wrong"))).put(JSONObject().put("index",1).put("event",JSONObject().put("company","fixed"))))
+  val result=AnalysisCorrection.merge(saved,response)!!
+  assertEquals("kept",result.getJSONArray("events").getJSONObject(0).getString("company"))
+  assertEquals("fixed",result.getJSONArray("events").getJSONObject(1).getString("company"))
+  assertEquals(2,result.getJSONArray("events").length())
+ }
  @Test fun positiveResultReusesSourceBackedApplicationAndDoesNotResetExam(){
   val company="进度测试科技";val role="算法工程师";val quote="$company 招聘$role，笔试2026年11月18日09:00。"
   val exam=Event(company=company,role=role,stage="written_test",start="2026-11-18T09:00:00",evidence=quote)
