@@ -3,7 +3,7 @@ const t = (zh, en) => english ? en : zh, $ = id => document.getElementById(id), 
 const timeFormatters=new Map();
 const time = v => { if (!v)
     return t('待通知', 'Not announced'); const d = new Date(v + '+08:00'); return Number.isNaN(d.getTime()) ? v : (timeFormatters.get(english)||timeFormatters.set(english,new Intl.DateTimeFormat(english ? 'en-GB' : 'zh-CN', { timeZone: 'Asia/Shanghai', month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })).get(english)).format(d); };
-let lastSnapshot = '',inboxOffset=0;
+let lastSnapshot = '',inboxOffset=0,cachedSnapshot='',cachedState=null,renderVersion=0;
 let theme = localStorage.getItem('theme') || 'system';
 function applyTheme() { if (theme === 'system')
     delete document.documentElement.dataset.theme;
@@ -13,17 +13,20 @@ const stage = value => ({ written_test: t('笔试', 'Written test'), interview: 
 function overlaps(a, b) { if (a.kind !== 'start' || b.kind !== 'start' || a.done || b.done || a.cancelled || b.cancelled)
     return false; const stamp = v => Date.parse(v + '+08:00'), x = stamp(a.start), y = stamp(b.start); if (!a.end || !b.end)
     return x === y; return x < stamp(b.end) && y < stamp(a.end); }
-function render() {
-    lastSnapshot = CareerFlow.state();
-    const state = JSON.parse(lastSnapshot);
+function render(snapshot = null) {
+    lastSnapshot = snapshot || CareerFlow.state();
+    renderVersion++;
+    if(cachedSnapshot!==lastSnapshot){cachedState=JSON.parse(lastSnapshot);cachedSnapshot=lastSnapshot;}
+    const state = cachedState;
     document.documentElement.lang = english ? 'en' : 'zh-CN';
+    for(const summary of document.querySelectorAll('[data-help-label]'))summary.textContent=t('了解更多','Learn more');
     $('brand').textContent = t('赴程', 'CareerFlow');
     $('lang').textContent = english ? '中文' : 'EN';
     $('intro').textContent = t('专注下一场，其他交给赴程。', 'Focus on your next step.');
     applyTheme();
     $('tabs').replaceChildren();
     for (const [key, zh, en] of [['home','总览','Overview'],['schedule', '待办', 'Tasks'],['calendar','日历','Calendar'], ['inbox', '通知', 'Inbox'], ['settings', '设置', 'Settings']]) {
-        const b = button(t(zh, en), () => { active = key; render(); window.scrollTo(0,0); });
+        const b = button(t(zh, en), () => navigate(key));
         b.setAttribute('aria-label', t(zh, en));
         b.replaceChildren(node('span', ({home:'⌂',schedule:'✓',calendar:'▦',inbox:'✉',settings:'⚙'})[key]), node('span', t(zh, en)));
         b.firstChild.className = 'nav-icon';
@@ -38,7 +41,7 @@ function render() {
     $('permissions').textContent = t('提醒：', 'Reminders: ') + (state.notifications ? t('通知已开启', 'notifications enabled') : t('通知未开启', 'notifications disabled')) + ' · ' + (state.exact ? t('精确闹钟已允许', 'exact alarms allowed') : t('精确闹钟未允许，可能延迟', 'exact alarms unavailable; delivery may be delayed'));
     $('auto').checked = state.auto;
     $('mailStatus').textContent = (state.mailConfigured ? t('邮箱已配置', 'Mailbox configured') : t('尚未配置邮箱', 'No mailbox configured')) + ' · ' + ({ syncing:t('正在同步','Syncing'),catchup:t('正在补齐历史邮件','Catching up'),ok: t('同步成功', 'Sync succeeded'), authentication: t('邮箱授权失效，请重新连接', 'Mailbox authorization expired; reconnect'), connection: t('同步失败，将自动重试', 'Sync failed; will retry'), idle: t('等待同步', 'Awaiting sync') }[state.mailStatus] || state.mailStatus) + (state.lastSync ? ' · ' + new Date(state.lastSync).toLocaleString() : '');
-    renderOAuth();
+    if(active==='settings')renderOAuth();
     $('settingsPermissions').textContent = $('permissions').textContent;
     document.querySelector('.permission-hint').hidden = state.notifications && state.exact;
     $('apiState').textContent = state.configured ? t('密钥已加密保存', 'Key stored securely') : t('配置后自动分析招聘通知', 'Configure to analyze recruitment messages');
@@ -68,6 +71,7 @@ function render() {
         if (item.state === 'review') {
             const reviewPanel=node('details','');reviewPanel.append(node('summary',t('关联冲突 · 展开查看','Link conflict · details')));card.append(reviewPanel);
             reviewPanel.append(node('p', item.analysis?.reviewReasons?.join('；') || t('存在多个可能的岗位或场次，已保留原记录；新通知到达后自动重新关联。', 'No unique evidence yet. New messages trigger another check; you can optionally add details here.')));
+            reviewPanel.addEventListener('toggle',()=>{if(!reviewPanel.open||reviewPanel.dataset.loaded)return;reviewPanel.dataset.loaded='true';
             for (const [index, e] of (item.analysis?.events || []).entries()) {
                 reviewPanel.append(node('pre', [e.company, e.role, e.ref, e.stage, time(e.start), time(e.end), e.location, e.action, e.evidence].filter(Boolean).join('\n')));
                 const edits = {};
@@ -89,12 +93,13 @@ function render() {
                     render();
                 } }));
             }
+            });
         }
         card.append(button(t('重新分析', 'Analyze again'), () => { CareerFlow.analyze(item.id); feedback(t('已加入后台队列', 'Queued for background analysis')); }));
         $('inbox').append(card);
     }
     }
-    if(active==='settings')$('history').replaceChildren(...state.history.map(h => node('p', new Date(h.at).toLocaleString() + ' · ' + h.detail)));
+    if(active==='settings'&&$('history').parentElement.open)$('history').replaceChildren(...(CareerFlow.changeHistory?JSON.parse(CareerFlow.changeHistory()):state.history).map(h => node('p', new Date(h.at).toLocaleString() + ' · ' + h.detail)));
 }
 
 function renderOAuth() {
@@ -134,8 +139,13 @@ $('disableMail').onclick = () => { CareerFlow.disableMail(); feedback(t('已暂�
 $('testReminder').onclick = () => { CareerFlow.testReminder(); feedback(t('请锁屏等待测试通知；未允许精确闹钟时可能延迟', 'Lock the screen and wait for the test notification; exact alarm access avoids scheduling delay')); };
 $('notifications').onclick = () => CareerFlow.notificationPermission();
 $('alarms').onclick = () => CareerFlow.alarmPermission();
-setInterval(() => { if (!document.hidden && !['settings','workspace'].includes(active) && (!document.querySelector('dialog[open]') && !document.querySelector('.page-panel:not([hidden]) article details[open]') && !['INPUT', 'SELECT','TEXTAREA'].includes(document.activeElement?.tagName)) && CareerFlow.state() !== lastSnapshot)
-    render(); }, 15000);
-
-setInterval(() => { if (!document.hidden && active === "settings") renderOAuth(); }, 1000);
-document.addEventListener("visibilitychange", () => { if(!document.hidden){renderOAuth();if(!document.querySelector('dialog[open]')&&!['INPUT','SELECT'].includes(document.activeElement?.tagName))render();} });
+function canRefreshMobile(){return !document.hidden&&!document.querySelector('dialog[open]')&&!document.querySelector('.page-panel:not([hidden]) details[open]')&&!['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName);}
+let snapshotRequested=false,snapshotVersion=0;
+window.onMobileSnapshot=value=>{snapshotRequested=false;if(value&&snapshotVersion===renderVersion&&canRefreshMobile()&&value!==lastSnapshot)render(value);};
+function refreshMobile(){if(!canRefreshMobile()||['settings','workspace'].includes(active)||snapshotRequested)return;if(CareerFlow.requestState){snapshotRequested=true;snapshotVersion=renderVersion;CareerFlow.requestState();}else{const value=CareerFlow.state();if(value!==lastSnapshot)render(value);}}
+setInterval(refreshMobile,15000);
+setInterval(()=>{if(!document.hidden&&active==='settings'&&$('outlookTitle').parentElement.open)renderOAuth();},1000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(active==='settings')renderOAuth();else refreshMobile();}});
+$('history').parentElement.addEventListener('toggle',()=>{if($('history').parentElement.open){const items=CareerFlow.changeHistory?JSON.parse(CareerFlow.changeHistory()):JSON.parse(lastSnapshot).history;$('history').replaceChildren(...items.map(h=>node('p',new Date(h.at).toLocaleString()+' · '+h.detail)));}});
+window.onSmsImport=result=>{$('import').disabled=false;feedback(result==='permission'?t('授权后请再次检查','Grant access, then check again'):result==='failed'?t('读取失败，请重试','Could not read SMS; retry'):t('新增：','Added: ')+result);render();};
+$('import').onclick=()=>{if(CareerFlow.importRecentAsync){$('import').disabled=true;feedback(t('正在后台检查短信，可继续使用','Checking SMS in background; you can keep browsing'));CareerFlow.importRecentAsync();}else window.onSmsImport(CareerFlow.importRecent());};

@@ -22,3 +22,7 @@ assert.deepEqual(groups.stages.interviewed.map(x=>x.id),['a','b']);
 assert.deepEqual(groups.stages.applied.map(x=>x.id),['a','b']);
 assert.equal(groups.statuses.get('REJECTED').length,2);
 assert.equal(m.stamp('2026-11-01T09:00:00+08:00'),now);
+
+const history={id:'h',kind:'application',data:{status:'REJECTED',appliedAt:'2026-10-30T12:00:00'},stageEvents:[{status:'APPLIED',at:now},{status:'WRITTEN_TEST',at:now},{status:'WRITTEN_TEST',at:now},{status:'REJECTED',at:now}]};
+const progress=m.progress([history]);assert.equal(progress.length,3);assert.equal(progress[0].date,'2026-10-30');assert.equal(progress.filter(p=>p.group==='interviewed').length,1);assert.equal(m.progress([{kind:'application',data:{status:'INTERVIEW_1'}}]).length,0,'Unknown historical dates stay absent');
+assert.equal(m.applicationGroups([{kind:'application',data:{status:'WRITTEN_TEST'}}]).stages.interviewed.length,1);

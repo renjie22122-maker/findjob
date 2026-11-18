@@ -39,6 +39,24 @@ class PerformanceTest {
    assertTrue("Model button must not block WebView",responded.await(2,TimeUnit.SECONDS))
   }finally{release.countDown();idle();instrumentation.runOnMainSync{activity.finish()}}
  }
+ @Test fun asynchronousSnapshotAndSystemBackKeepWebViewResponsive(){
+  val activity=instrumentation.startActivitySync(android.content.Intent(context,MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+  fun evaluate(script:String):String{val latch=CountDownLatch(1);var value="";instrumentation.runOnMainSync{val view=(activity.findViewById<android.view.ViewGroup>(android.R.id.content)).getChildAt(0) as android.webkit.WebView;view.evaluateJavascript(script){value=it;latch.countDown()}};assertTrue(latch.await(3,TimeUnit.SECONDS));return value}
+  try{
+   val deadline=System.currentTimeMillis()+10000
+   while(evaluate("typeof window.handleMobileBack==='function'")!="true"&&System.currentTimeMillis()<deadline)Thread.sleep(100)
+   assertEquals("true",evaluate("typeof window.handleMobileBack==='function'"))
+   assertEquals("true",evaluate("window.snapshotArrived=false;window.onMobileSnapshot=v=>{window.snapshotArrived=!!v&&Array.isArray(JSON.parse(v).schedules)};CareerFlow.requestState();true"))
+   val until=System.currentTimeMillis()+5000
+   while(evaluate("window.snapshotArrived")!="true"&&System.currentTimeMillis()<until)Thread.sleep(50)
+   assertEquals("true",evaluate("window.snapshotArrived"))
+   evaluate("navigate('calendar');document.getElementById('assistantDialog').showModal()")
+   instrumentation.runOnMainSync{activity.onBackPressed()};Thread.sleep(100)
+   assertEquals("true",evaluate("!document.getElementById('assistantDialog').open && active==='calendar'"))
+   instrumentation.runOnMainSync{activity.onBackPressed()};Thread.sleep(100)
+   assertEquals("true",evaluate("active==='home'"))
+  }finally{instrumentation.runOnMainSync{activity.finish()}}
+ }
  @Test fun nativeConfiguredApiProbe(){
   Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("liveApi")=="true")
   val file=java.io.File(context.filesDir,"api-test.json");val configuration=JSONObject(file.readText());file.delete()

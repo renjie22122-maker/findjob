@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 const assets = new URL('../../android/app/src/main/assets/', import.meta.url);
-const server = createServer((req, res) => { const file = req.url === '/' ? 'index.html' : req.url.slice(1); if (!['index.html', 'app.js', 'style.css','mobile-model.js','mobile-views.js','workspace.js','reanalysis.js','relationships.js'].includes(file)) {
+const server = createServer((req, res) => { const file = req.url === '/' ? 'index.html' : req.url.slice(1); if (!['index.html', 'app.js', 'style.css','mobile-model.js','mobile-views.js','workspace.js','reanalysis.js','relationships.js','progress-timeline.js'].includes(file)) {
     res.writeHead(404).end();
     return;
 } res.setHeader('Content-Type', file.endsWith('js') ? 'text/javascript' : file.endsWith('css') ? 'text/css' : 'text/html'); res.end(readFileSync(new URL(file, assets))); }).listen(0, '127.0.0.1');
@@ -15,7 +15,7 @@ try {
     await page.clock.setFixedTime(new Date('2026-11-05T01:00:00Z'));
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
-    await page.addInitScript(() => { const schedule = { id: 1, company: 'Example', role: 'Engineer', ref: 'JOB-1', stage: 'interview', round: 'Technical interview', kind: 'start', start: '2026-11-05T14:00:00', end: '2026-11-05T16:00:00', location: 'Room A', done: false, cancelled: false, sources: [{ source: 'email', body: '<script>alert(1)</script> original evidence', received: 1 }, { source: 'sms', body: 'Same event', received: 2 }] }; const state = { configured: true, auto: true, exact: false, notifications: false, mailConfigured: true, mailStatus: 'ok', lastSync: 1, history: [], items: [], schedules: [schedule, { ...schedule, id: 2, company: 'Window', kind: 'window' }] }; window.perfState=state;window.oauth = {oauthStatus:"idle",oauthExpires:0,oauthCanOpen:false}; window.workspaceRecords=[{id:'resume:1',kind:'resume',data:{name:'Test CV',targetRole:'Engineer',skills:['Kotlin'],content:'Original resume'},dirty:false,conflict:null},{id:'application:1',kind:'application',data:{companyName:'Example',positionTitle:'Engineer',status:'APPLIED'},dirty:false,conflict:null},{id:'job:1',kind:'job',data:{companyName:'Example',positionTitle:'Developer',resumeKey:'resume:1',status:'new',score:80,reasons:['Kotlin'],jdDescription:'<script>alert(1)</script>'},dirty:false,conflict:null}];window.llm={baseUrl:'https://api.example/v1',model:'my-model',auth:'bearer',jsonMode:true,temperature:true,timeout:90,maxTokens:4096,status:'idle',models:[]};window.batch={status:'idle',total:0,finished:0,failed:0,phase:'idle'};window.CareerFlow = {reanalysisState:()=>JSON.stringify(window.batch),reanalysis:action=>{if(action==='start')window.batch={status:'running',total:100,finished:0,failed:0,phase:'queued'};if(action==='pause')window.batch.status='paused';if(action==='resume')window.batch.status='running';},llmSettings:()=>JSON.stringify(window.llm),saveLlm:raw=>{window.llm={...window.llm,...JSON.parse(raw)};return true;},probeLlm:models=>{window.llm.status=models?'models_ok':'ok';if(models)window.llm.models=['custom-model'];},workspace:()=>JSON.stringify({records:window.workspaceRecords,syncStatus:'idle',lastSync:0}),workspaceHistory:()=> '[]',saveWorkspace:(kind,id,raw)=>{const data=JSON.parse(raw);const old=window.workspaceRecords.find(r=>r.id===id);if(old)old.data=data;else window.workspaceRecords.push({id:kind+':local-test',kind,data,dirty:true,conflict:null});return true;}, oauthState: () => JSON.stringify(window.oauth), copyOutlookCode: () => { window.copied=window.oauth.oauthCode; return true; }, state: () => JSON.stringify(state), complete: (id, value) => { state.schedules.find(x => x.id === id).done = value; }, notificationPermission: () => { }, alarmPermission: () => { }, syncMail: () => { }, saveMail: () => true, disableMail: () => { }, automatic: () => { }, importRecent: () => '0', saveKey: () => { }, analyze: () => { } }; });
+    await page.addInitScript(() => { const schedule = { id: 1, company: 'Example', role: 'Engineer', ref: 'JOB-1', stage: 'interview', round: 'Technical interview', kind: 'start', start: '2026-11-05T14:00:00', end: '2026-11-05T16:00:00', location: 'Room A', done: false, cancelled: false, sources: [{ source: 'email', body: '<script>alert(1)</script> original evidence', received: 1 }, { source: 'sms', body: 'Same event', received: 2 }] }; const state = { configured: true, auto: true, exact: false, notifications: false, mailConfigured: true, mailStatus: 'ok', lastSync: 1, history: [], items: [], schedules: [schedule, { ...schedule, id: 2, company: 'Window', kind: 'window' }] }; window.perfState=state;window.oauth = {oauthStatus:"idle",oauthExpires:0,oauthCanOpen:false}; window.workspaceRecords=[{id:'resume:1',kind:'resume',data:{name:'Test CV',targetRole:'Engineer',skills:['Kotlin'],content:'Original resume'},dirty:false,conflict:null},{id:'application:1',kind:'application',data:{companyName:'Example',positionTitle:'Engineer',status:'APPLIED'},dirty:false,conflict:null},{id:'job:1',kind:'job',data:{companyName:'Example',positionTitle:'Developer',resumeKey:'resume:1',status:'new',score:80,reasons:['Kotlin'],jdDescription:'<script>alert(1)</script>'},dirty:false,conflict:null}];window.workspaceRecords[1].stageEvents=[{status:'APPLIED',at:Date.parse('2026-11-03T09:00:00+08:00')},{status:'WRITTEN_TEST',at:Date.parse('2026-11-04T09:00:00+08:00')}];window.llm={baseUrl:'https://api.example/v1',model:'my-model',auth:'bearer',jsonMode:true,temperature:true,timeout:90,maxTokens:4096,status:'idle',models:[]};window.batch={status:'idle',total:0,finished:0,failed:0,phase:'idle'};window.CareerFlow = {reanalysisState:()=>JSON.stringify(window.batch),reanalysis:action=>{if(action==='start')window.batch={status:'running',total:100,finished:0,failed:0,phase:'queued'};if(action==='pause')window.batch.status='paused';if(action==='resume')window.batch.status='running';},llmSettings:()=>JSON.stringify(window.llm),saveLlm:raw=>{window.workspaceRecords[1].stageEvents=[{status:'APPLIED',at:Date.parse('2026-11-03T09:00:00+08:00')},{status:'WRITTEN_TEST',at:Date.parse('2026-11-04T09:00:00+08:00')}];window.llm={...window.llm,...JSON.parse(raw)};return true;},probeLlm:models=>{window.llm.status=models?'models_ok':'ok';if(models)window.llm.models=['custom-model'];},workspace:()=>JSON.stringify({records:window.workspaceRecords,syncStatus:'idle',lastSync:0}),workspaceHistory:()=> '[]',saveWorkspace:(kind,id,raw)=>{const data=JSON.parse(raw);const old=window.workspaceRecords.find(r=>r.id===id);if(old)old.data=data;else window.workspaceRecords.push({id:kind+':local-test',kind,data,dirty:true,conflict:null});return true;}, oauthState: () => JSON.stringify(window.oauth), copyOutlookCode: () => { window.copied=window.oauth.oauthCode; return true; }, state: () => JSON.stringify(state), complete: (id, value) => { state.schedules.find(x => x.id === id).done = value; }, notificationPermission: () => { }, alarmPermission: () => { }, syncMail: () => { }, saveMail: () => true, disableMail: () => { }, automatic: () => { }, importRecent: () => '0', saveKey: () => { }, analyze: () => { } }; });
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.locator('#nextSteps').getByText('Example', { exact: true }).waitFor();
     await page.locator('#pipelineTitle').click();
@@ -40,6 +40,7 @@ try {
     await page.evaluate(()=>{window.perfState.items=Array.from({length:200},(_,i)=>({id:100+i,source:'email',received:1,state:'linked',body:'Original source '.repeat(400),analysis:{summary:'Saved notice'}}));render();});
     assert.equal(await page.locator('#inbox article').count(),0,'Settings must not build the hidden inbox');
     assert.equal(await page.locator('#schedules article').count(),1,'Settings must not rebuild hidden schedule cards');
+    await page.locator('#aiTitle').click();
     await page.locator('#llmBase').fill('https://compatible.example/v1');
     await page.locator('#llmModel').fill('custom-model');
     await page.waitForTimeout(2100);
@@ -56,6 +57,7 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2), false);
 
+    await page.locator('#outlookTitle').click();
     await page.locator('#clientId').focus();
     await page.evaluate(() => { window.oauth={oauthStatus:'pending',oauthCode:'TESTONLY',oauthExpires:Date.now()+60000,oauthCanOpen:true}; });
     await page.waitForFunction(() => document.querySelector('#outlookCode').textContent === 'TESTONLY');
@@ -108,13 +110,20 @@ try {
     assert.ok((await page.locator('#chatInput').inputValue()).includes('recover unfinished'));
     await page.locator('#assistantClose').click();
     await page.evaluate(()=>{CareerFlow.relationshipMap=()=>JSON.stringify({total:2,schedules:window.perfState.schedules.map(s=>({...s,links:[{id:101,source:'email',received:Date.now()},{id:102,source:'sms',received:Date.now()}]})),applications:[{company:'Example',role:'Engineer',status:'APPLIED'}],unlinked:[{id:103,source:'sms',received:Date.now()}]});CareerFlow.noticeBody=()=>'<script>alert(1)</script> original evidence';CareerFlow.changeHistory=()=>JSON.stringify([{at:Date.now(),detail:JSON.stringify({kind:'assistant_schedule',operation:'merge',before:{company:'Example',role:'Engineer',start:'2026-11-05T14:00:00',done:false},after:{id:1,company:'Example',role:'Engineer',start:'2026-11-05T14:00:00',done:true}})}]);});
-    assert.equal(await page.locator('#overviewTimeline .overview-days button').count(),7);
-    await page.locator('#overviewTimeline').getByRole('button',{name:'7 days · zoom',exact:true}).click();
-    assert.equal(await page.locator('#overviewTimeline .overview-days button').count(),30);
-    const before=await page.locator('#overviewTimeline .overview-days strong').first().textContent();
-    await page.locator('#overviewTimeline').getByRole('button',{name:'Next',exact:true}).click();
-    assert.notEqual(await page.locator('#overviewTimeline .overview-days strong').first().textContent(),before);
+    assert.equal(await page.locator('#overviewTimeline .progress-plot').count(),1);
+    assert.equal(await page.locator('#overviewTimeline input[type=range]').count(),0);
+    await page.getByLabel('Timeline range',{exact:true}).selectOption('30');
+    assert.equal(await page.getByLabel('Timeline range',{exact:true}).inputValue(),'30');
+    const before=await page.getByLabel('Timeline end date',{exact:true}).inputValue();
+    await page.locator('#overviewTimeline').getByRole('button',{name:'Later →',exact:true}).click();
+    assert.notEqual(await page.getByLabel('Timeline end date',{exact:true}).inputValue(),before);
     await page.locator('#overviewTimeline').getByRole('button',{name:'Today',exact:true}).click();
+    await page.locator('#overviewTimeline').screenshot({path:'server/data/ui-review/android-0100-trend.png'});
+    await page.locator('.progress-plot').evaluate(el=>{const start=new Event('touchstart');Object.defineProperty(start,'touches',{value:[{clientX:100,clientY:150},{clientX:200,clientY:150}]});el.dispatchEvent(start);const move=new Event('touchmove');Object.defineProperty(move,'touches',{value:[{clientX:50,clientY:150},{clientX:250,clientY:150}]});el.dispatchEvent(move);const end=new Event('touchend');Object.defineProperty(end,'changedTouches',{value:[{clientX:50,clientY:150}]});el.dispatchEvent(end);});
+    assert.equal(await page.getByLabel('Timeline range',{exact:true}).inputValue(),'15');
+    await page.locator('.progress-plot').dispatchEvent('pointerdown',{pointerId:1,pointerType:'mouse',clientX:250,clientY:200});
+    await page.locator('.progress-plot').dispatchEvent('pointerup',{pointerId:1,pointerType:'mouse',clientX:100,clientY:200});
+    assert.notEqual(await page.getByLabel('Timeline end date',{exact:true}).inputValue(),before);
     await page.getByRole('button',{name:'Connections',exact:true}).click();
     assert.equal(await page.locator('.relation-company').count(),2);
     assert.equal(await page.locator('#relationsTree pre').count(),0);
@@ -154,6 +163,20 @@ try {
     await page.evaluate(()=>{CareerFlow.noticePage=offset=>JSON.stringify({items:window.perfState.items.slice(offset,offset+50),total:window.perfState.items.length});active='inbox';inboxOffset=0;render();});
     assert.equal(await page.locator('#inbox article').count(),50);assert.equal(await page.locator('#inbox pre').count(),0,'Original text stays lazy');
     await page.locator('#inboxPager').getByRole('button',{name:'Next',exact:true}).click();assert.equal(await page.locator('#inbox article').count(),50);
+    await page.evaluate(()=>{window.workspaceRecords=Array.from({length:1200},(_,i)=>({id:'large-'+i,kind:'application',data:{companyName:'Large '+i,positionTitle:'Engineer',status:'APPLIED'}}));navigate('home');});
+    assert.equal(await page.locator('#workspaceList article').count(),0,'Home does not render hidden workspace records');
+    await page.evaluate(()=>openWorkspace('application'));
+    assert.equal(await page.locator('#workspaceList article').count(),50,'Workspace lists are paginated');
+    const navigation=await page.evaluate(()=>{const old=CareerFlow.state;let reads=0;CareerFlow.state=()=>{reads++;return old();};navigate('calendar');navigate('schedule');CareerFlow.state=old;return reads;});
+    assert.equal(navigation,0,'Tab navigation reuses the current snapshot without database bridge reads');
+    const stale=await page.evaluate(()=>{active='schedule';document.activeElement.blur();CareerFlow.requestState=()=>{};refreshMobile();navigate('calendar');const before=lastSnapshot;onMobileSnapshot(JSON.stringify({schedules:[],items:[]}));return before===lastSnapshot;});
+    assert.equal(stale,true,'A late refresh cannot replace state after navigation or edits');
+    await page.evaluate(()=>{delete CareerFlow.requestState;active='home';render();window.scrollTo(0,0);});
+    await page.screenshot({path:'server/data/ui-review/android-0100-home.png'});
+    await page.setViewportSize({width:320,height:740});
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Small phones must not overflow horizontally');
+    await page.evaluate(()=>{navigate('calendar');document.getElementById('assistantDialog').showModal();handleMobileBack();});
+    assert.equal(await page.locator('#assistantDialog').isVisible(),false);
     assert.deepEqual(errors,[]);console.log('1200 schedule render: '+Math.round(stress.ms)+' ms; 50 visible cards; inbox pagination and lazy source passed.');
     console.log('Android UI passed: bilingual, completion, evidence escaping, window conflicts, mobile width.');
 }

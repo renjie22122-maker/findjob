@@ -19,12 +19,16 @@ const MobileModel = (() => {
  for(const r of apps){const status=r.data.status||'WISHLIST';if(!statuses.has(status))statuses.set(status,[]);statuses.get(status).push(r);
  const seen=new Set([status,...(r.stageHistory||[])]);
  const offered=[...seen].some(x=>['OFFER','SIGNED'].includes(x));
- const interviewed=offered||[...seen].some(x=>/^INTERVIEW_|^HR_INTERVIEW$/.test(x));
+ const interviewed=offered||[...seen].some(x=>x==='WRITTEN_TEST'||/^INTERVIEW_|^HR_INTERVIEW$/.test(x));
  if([...seen].some(x=>['APPLIED','SCREENING','WRITTEN_TEST','OFFER','SIGNED'].includes(x))||interviewed||r.data.appliedAt)stages.applied.push(r);
  if(interviewed)stages.interviewed.push(r);if(offered)stages.offer.push(r);
  }
  return {apps,statuses,stages};
  }
- return {applicationGroups,stamp,day,due,live,onDay,sort,tasks,month};
+ function progress(records){const points=[];for(const r of records.filter(r=>r.kind==='application')){const seen=new Set();const add=(status,date)=>{if(!date||!/^\d{4}-\d{2}-\d{2}$/.test(date))return;const group=status==='APPLIED'?'applied':status==='WRITTEN_TEST'||/^INTERVIEW_|^HR_INTERVIEW$/.test(status)?'interviewed':['OFFER','SIGNED'].includes(status)?'offer':status==='REJECTED'?'rejected':null;if(!group||seen.has(group+'|'+date))return;seen.add(group+'|'+date);points.push({date,group,record:r});};
+ if(r.data.appliedAt)add('APPLIED',r.data.appliedAt.slice(0,10));
+ for(const e of r.stageEvents||[]){if(e.status==='APPLIED'&&r.data.appliedAt)continue;if(Number.isFinite(e.at))add(e.status,day(e.at));}}
+ return points;}
+ return {progress,applicationGroups,stamp,day,due,live,onDay,sort,tasks,month};
 })();
 if(typeof module!=='undefined')module.exports=MobileModel;

@@ -25,7 +25,7 @@ function scheduleCard(s,state){
             card.append(node('strong', t('时间冲突：', 'Time conflict: ') + conflicts.map(x => x.company).join(' / ')));
         if (s.cancelled)
             card.append(node('p', t('已取消，提醒已停止', 'Canceled; reminders stopped')));
-        card.append(button(s.done ? t('已完成 · 撤销', 'Completed · undo') : t('标记完成', 'Mark complete'), () => { CareerFlow.complete(s.id, !s.done); render(); }));
+        card.append(button(s.done ? t('已完成 · 撤销', 'Completed · undo') : t('标记完成', 'Mark complete'), () => { CareerFlow.complete(s.id, !s.done); CareerFlow.haptic?.(); render(); }));
         const details = node('details', '');
         details.append(node('summary', t('安排详情', 'Event details')),button(t('编辑安排','Edit event'),()=>openEditor(s)),node('h3',t('关联依据', 'Linked evidence') + ' · ' + (s.sourceCount??s.sources?.length??0)));
         details.ontoggle=()=>{if(!details.open||details.querySelector("pre"))return;for (const source of (CareerFlow.scheduleSources?JSON.parse(CareerFlow.scheduleSources(s.id)):s.sources))
@@ -33,19 +33,21 @@ function scheduleCard(s,state){
         card.append(details);
 return card;
 }
-let calendarZoom='month',overviewSpan=7,overviewAnchor=MobileModel.day();
+let calendarZoom='month',overviewSpan=90,overviewAnchor=MobileModel.day();
 let taskFilter='upcoming',inboxFilter='all',selectedDate=MobileModel.day(),calendarMonth=selectedDate.slice(0,7),editingEvent=null;
-function navigate(key){active=key;render();window.scrollTo(0,0);}
+const pageScroll=new Map();
+function navigate(key){pageScroll.set(active,window.scrollY);active=key;render(lastSnapshot);window.scrollTo(0,pageScroll.get(key)||0);}
+window.handleMobileBack=()=>{const dialogs=[...document.querySelectorAll('dialog[open]')];if(dialogs.length){dialogs.at(-1).close();return true;}if(active!=='home'){navigate('home');return true;}if(window.scrollY>100){window.scrollTo(0,0);return true;}return false;};
 function renderMobile(state){
- const health=JSON.parse(CareerFlow.health?.()||'{}'),now=Date.now(),upcoming=active==='home'?MobileModel.tasks(state.schedules,'upcoming'):[],today=active==='home'?MobileModel.tasks(state.schedules,'today'):[],overdue=active==='home'?MobileModel.tasks(state.schedules,'overdue'):[],reviews=state.items.filter(i=>i.state==='review');const reviewTotal=state.reviewCount??reviews.length;
- const labels={tasksTitle:['待办','Tasks'],tasksHelp:['先看下一步。时间均为北京时间，弹性测评只按截止时间提醒。','Your next actions, in UTC+8. Flexible assessments use deadline reminders.'],addEvent:['＋ 新建','＋ Add'],calendarTitle:['日历','Calendar'],calendarToday:['今天','Today'],calendarHelp:['蓝点：固定场次 · 紫点：弹性窗口 · 红点：截止事项。点日期查看详情。','Blue: appointment · purple: flexible window · red: deadline. Tap a day for details.'],pipelineTitle:['申请总览','Application overview'],applicationsTitle:['公司与岗位进展','Companies & roles'],backgroundSettings:['检查系统后台设置','Open background settings']};
+ const health=active==='settings'?JSON.parse(CareerFlow.health?.()||'{}'):{},now=Date.now(),upcoming=active==='home'?MobileModel.tasks(state.schedules,'upcoming'):[],today=active==='home'?MobileModel.tasks(state.schedules,'today'):[],overdue=active==='home'?MobileModel.tasks(state.schedules,'overdue'):[],reviews=state.items.filter(i=>i.state==='review');const reviewTotal=state.reviewCount??reviews.length;
+ const labels={tasksTitle:['待办','Tasks'],tasksHelp:['先看下一步。时间均为北京时间，弹性测评只按截止时间提醒。','Your next actions, in UTC+8. Flexible assessments use deadline reminders.'],addEvent:['＋ 新建','＋ Add'],calendarTitle:['日历','Calendar'],calendarToday:['今天','Today'],calendarHelp:['蓝点：固定场次 · 紫点：弹性窗口 · 红点：截止事项。点日期查看详情。','Blue: appointment · purple: flexible window · red: deadline. Tap a day for details.'],pipelineTitle:['状态分布','Status distribution'],applicationsTitle:['公司与岗位进展','Companies & roles'],backgroundSettings:['检查系统后台设置','Open background settings']};
  for(const [id,pair] of Object.entries(labels))$(id).textContent=t(...pair);
  $('taskSearch').placeholder=t('搜索公司、岗位或地点','Search company, role or location');$('taskSearch').setAttribute('aria-label',$('taskSearch').placeholder);
  if(active==='home'){
  $('metrics').replaceChildren();for(const [value,label,fn] of [[today.length,t('今天要做','Today'),()=>{taskFilter='today';navigate('schedule');}],[upcoming.length,t('待完成','Upcoming'),()=>{taskFilter='upcoming';navigate('schedule');}],[overdue.length,t('已过期未完成','Overdue'),()=>{taskFilter='overdue';navigate('schedule');}]]){const metric=button('',fn);metric.className='metric';metric.append(node('strong',String(value)),node('span',label));$('metrics').append(metric);}
  const paused=health.mailEnabled===false;const syncText=paused?t('邮箱同步已暂停或未连接','Mail sync paused or not connected'):$('mailStatus').textContent;
  $('homeHealth').replaceChildren(node('span',syncText),button(t('同步','Sync'),()=>{CareerFlow.syncMail();feedback(t('同步已排队','Sync queued'));}));
- $('homeActions').replaceChildren(button(t('关联图谱','Connections'),()=>openRelationships()),button(t('问赴程','Ask AI'),()=>{$('assistantDialog').showModal();renderChat();}),button(t('查看日历','Calendar'),()=>navigate('calendar')),button(t('添加待办','Add task'),()=>openEditor()),button(t('自动整理','Auto-organize'),()=>{CareerFlow.recheck();feedback(t('已开始自动核查，保留完成状态','Auto-check started; completed status is preserved'));}));
+ $('homeActions').replaceChildren(button(t('关联图谱','Connections'),()=>openRelationships()),button(t('问赴程','Ask AI'),()=>{$('assistantDialog').showModal();renderChat();}));
  $('nextSteps').replaceChildren(node('h3',t('接下来','Up next')));
  if(!upcoming.length)$('nextSteps').append(node('p',t('暂无待办。连接邮箱、导入短信或手动添加。','No upcoming tasks. Connect mail, import SMS or add one.')));
  for(const s of upcoming.slice(0,3))$('nextSteps').append(scheduleCard(s,state));
@@ -92,10 +94,15 @@ $('calendarGrid').addEventListener('touchstart',e=>{if(e.touches.length===1)cale
 $('calendarGrid').addEventListener('touchend',e=>{if(!calendarTouch)return;const dx=e.changedTouches[0].clientX-calendarTouch.x,dy=e.changedTouches[0].clientY-calendarTouch.y;calendarTouch=null;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5)moveMonth(dx<0?1:-1);},{passive:true});
 $('calendarGrid').addEventListener('touchcancel',()=>{calendarTouch=null;},{passive:true});
 
-function renderOverviewTimeline(state){
- let host=$('overviewTimeline');if(!host){host=node('section','');host.id='overviewTimeline';host.className='panel';$('nextSteps').before(host);}host.replaceChildren(node('h3',t('日程时间轴','Schedule timeline')));
- const move=delta=>{const d=new Date(overviewAnchor+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+delta*overviewSpan);overviewAnchor=d.toISOString().slice(0,10);render();};
- const controls=node('div','');controls.className='calendar-tools';controls.append(button(t('上一段','Previous'),()=>move(-1)),button(overviewSpan+t(' 天 · 缩放',' days · zoom'),()=>{overviewSpan=overviewSpan===7?30:7;render();}),button(t('今天','Today'),()=>{overviewAnchor=MobileModel.day();render();}),button(t('下一段','Next'),()=>move(1)));host.append(controls);
- const strip=node('div','');strip.className='overview-days';
- for(let i=0;i<overviewSpan;i++){const d=new Date(overviewAnchor+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+i);const date=d.toISOString().slice(0,10);const events=state.schedules.filter(e=>!e.cancelled&&MobileModel.onDay(e,date));const b=button('',()=>{selectedDate=date;calendarMonth=date.slice(0,7);scheduleOffsets.calendar=0;navigate('calendar');});b.append(node('strong',date.slice(5)),node('span',events.length+t(' 项',' events')));if(events.length)b.className='has-events';strip.append(b);}host.append(strip);
+// Keep daily decisions above maintenance and connection tools.
+$('homePanel').insertBefore($('nextSteps'),$('reanalysisPanel'));
+$('homePanel').insertBefore($('pipeline').parentElement,$('nextSteps'));
+$('homePanel').append($('reanalysisPanel'));
+for(const id of ['taskSearch','workspaceSearch'])$(id).setAttribute('enterkeyhint','search');
+for(const dialog of document.querySelectorAll('dialog')){
+ dialog.addEventListener('click',e=>{if(e.target!==dialog)return;const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();});
 }
+
+$('applications').parentElement.hidden=true;
+
+for(const id of ['privacy','llmHelp','mailHelp','outlookHelp','backgroundHealth']){const content=$(id),details=node('details',''),summary=node('summary','');details.className='help-details';summary.dataset.helpLabel='true';summary.textContent=t('了解更多','Learn more');content.before(details);details.append(summary,content);}

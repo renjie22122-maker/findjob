@@ -235,3 +235,18 @@ English: shared email/SMS semantics now distinguish stage results, provisional i
 验证：29 项 JVM 单元测试；Android 14 模拟器报告 58 项 instrumentation 测试通过（需要显式 live/SMS 参数的用例默认跳过），包括错误时间→执行反馈→修复→已完成日程不重复、成功序号不可被纠错覆盖，以及原有后台恢复/提醒回归。6 类合成通知通过配置 API；UI 回归覆盖 1,200 条日程、分页、周/月、跨年跳转和滑动。未连接用户实机测量发热或验证厂商锁屏策略；系统省电可能延迟执行，强行停止需重新打开。
 
 English: bounded execution-feedback correction patches failed events only and revalidates source evidence, preserving completion and audit history. Overview supports a scrollable 7/30-day timeline; calendar supports swipe, week/month zoom and date jump. Install over the existing app; background timing remains subject to Android power policy.
+
+## 0.10.0 · 手机界面与进度图
+
+- 总览直接展示状态环图和转化漏斗，点击类别进入申请明细；漏斗包含已记录的笔试/面试阶段，后续拒绝不抹除历史。
+- 日期数量卡片替换为与桌面同类的进度折线图：投递、笔试/面试、Offer、被拒；支持 7/30/90/365 天、前后范围、日期定位、回到今天、单指左右拖动、双指捏合缩放（已移除滑块）。点图后显示当天分类，点击分类查看对应申请。图表只读取本机数据，不调用 API。
+- 进度日期来自已有投递日期或本机版本记录中的状态变更时刻。不会将当前状态复制到所有历史日期，不伪造丢失的旧日期；没有时间记录的申请仍包含在状态环图/漏斗中。桌面数据尚未自动同步到手机，因此两端数量可能不同。
+- 简化首页重复入口和说明，设置分组默认折叠，长说明按需展开，统一卡片层次、公司和时间排版、底部导航和手机底部弹层。系统返回先关闭弹层，再回总览；切换主页面记住滚动位置。完成操作使用系统允许的轻触反馈。
+- 主页面切换复用已加载日程快照；定时刷新在原生后台执行并合并重复请求，过期响应不覆盖刚完成的导航/修改。快照不再夹带通知全文分析和处理记录，通知原文/复核控件/记录按需加载。状态计数让后台分析完成后仍能更新列表。
+- 历史短信导入移到后台，可继续浏览。首页不再渲染隐藏申请列表；工作台每页最多 50 条，搜索延迟合并输入。继续沿用串行分析、热状态退避和后台暂停 WebView 定时器，不通过增加 AI 并发提高手机负载。
+
+安装：原签名 **CareerFlow-0.10.0.apk**（versionCode 13），直接覆盖，不卸载。配置、完成状态和处理记录保留，无数据库破坏性迁移。
+
+验证：29 项 JVM 单元测试，Android 14 模拟器 instrumentation 报告 59 项通过（显式 live/SMS 用例默认跳过）；新增原生异步快照、返回关闭弹层和阶段历史验证。浏览器回归覆盖 1,200 日程/申请、分页、隐藏列表不渲染、无日程数据库读取的主页面导航、过期异步响应、320px 窄屏、双指缩放及日期拖动。未连接用户实机测量温度/耗电，不能据此承诺具体降温幅度。
+
+English: simplified mobile surfaces and bottom sheets; desktop-style local progress chart with one-finger pan, pinch zoom and date navigation and visible drill-down ring/funnel. Asynchronous snapshot refresh, background SMS import, lazy details and bounded workspace rendering reduce unnecessary UI work. Install over the existing app; phone data remain independent from desktop.

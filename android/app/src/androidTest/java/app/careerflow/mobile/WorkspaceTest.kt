@@ -13,7 +13,7 @@ class WorkspaceTest {
   val store=WorkspaceStore(context,name)
   try{val d=JSONObject().put("companyName","Example").put("positionTitle","Engineer").put("status","APPLIED")
    val id=store.save("application",d);d.put("status","INTERVIEW_1");store.save("application",d,id);d.put("status","REJECTED");store.save("application",d,id)
-   val row=store.list().getJSONObject(0);assertEquals("REJECTED",row.getJSONObject("data").getString("status"));val stages=row.getJSONArray("stageHistory").toString();assertTrue(stages.contains("APPLIED"));assertTrue(stages.contains("INTERVIEW_1"));assertEquals(1,store.list().length())
+   val row=store.list().getJSONObject(0);assertEquals("REJECTED",row.getJSONObject("data").getString("status"));val stages=row.getJSONArray("stageHistory").toString();assertTrue(stages.contains("APPLIED"));assertTrue(stages.contains("INTERVIEW_1"));assertEquals(1,store.list().length());val events=row.getJSONArray("stageEvents");assertEquals(2,events.length());assertEquals("INTERVIEW_1",events.getJSONObject(0).getString("status"));assertEquals("REJECTED",events.getJSONObject(1).getString("status"));assertTrue(events.getJSONObject(0).getLong("at")>0)
   }finally{store.close();context.deleteDatabase(name)}
  }
 
